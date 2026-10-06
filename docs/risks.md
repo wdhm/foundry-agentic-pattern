@@ -1,13 +1,13 @@
 # Risks
 
-Verified risks and open questions for Agentic Pattern v1. Each risk has a status, the evidence for it, a mitigation and a linked spike in milestone **M0 · Spikes**.
+Verified risks and open questions for Agentic Pattern v1. Each risk has a status, the evidence for it, a mitigation and a linked spike in milestone [**M0: Spikes**](https://github.com/wdhm/foundry-agentic-pattern/milestone/1).
 
-| ID | Topic | Status | Owner | ADRs |
-|---|---|---|---|---|
-| [R1](#r1) | Tool approval enforcement and approval UX in Teams | 🟡 Partly verified, spike needed | P1 | [0008](adr/0008-human-in-the-loop-approval.md), [0009](adr/0009-hosted-agent-runtime.md), [0016](adr/0016-state-and-audit-cosmos-db.md) |
-| [R2](#r2) | Publish hosted agent to Teams, and rollback via `version_selector` | 🟢 OK (verify in spike) | P3 | [0008](adr/0008-human-in-the-loop-approval.md), [0009](adr/0009-hosted-agent-runtime.md), [0013](adr/0013-evaluation-gate-in-ci.md), [0018](adr/0018-region-sweden-central.md) |
-| [R3](#r3) | Agent identity lifecycle and Azure DevOps access | 🟠 Spike needed | P2 | [0012](adr/0012-agent-identity-and-rbac.md), [0014](adr/0014-infrastructure-scope.md) |
-| [R4](#r4) | AI Gateway token limits and per-agent cost attribution | 🟡 Design adjusted | P3 | [0014](adr/0014-infrastructure-scope.md) |
+| ID | Topic | Status | Owner | ADRs | Spike |
+|---|---|---|---|---|---|
+| [R1](#r1) | Tool approval enforcement and approval UX in Teams | 🟡 Partly verified, spike needed | P1 | [0008](adr/0008-human-in-the-loop-approval.md), [0009](adr/0009-hosted-agent-runtime.md), [0016](adr/0016-state-and-audit-cosmos-db.md) | [#1](https://github.com/wdhm/foundry-agentic-pattern/issues/1) |
+| [R2](#r2) | Publish hosted agent to Teams, and rollback via `version_selector` | 🟢 OK (verify in spike) | P3 | [0008](adr/0008-human-in-the-loop-approval.md), [0009](adr/0009-hosted-agent-runtime.md), [0013](adr/0013-evaluation-gate-in-ci.md), [0018](adr/0018-region-sweden-central.md) | [#4](https://github.com/wdhm/foundry-agentic-pattern/issues/4) |
+| [R3](#r3) | Agent identity lifecycle and Azure DevOps access | 🟠 Spike needed | P2 | [0012](adr/0012-agent-identity-and-rbac.md), [0014](adr/0014-infrastructure-scope.md) | [#2](https://github.com/wdhm/foundry-agentic-pattern/issues/2) |
+| [R4](#r4) | AI Gateway token limits and per-agent cost attribution | 🟡 Design adjusted | P3 | [0014](adr/0014-infrastructure-scope.md) | [#3](https://github.com/wdhm/foundry-agentic-pattern/issues/3) |
 
 ---
 
@@ -28,7 +28,7 @@ Verified risks and open questions for Agentic Pattern v1. Each risk has a status
 - The hosted agent implements an explicit approval interrupt. Pending tool calls (tool name, arguments hash, run ID) are persisted in Cosmos DB, and the call executes **only** when an approval matching that exact call is received ([ADR 0016](adr/0016-state-and-audit-cosmos-db.md)).
 - Evidence is rendered inline in the Teams message body as a compact list with exact versions.
 
-**Spike (M0):** demonstrate Approve / Modify / Reject in Teams for a hosted agent, with the wiki-write call executed only after approval.
+**Spike (M0, [#1](https://github.com/wdhm/foundry-agentic-pattern/issues/1)):** demonstrate Approve / Modify / Reject in Teams for a hosted agent, with the wiki-write call executed only after approval.
 
 ---
 
@@ -45,7 +45,7 @@ Verified risks and open questions for Agentic Pattern v1. Each risk has a status
 
 **Mitigation / design use:** the CI eval gate promotes a new version by shifting `traffic_percentage`. A failed gate means no shift, and a rollback shifts traffic back ([ADR 0013](adr/0013-evaluation-gate-in-ci.md)).
 
-**Spike (M0):** publish a hosted agent to Teams in Sweden Central, run two versions, and shift traffic back and forth without republishing.
+**Spike (M0, [#4](https://github.com/wdhm/foundry-agentic-pattern/issues/4)):** publish a hosted agent to Teams in Sweden Central, run two versions, and shift traffic back and forth without republishing.
 
 ---
 
@@ -66,7 +66,7 @@ Verified risks and open questions for Agentic Pattern v1. Each risk has a status
 - Post-deploy RBAC workflow (`post-deploy-rbac.yml`) that runs after create/publish.
 - Fallback: authenticate the Toolbox connection with the **project managed identity** or a **user-assigned managed identity**, and keep the approver and run ID in the audit trail and the wiki commit message ([ADR 0012](adr/0012-agent-identity-and-rbac.md)).
 
-**Spike (M0):** agent identity → Azure DevOps (read work items, read/write wiki). Record go/no-go and the chosen fallback.
+**Spike (M0, [#2](https://github.com/wdhm/foundry-agentic-pattern/issues/2)):** agent identity → Azure DevOps (read work items, read/write wiki). Record go/no-go and the chosen fallback.
 
 ---
 
@@ -85,4 +85,4 @@ Verified risks and open questions for Agentic Pattern v1. Each risk has a status
 - Enforce limits per project/deployment.
 - **Cost per agent/version** is handled by a **FinOps pattern**: model calls are tagged (agent name, agent version, run ID) and token usage is aggregated from APIM logs and Application Insights.
 
-**Spike (M0):** configure a token limit on a deployment through the AI Gateway, emit tagged calls from two agent versions, and produce a cost-per-agent/version query.
+**Spike (M0, [#3](https://github.com/wdhm/foundry-agentic-pattern/issues/3)):** configure a token limit on a deployment through the AI Gateway, emit tagged calls from two agent versions, and produce a cost-per-agent/version query.
