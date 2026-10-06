@@ -2,6 +2,18 @@
 
 These topics are **intentionally out of scope** for the v1 repo. They are covered in the workshop and in the slides as the natural evolution of the pattern.
 
+In the workshop, each topic is presented **on slides only**, at the end of its owner's lane (see the [feature map](workshop/feature-map.md)):
+
+| Topic | Lane | Section | Issue |
+|---|---|---|---|
+| A2A hand-over (Publisher agent) | P1 | [1](#1-agent-to-agent-a2a-separate-publisher-agent) | [#43](https://github.com/wdhm/foundry-agentic-pattern/issues/43) |
+| Agent 365 | P2 | [3](#3-agent-365) | [#46](https://github.com/wdhm/foundry-agentic-pattern/issues/46) |
+| Work IQ | P2 | [4](#4-work-iq) | [#47](https://github.com/wdhm/foundry-agentic-pattern/issues/47) |
+| PDF / SharePoint document sources | P2 | [8](#8-pdf--sharepoint-document-sources) | [#48](https://github.com/wdhm/foundry-agentic-pattern/issues/48) |
+| Landing zones & subscription vending | P3 | [2](#2-landing-zone--subscription-vending) | [#50](https://github.com/wdhm/foundry-agentic-pattern/issues/50) |
+| Deploy strategy (PTU · spillover · regions) | P3 | [5](#5-model-deployment-strategy) | [#51](https://github.com/wdhm/foundry-agentic-pattern/issues/51) |
+| On-behalf-of identity, more agents | – | [6](#6-on-behalf-of-obo-identity), [7](#7-more-agents-on-the-same-pattern) | – |
+
 ## 1. Agent-to-Agent (A2A): separate Publisher agent
 
 **Today (v1):** one agent analyses the change and, after approval, writes to the wiki through an approval-gated tool ([ADR 0007](adr/0007-single-agent-in-v1.md)).
@@ -45,3 +57,11 @@ Candidates that reuse the contract, identity, approval, audit, eval and CI/CD bu
 - Architecture review agent (ADR compliance)
 - Runbook / operations documentation agent
 - Release notes agent
+
+## 8. PDF & SharePoint document sources
+
+v1 reads code, configuration and IaC from Git, and reads wiki pages and work items from Azure DevOps. Many organisations also keep design documents, specifications and vendor documentation as **PDFs** or in **SharePoint**. Next steps:
+- Index PDFs and SharePoint libraries into **Foundry IQ** with a SharePoint or Blob knowledge source, so the agent can ground on them alongside the documentation standard and ADRs.
+- Keep **evidence exact**. Cite the document URL plus a version (SharePoint version / ETag, or blob hash) and the page or section, so the "evidence at an exact version" rule still holds.
+- Respect **document permissions**. Either index only libraries that the agent identity may read, or use OBO / permission-trimmed retrieval ([section 6](#6-on-behalf-of-obo-identity)).
+- Optionally make SharePoint a **write target** as well as a source, behind the same approval-gated tool pattern as the wiki.

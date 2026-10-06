@@ -76,22 +76,30 @@ flowchart LR
 
 For more detail, see [docs/architecture.md](docs/architecture.md). The design rationale is in [docs/adr/](docs/adr/README.md) and the known risks are in [docs/risks.md](docs/risks.md).
 
+The workshop reference architecture is also available as a diagram ([HTML](docs/diagrams/reference-architecture.html) · [PNG](docs/diagrams/reference-architecture.png)):
+
+![Reference architecture](docs/diagrams/reference-architecture.png)
+
 ## Feature map
 
-| Capability | How it is implemented | ADR |
-|---|---|---|
-| **Agent contract** | Pydantic `AgentRequest` / `AgentResult` are the single source of truth, and JSON Schema is generated from them. The agent is trigger-agnostic. | [0010](docs/adr/0010-python-and-pydantic-contracts.md), [0006](docs/adr/0006-sources-and-trigger.md) |
-| **Runtime** | Foundry hosted agent (container) on Microsoft Agent Framework | [0009](docs/adr/0009-hosted-agent-runtime.md) |
-| **Registry** | Foundry fleet management, with no custom registry | [0015](docs/adr/0015-registry-foundry-fleet-management.md) |
-| **Knowledge** | Foundry IQ (Azure AI Search) for stable knowledge, plus Toolbox live calls for versioned/volatile data | [0011](docs/adr/0011-knowledge-foundry-iq-and-toolbox.md) |
-| **Toolbox / APIs** | MCP tools for GitHub and Azure DevOps. Wiki write is approval-gated. | [0011](docs/adr/0011-knowledge-foundry-iq-and-toolbox.md), [0008](docs/adr/0008-human-in-the-loop-approval.md) |
-| **Human-in-the-loop** | Agent published to Teams, with Approve / Modify / Reject | [0008](docs/adr/0008-human-in-the-loop-approval.md) |
-| **Identity / RBAC** | Entra Agent ID with least privilege per source. The approver is recorded. | [0012](docs/adr/0012-agent-identity-and-rbac.md) |
-| **State & audit** | Cosmos DB stores runs, results, review decisions and pending approvals | [0016](docs/adr/0016-state-and-audit-cosmos-db.md) |
-| **Observability** | OpenTelemetry traces to Application Insights, with every output tagged with agent/model/prompt/policy/contract version | [0016](docs/adr/0016-state-and-audit-cosmos-db.md) |
-| **Evaluation** | Ground-truth eval gate in CI, plus Foundry evaluators that are reported but non-blocking | [0013](docs/adr/0013-evaluation-gate-in-ci.md) |
-| **CI/CD, versioning, rollback** | GitHub Actions; agent versions; endpoint `version_selector` for canary/rollback | [0003](docs/adr/0003-github-for-code-and-cicd.md), [0013](docs/adr/0013-evaluation-gate-in-ci.md) |
-| **AI Gateway / FinOps** | APIM token limits per project + deployment, and cost attribution per agent/version via tagged calls | [0014](docs/adr/0014-infrastructure-scope.md) |
+Features are grouped into three swimlanes, each with one owner: **P1** Agent architecture, **P2** Knowledge & identity, **P3** AgentOps & platform. The **F1–F8** tags match the diagrams. Items marked *slides* are covered as next steps only. For the full table with issues, see [docs/workshop/feature-map.md](docs/workshop/feature-map.md), and for the swimlane diagram see [HTML](docs/diagrams/feature-swimlanes.html) · [PNG](docs/diagrams/feature-swimlanes.png).
+
+| Lane | F | Capability | How it is implemented | ADR |
+|---|---|---|---|---|
+| P1 | **F2** | **Hosted agent** | Foundry hosted agent (container) on Microsoft Agent Framework (Python) | [0009](docs/adr/0009-hosted-agent-runtime.md) |
+| P1 | **F4** | **Output contract** | Pydantic `AgentRequest` / `AgentResult` are the single source of truth, and JSON Schema is generated from them. The agent is trigger-agnostic. | [0010](docs/adr/0010-python-and-pydantic-contracts.md), [0006](docs/adr/0006-sources-and-trigger.md) |
+| P1 | **F5** | **Human-in-the-loop** | Agent published to Teams, with Approve / Modify / Reject. Wiki write is approval-gated. | [0008](docs/adr/0008-human-in-the-loop-approval.md) |
+| P1 | – | **State & audit** | Cosmos DB stores runs, results, review decisions and pending approvals | [0016](docs/adr/0016-state-and-audit-cosmos-db.md) |
+| P1 | – | **Architecture & registry** | Foundry fleet management, with no custom registry | [0015](docs/adr/0015-registry-foundry-fleet-management.md) |
+| P2 | **F3** | **Foundry IQ** | Azure AI Search knowledge for stable sources: documentation standard, ADRs and wiki | [0011](docs/adr/0011-knowledge-foundry-iq-and-toolbox.md) |
+| P2 | **F1** | **Toolbox** | MCP / REST tools for GitHub and Azure DevOps (wiki, work items, Azure Repos), for versioned/volatile data | [0011](docs/adr/0011-knowledge-foundry-iq-and-toolbox.md) |
+| P2 | – | **Identities & resource org** | Entra Agent ID with least privilege per source. The approver is recorded. | [0012](docs/adr/0012-agent-identity-and-rbac.md) |
+| P2 | **F8** | **Mock data** | Fictional sample integration, wiki, work items, ADRs and doc standard, with planted gaps and ground truth | [0005](docs/adr/0005-generic-repo-with-fictional-data.md) |
+| P3 | – | **AI Gateway / FinOps** | APIM token limits per project + deployment, and cost attribution per agent/version via tagged calls | [0014](docs/adr/0014-infrastructure-scope.md) |
+| P3 | – | **Model deployments** | Chat model + eval model, with pinned versions, behind the gateway | [0014](docs/adr/0014-infrastructure-scope.md) |
+| P3 | **F6** | **Evals & observability** | Ground-truth eval gate in CI, plus Foundry evaluators that are reported but non-blocking. OpenTelemetry traces go to App Insights, with every output tagged with agent/model/prompt/policy/contract version. | [0013](docs/adr/0013-evaluation-gate-in-ci.md), [0016](docs/adr/0016-state-and-audit-cosmos-db.md) |
+| P3 | **F7** | **Versioning & CI/CD** | GitHub Actions, agent versions, and endpoint `version_selector` for canary/rollback | [0003](docs/adr/0003-github-for-code-and-cicd.md), [0013](docs/adr/0013-evaluation-gate-in-ci.md) |
+| *slides* | – | **Beyond v1** | A2A hand-over (P1). Agent 365, Work IQ and PDF/SharePoint (P2). Landing zones and deploy strategy (P3). | [next-steps](docs/next-steps.md) |
 
 ## Repository layout
 
@@ -114,7 +122,8 @@ For more detail, see [docs/architecture.md](docs/architecture.md). The design ra
     ├── risks.md
     ├── next-steps.md
     ├── adr/                        # Architecture Decision Records
-    └── workshop/                   # Workshop agenda and material
+    ├── diagrams/                   # Reference architecture + feature swimlanes (HTML + PNG)
+    └── workshop/                   # Workshop agenda, feature map and material
 ```
 
 ## Status & roadmap

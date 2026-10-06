@@ -2,6 +2,10 @@
 
 This document describes **Agentic Pattern v1** and the **Documentation Agent v1** reference implementation. Each design choice is recorded as an ADR in [adr/](adr/README.md), and open risks are listed in [risks.md](risks.md).
 
+**Diagrams:** the reference architecture ([HTML](diagrams/reference-architecture.html) · [PNG](diagrams/reference-architecture.png)) and the feature swimlanes ([HTML](diagrams/feature-swimlanes.html) · [PNG](diagrams/feature-swimlanes.png)). The feature tags **F1–F8** and lane owners **P1/P2/P3** used below match these diagrams and the [workshop feature map](workshop/feature-map.md).
+
+![Reference architecture](diagrams/reference-architecture.png)
+
 ## 1. Principles
 
 - **The contract is the interface.** Agents accept an `AgentRequest` and return an `AgentResult`. They are trigger-agnostic.
@@ -13,20 +17,24 @@ This document describes **Agentic Pattern v1** and the **Documentation Agent v1*
 
 ## 2. Components
 
-| Component | Technology | Responsibility | ADR |
-|---|---|---|---|
-| Trigger | GitHub Actions (PR on `samples/**`), CLI fallback | Builds and submits the `AgentRequest` | [0006](adr/0006-sources-and-trigger.md) |
-| Contract | Pydantic → JSON Schema | Single source of truth for request/result | [0010](adr/0010-python-and-pydantic-contracts.md) |
-| Agent runtime | Foundry hosted agent, Microsoft Agent Framework (Python) | Orchestration, gap analysis, approval interrupt | [0009](adr/0009-hosted-agent-runtime.md) |
-| Registry | Foundry fleet management | Agent inventory, versions, endpoints | [0015](adr/0015-registry-foundry-fleet-management.md) |
-| Stable knowledge | Foundry IQ (Azure AI Search) | Documentation standard, ADRs, wiki (semantic search) | [0011](adr/0011-knowledge-foundry-iq-and-toolbox.md) |
-| Live tools | Foundry Toolbox (MCP): GitHub, Azure DevOps | Code/IaC/config at commit, work items, current wiki, wiki write | [0011](adr/0011-knowledge-foundry-iq-and-toolbox.md) |
-| Human-in-the-loop | Agent published to Microsoft Teams | Approve / Modify / Reject | [0008](adr/0008-human-in-the-loop-approval.md) |
-| Identity | Entra Agent ID (fallback: project or user-assigned MI) | Least-privilege access per source | [0012](adr/0012-agent-identity-and-rbac.md) |
-| Model access | AI Gateway (APIM) → model deployments | Token limits, FinOps tagging | [0014](adr/0014-infrastructure-scope.md) |
-| State & audit | Cosmos DB | Runs, results, review decisions, pending approvals | [0016](adr/0016-state-and-audit-cosmos-db.md) |
-| Observability | OpenTelemetry → Application Insights | Traces, metrics, cost queries | [0016](adr/0016-state-and-audit-cosmos-db.md) |
-| Evaluation | Custom ground-truth metrics + Foundry evaluators | CI gate, quality trends | [0013](adr/0013-evaluation-gate-in-ci.md) |
+Lanes: **P1** Agent architecture · **P2** Knowledge & identity · **P3** AgentOps & platform.
+
+| Lane | F | Component | Technology | Responsibility | ADR |
+|---|---|---|---|---|---|
+| P1 | F2 | Agent runtime | Foundry hosted agent, Microsoft Agent Framework (Python) | Orchestration, gap analysis, approval interrupt | [0009](adr/0009-hosted-agent-runtime.md) |
+| P1 | F4 | Contract | Pydantic → JSON Schema | Single source of truth for request/result | [0010](adr/0010-python-and-pydantic-contracts.md) |
+| P1 | F5 | Human-in-the-loop | Agent published to Microsoft Teams | Approve / Modify / Reject | [0008](adr/0008-human-in-the-loop-approval.md) |
+| P1 | – | State & audit | Cosmos DB | Runs, results, review decisions, pending approvals | [0016](adr/0016-state-and-audit-cosmos-db.md) |
+| P1 | – | Registry | Foundry fleet management | Agent inventory, versions, endpoints | [0015](adr/0015-registry-foundry-fleet-management.md) |
+| P2 | F3 | Stable knowledge | Foundry IQ (Azure AI Search) | Documentation standard, ADRs, wiki (semantic search) | [0011](adr/0011-knowledge-foundry-iq-and-toolbox.md) |
+| P2 | F1 | Live tools | Foundry Toolbox (MCP / REST): GitHub, Azure DevOps | Code/IaC/config at commit (GitHub or Azure Repos), work items, current wiki, wiki write | [0011](adr/0011-knowledge-foundry-iq-and-toolbox.md) |
+| P2 | – | Identity & resource org | Entra Agent ID (fallback: project or user-assigned MI) | Least-privilege access per source | [0012](adr/0012-agent-identity-and-rbac.md) |
+| P2 | F8 | Mock data | `data/` generator + `samples/` | Sample integration, wiki, work items, planted gaps, ground truth | [0005](adr/0005-generic-repo-with-fictional-data.md) |
+| P3 | – | Trigger | GitHub Actions (PR on `samples/**`), CLI fallback | Builds and submits the `AgentRequest` | [0006](adr/0006-sources-and-trigger.md) |
+| P3 | – | Model access | AI Gateway (APIM) → model deployments (chat, eval) | Token limits, FinOps tagging, version pinning | [0014](adr/0014-infrastructure-scope.md) |
+| P3 | F6 | Observability | OpenTelemetry → Application Insights | Traces, metrics, cost queries | [0016](adr/0016-state-and-audit-cosmos-db.md) |
+| P3 | F6 | Evaluation | Custom ground-truth metrics + Foundry evaluators | CI gate, quality trends | [0013](adr/0013-evaluation-gate-in-ci.md) |
+| P3 | F7 | Versioning & CI/CD | GitHub Actions, agent versions, `version_selector` | Build, gate, promote, roll back | [0003](adr/0003-github-for-code-and-cicd.md), [0013](adr/0013-evaluation-gate-in-ci.md) |
 
 ## 3. Request lifecycle
 
@@ -85,7 +93,7 @@ See [src/contracts/](../src/contracts/README.md) for the field list. Key propert
 | Wiki (for discovery) | Medium | Foundry IQ | Find related pages |
 | **Current** wiki page | Volatile | Toolbox (ADO) | Exact version required for evidence and update |
 | Work items / requirements | Volatile | Toolbox (ADO) | Exact revision |
-| Code / IaC / config | Versioned | Toolbox (GitHub MCP) | Exact commit SHA |
+| Code / IaC / config | Versioned | Toolbox (GitHub MCP; Azure Repos via ADO MCP/REST) | Exact commit SHA |
 
 ## 6. Identity & RBAC matrix (target)
 
@@ -144,4 +152,4 @@ flowchart LR
 
 ## 10. Beyond v1
 
-See [next-steps.md](next-steps.md): Agent-to-Agent (Publisher agent), landing zone & subscription vending, Agent 365, Work IQ, and model deployment strategy.
+See [next-steps.md](next-steps.md). These topics are covered on slides only, at the end of each lane: A2A hand-over (P1); Agent 365, Work IQ and PDF/SharePoint document sources (P2); landing zones & subscription vending and model deployment strategy (P3).
