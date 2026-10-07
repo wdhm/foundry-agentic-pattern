@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Foundry agentic pattern · Features by person</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #f5f5f5;
+      --color-ink:     #2d3142;
+      --color-muted:   #4f5d75;
+      --color-accent:  #eb6c36;
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1440px; width: 100%; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      margin-bottom: 0.4rem;
+    }
+    .sub { color: var(--color-muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
+    svg { width: 100%; min-width: 1100px; display: block; }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Swimlane · foundry-agentic-pattern</p>
+    <h1>Every feature, one owner — P1, P2, P3</h1>
+    <p class="sub">P = person / track owner. Solid = built in the repo and demoed live. Dashed = covered on slides as a next step.</p>
+    <svg viewBox="0 0 1340 650" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="p-features-title p-features-desc">
+      <title id="p-features-title">Workshop features by owner P1, P2, P3</title>
+      <desc id="p-features-desc">Swimlane assigning every workshop feature to one of three owners — agent architecture, knowledge and identity, AgentOps and platform — split into features built and demoed in the repo versus features covered on slides only.</desc>
+      <rect width="100%" height="100%" fill="#f5f5f5"/>
+      <text x="244" y="60" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.16em">BUILT IN REPO · DEMOED LIVE</text>
+      <text x="964" y="60" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.16em">SLIDES ONLY · NEXT STEP</text>
+      <line x1="40" y1="80" x2="1300" y2="80" stroke="rgba(45,49,66,0.22)" stroke-width="1"/>
+      <line x1="40" y1="240" x2="1300" y2="240" stroke="rgba(45,49,66,0.1)" stroke-width="1"/>
+      <line x1="40" y1="400" x2="1300" y2="400" stroke="rgba(45,49,66,0.1)" stroke-width="1"/>
+      <line x1="40" y1="560" x2="1300" y2="560" stroke="rgba(45,49,66,0.22)" stroke-width="1"/>
+      <line x1="224" y1="44" x2="224" y2="560" stroke="rgba(45,49,66,0.22)" stroke-width="1"/>
+      <line x1="944" y1="44" x2="944" y2="560" stroke="rgba(45,49,66,0.14)" stroke-width="1" stroke-dasharray="3,4"/>
+      <text x="52" y="140" fill="#b8915a" font-size="10" font-weight="600" font-family="'Geist Mono', monospace" letter-spacing="0.18em">P1 · JOHN</text>
+      <text x="52" y="160" fill="#2d3142" font-size="13" font-weight="600" font-family="'Geist', sans-serif">Agent architecture</text>
+      <text x="52" y="176" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.08em">AREA 01</text>
+      <text x="52" y="192" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.08em">5 BUILD · 1 SLIDES</text>
+      <rect x="244" y="104" width="212" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="244" y="104" width="212" height="56" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1.4"/>
+      <rect x="428" y="110" width="20" height="12" rx="2" fill="none" stroke="#eb6c36" stroke-width="0.8"/>
+      <text x="438" y="119" fill="#eb6c36" font-size="7" font-weight="600" font-family="'Geist Mono', monospace" text-anchor="middle">F2</text>
+      <text x="350.0" y="132" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Hosted agent</text>
+      <text x="350.0" y="148" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">Agent Framework · Python</text>
+      <rect x="476" y="104" width="212" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="476" y="104" width="212" height="56" rx="6" fill="rgba(184,145,90,0.08)" stroke="#b8915a" stroke-width="1"/>
+      <rect x="660" y="110" width="20" height="12" rx="2" fill="none" stroke="#b8915a" stroke-width="0.8"/>
+      <text x="670" y="119" fill="#b8915a" font-size="7" font-weight="600" font-family="'Geist Mono', monospace" text-anchor="middle">F4</text>
+      <text x="582.0" y="132" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Output contract</text>
+      <text x="582.0" y="148" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">AgentRequest → JSON result</text>
+      <rect x="708" y="104" width="212" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="708" y="104" width="212" height="56" rx="6" fill="rgba(184,145,90,0.08)" stroke="#b8915a" stroke-width="1"/>
+      <rect x="892" y="110" width="20" height="12" rx="2" fill="none" stroke="#b8915a" stroke-width="0.8"/>
+      <text x="902" y="119" fill="#b8915a" font-size="7" font-weight="600" font-family="'Geist Mono', monospace" text-anchor="middle">F5</text>
+      <text x="814.0" y="132" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Human-in-the-loop</text>
+      <text x="814.0" y="148" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">publish to Teams · approve</text>
+      <rect x="244" y="176" width="212" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="244" y="176" width="212" height="56" rx="6" fill="rgba(184,145,90,0.08)" stroke="#b8915a" stroke-width="1"/>
+      <text x="350.0" y="204" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">State &amp; audit</text>
+      <text x="350.0" y="220" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">Cosmos DB · versions logged</text>
+      <rect x="476" y="176" width="212" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="476" y="176" width="212" height="56" rx="6" fill="rgba(184,145,90,0.08)" stroke="#b8915a" stroke-width="1"/>
+      <text x="582.0" y="204" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">App / Foundry architecture</text>
+      <text x="582.0" y="220" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">reference design · registry</text>
+      <rect x="964" y="104" width="152" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="964" y="104" width="152" height="56" rx="6" fill="rgba(45,49,66,0.02)" stroke="#b8915a" stroke-width="1" stroke-dasharray="4,3"/>
+      <text x="1040.0" y="132" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">A2A hand-over</text>
+      <text x="1040.0" y="148" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">hosted agents · reuse</text>
+      <text x="52" y="300" fill="#5e7a9b" font-size="10" font-weight="600" font-family="'Geist Mono', monospace" letter-spacing="0.18em">P2 · RICKARD</text>
+      <text x="52" y="320" fill="#2d3142" font-size="13" font-weight="600" font-family="'Geist', sans-serif">Knowledge &amp; identity</text>
+      <text x="52" y="336" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.08em">AREAS 02 · 03</text>
+      <text x="52" y="352" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.08em">5 BUILD · 3 SLIDES</text>
+      <rect x="244" y="264" width="212" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="244" y="264" width="212" height="56" rx="6" fill="rgba(94,122,155,0.08)" stroke="#5e7a9b" stroke-width="1"/>
+      <rect x="428" y="270" width="20" height="12" rx="2" fill="none" stroke="#5e7a9b" stroke-width="0.8"/>
+      <text x="438" y="279" fill="#5e7a9b" font-size="7" font-weight="600" font-family="'Geist Mono', monospace" text-anchor="middle">F3</text>
+      <text x="350.0" y="292" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Foundry IQ</text>
+      <text x="350.0" y="308" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">AI Search · knowledge base</text>
+      <rect x="476" y="264" width="212" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="476" y="264" width="212" height="56" rx="6" fill="rgba(94,122,155,0.08)" stroke="#5e7a9b" stroke-width="1"/>
+      <rect x="660" y="270" width="20" height="12" rx="2" fill="none" stroke="#5e7a9b" stroke-width="0.8"/>
+      <text x="670" y="279" fill="#5e7a9b" font-size="7" font-weight="600" font-family="'Geist Mono', monospace" text-anchor="middle">F1</text>
+      <text x="582.0" y="292" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Toolbox</text>
+      <text x="582.0" y="308" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">MCP · REST API · DevOps</text>
+      <rect x="708" y="264" width="212" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="708" y="264" width="212" height="56" rx="6" fill="rgba(94,122,155,0.08)" stroke="#5e7a9b" stroke-width="1"/>
+      <text x="814.0" y="292" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Integration patterns</text>
+      <text x="814.0" y="308" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">DevOps wiki · DevOps repos</text>
+      <rect x="244" y="336" width="212" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="244" y="336" width="212" height="56" rx="6" fill="rgba(94,122,155,0.08)" stroke="#5e7a9b" stroke-width="1"/>
+      <text x="350.0" y="364" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Identities &amp; resource org</text>
+      <text x="350.0" y="380" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">agent ID · RBAC · projects</text>
+      <rect x="476" y="336" width="212" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="476" y="336" width="212" height="56" rx="6" fill="rgba(94,122,155,0.08)" stroke="#5e7a9b" stroke-width="1"/>
+      <rect x="660" y="342" width="20" height="12" rx="2" fill="none" stroke="#5e7a9b" stroke-width="0.8"/>
+      <text x="670" y="351" fill="#5e7a9b" font-size="7" font-weight="600" font-family="'Geist Mono', monospace" text-anchor="middle">F8</text>
+      <text x="582.0" y="364" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Mock data</text>
+      <text x="582.0" y="380" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">sample integration · gaps</text>
+      <rect x="964" y="264" width="152" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="964" y="264" width="152" height="56" rx="6" fill="rgba(45,49,66,0.02)" stroke="#5e7a9b" stroke-width="1" stroke-dasharray="4,3"/>
+      <text x="1040.0" y="292" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Agent 365</text>
+      <text x="1040.0" y="308" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">agent governance</text>
+      <rect x="1132" y="264" width="152" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="1132" y="264" width="152" height="56" rx="6" fill="rgba(45,49,66,0.02)" stroke="#5e7a9b" stroke-width="1" stroke-dasharray="4,3"/>
+      <text x="1208.0" y="292" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Work IQ</text>
+      <text x="1208.0" y="308" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">M365 work context</text>
+      <rect x="964" y="336" width="152" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="964" y="336" width="152" height="56" rx="6" fill="rgba(45,49,66,0.02)" stroke="#5e7a9b" stroke-width="1" stroke-dasharray="4,3"/>
+      <text x="1040.0" y="364" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">PDF · SharePoint</text>
+      <text x="1040.0" y="380" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">document sources</text>
+      <text x="52" y="460" fill="#7c8f6f" font-size="10" font-weight="600" font-family="'Geist Mono', monospace" letter-spacing="0.18em">P3 · LOUISE</text>
+      <text x="52" y="480" fill="#2d3142" font-size="13" font-weight="600" font-family="'Geist', sans-serif">AgentOps &amp; platform</text>
+      <text x="52" y="496" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.08em">AREA 04</text>
+      <text x="52" y="512" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.08em">4 BUILD · 2 SLIDES</text>
+      <rect x="244" y="424" width="212" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="244" y="424" width="212" height="56" rx="6" fill="rgba(124,143,111,0.10)" stroke="#7c8f6f" stroke-width="1"/>
+      <text x="350.0" y="452" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">AI Gateway</text>
+      <text x="350.0" y="468" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">FinOps · tokenomics · limits</text>
+      <rect x="476" y="424" width="212" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="476" y="424" width="212" height="56" rx="6" fill="rgba(124,143,111,0.10)" stroke="#7c8f6f" stroke-width="1"/>
+      <text x="582.0" y="452" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Model deployments</text>
+      <text x="582.0" y="468" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">chat model · eval model</text>
+      <rect x="708" y="424" width="212" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="708" y="424" width="212" height="56" rx="6" fill="rgba(124,143,111,0.10)" stroke="#7c8f6f" stroke-width="1"/>
+      <rect x="892" y="430" width="20" height="12" rx="2" fill="none" stroke="#7c8f6f" stroke-width="0.8"/>
+      <text x="902" y="439" fill="#7c8f6f" font-size="7" font-weight="600" font-family="'Geist Mono', monospace" text-anchor="middle">F6</text>
+      <text x="814.0" y="452" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Evals &amp; observability</text>
+      <text x="814.0" y="468" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">App Insights · eval gate</text>
+      <rect x="244" y="496" width="212" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="244" y="496" width="212" height="56" rx="6" fill="rgba(124,143,111,0.10)" stroke="#7c8f6f" stroke-width="1"/>
+      <rect x="428" y="502" width="20" height="12" rx="2" fill="none" stroke="#7c8f6f" stroke-width="0.8"/>
+      <text x="438" y="511" fill="#7c8f6f" font-size="7" font-weight="600" font-family="'Geist Mono', monospace" text-anchor="middle">F7</text>
+      <text x="350.0" y="524" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Versioning &amp; CI/CD</text>
+      <text x="350.0" y="540" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">agent · prompt · rollback</text>
+      <rect x="964" y="424" width="152" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="964" y="424" width="152" height="56" rx="6" fill="rgba(45,49,66,0.02)" stroke="#7c8f6f" stroke-width="1" stroke-dasharray="4,3"/>
+      <text x="1040.0" y="452" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Landing zones</text>
+      <text x="1040.0" y="468" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">subscription vending</text>
+      <rect x="1132" y="424" width="152" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="1132" y="424" width="152" height="56" rx="6" fill="rgba(45,49,66,0.02)" stroke="#7c8f6f" stroke-width="1" stroke-dasharray="4,3"/>
+      <text x="1208.0" y="452" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Deploy strategy</text>
+      <text x="1208.0" y="468" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">PTU · spillover · regions</text>
+      <line x1="40" y1="584" x2="1300" y2="584" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <text x="40" y="602" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">LEGEND</text>
+      <rect x="40" y="616" width="14" height="10" rx="2" fill="rgba(184,145,90,0.08)" stroke="#b8915a" stroke-width="1"/>
+      <text x="60" y="624" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">P1 · Agent architecture</text>
+      <rect x="220" y="616" width="14" height="10" rx="2" fill="rgba(94,122,155,0.08)" stroke="#5e7a9b" stroke-width="1"/>
+      <text x="240" y="624" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">P2 · Knowledge &amp; identity</text>
+      <rect x="400" y="616" width="14" height="10" rx="2" fill="rgba(124,143,111,0.10)" stroke="#7c8f6f" stroke-width="1"/>
+      <text x="420" y="624" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">P3 · AgentOps &amp; platform</text>
+      <rect x="580" y="616" width="14" height="10" rx="2" fill="rgba(45,49,66,0.02)" stroke="#7a8399" stroke-width="1" stroke-dasharray="3,2"/>
+      <text x="600" y="624" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Slides only</text>
+      <rect x="690" y="616" width="14" height="10" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+      <text x="710" y="624" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Core product — everything plugs into it</text>
+      <rect x="920" y="616" width="20" height="10" rx="2" fill="none" stroke="#4f5d75" stroke-width="0.8"/>
+      <text x="930" y="624" fill="#4f5d75" font-size="6.5" font-family="'Geist Mono', monospace" text-anchor="middle">F#</text>
+      <text x="946" y="624" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Feature number from the PoC diagram</text>
+    </svg>
+  </div>
+</body>
+</html>
