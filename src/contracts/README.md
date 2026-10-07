@@ -29,4 +29,4 @@ The **agent contract**: Pydantic models for `AgentRequest` and `AgentResult`. Th
 - Breaking changes bump `contract_version` and require an ADR.
 - Generated JSON Schema is committed and checked in CI. A schema that drifts from the models fails the build.
 
-**Owner:** P1 (Agent architecture)
+**Owner:** P1 (Agent architecture): John ([@johnsward](https://github.com/johnsward))

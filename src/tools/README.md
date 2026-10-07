@@ -20,4 +20,4 @@ Tool and API integrations exposed to agents through a Foundry **Toolbox** (MCP) 
 - Least privilege per source ([ADR 0012](../../docs/adr/0012-agent-identity-and-rbac.md)).
 - The wiki commit message includes the run ID and the approver.
 
-**Owner:** P2 (Knowledge & identity)
+**Owner:** P2 (Knowledge & identity): Rickard ([@wdhm](https://github.com/wdhm))

@@ -28,4 +28,4 @@ evals/
 └── gate.py         # Aggregates results and enforces thresholds
 ```
 
-**Owner:** P3 (AgentOps & platform)
+**Owner:** P3 (AgentOps & platform): Louise ([@llandinl](https://github.com/llandinl))

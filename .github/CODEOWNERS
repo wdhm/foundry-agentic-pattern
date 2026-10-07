@@ -1,8 +1,6 @@
 # CODEOWNERS: see docs/adr/0017-ownership-model.md
 #
-# P1 = Agent architecture | P2 = Knowledge & identity | P3 = AgentOps & platform
-# TODO: replace @wdhm in each area section with the real GitHub handle of P1/P2/P3.
-# (Placeholder handles are not used because GitHub flags unknown owners as errors.)
+# P1 = Agent architecture (@johnsward) | P2 = Knowledge & identity (@wdhm) | P3 = AgentOps & platform (@llandinl)
 # Note: the last matching pattern takes precedence.
 
 # Default owner
@@ -12,23 +10,19 @@
 /docs/                  @wdhm
 
 # --- P1: Agent architecture (hosted agent, contract, state/Cosmos, Teams HITL) ---
-# TODO(P1): add P1 handle
-/src/contracts/         @wdhm
-/src/agents/            @wdhm
+/src/contracts/         @johnsward
+/src/agents/            @johnsward
 
 # --- P2: Knowledge & identity (Foundry IQ, Toolbox/MCP, Agent ID, RBAC, mock data) ---
-# TODO(P2): add P2 handle
 /src/tools/             @wdhm
 /data/                  @wdhm
 /samples/               @wdhm
 
 # --- P3: AgentOps & platform (infra/azd, AI Gateway/FinOps, evals, CI/CD, rollback, tracing) ---
-# TODO(P3): add P3 handle
-/infra/                 @wdhm
-/evals/                 @wdhm
-/.github/workflows/     @wdhm
-/azure.yaml             @wdhm
+/infra/                 @llandinl
+/evals/                 @llandinl
+/.github/workflows/     @llandinl
+/azure.yaml             @llandinl
 
 # --- Architecture decisions: all tracks review ---
-# TODO(P1, P2, P3): add all three handles
-/docs/adr/              @wdhm
+/docs/adr/              @johnsward @wdhm @llandinl

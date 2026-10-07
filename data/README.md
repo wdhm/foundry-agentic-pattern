@@ -19,4 +19,4 @@ A **mock data generator** and seed data that make the demo reproducible in any t
 - **Deterministic.** Fixed seeds make eval results comparable between versions.
 - **Fictional.** No real customer, system or personal data.
 
-**Owner:** P2 (Knowledge & identity)
+**Owner:** P2 (Knowledge & identity): Rickard ([@wdhm](https://github.com/wdhm))

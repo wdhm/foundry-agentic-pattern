@@ -15,4 +15,4 @@ GitHub Actions workflows ([ADR 0003](../../docs/adr/0003-github-for-code-and-cic
 
 Authentication to Azure uses **OIDC workload identity federation**, with no stored secrets.
 
-**Owner:** P3 (AgentOps & platform)
+**Owner:** P3 (AgentOps & platform): Louise ([@llandinl](https://github.com/llandinl))

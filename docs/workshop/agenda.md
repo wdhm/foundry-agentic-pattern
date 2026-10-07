@@ -7,30 +7,30 @@
 The agenda follows the three **swimlanes** in the [feature map](feature-map.md) and the [feature swimlanes diagram](../diagrams/feature-swimlanes.html) ([PNG](../diagrams/feature-swimlanes.png)). Each presenter owns one block. **Built** features are demoed live, and **slides-only** topics close each block as next steps ([next-steps.md](../next-steps.md)). F-tags (F1–F8) match the diagrams.
 
 **Presenters**
-- **P1**: Agent architecture (area 01)
-- **P2**: Knowledge & identity (areas 02 + 03)
-- **P3**: AgentOps & platform (area 04)
+- **P1** John ([@johnsward](https://github.com/johnsward)): Agent architecture (area 01)
+- **P2** Rickard ([@wdhm](https://github.com/wdhm)): Knowledge & identity (areas 02 + 03)
+- **P3** Louise ([@llandinl](https://github.com/llandinl)): AgentOps & platform (area 04)
 
 ## Overview
 
 | Time | Block | Lead |
 |---|---|---|
-| 09:00–09:15 | Welcome & framing | P1 |
-| 09:15–09:35 | Live end-to-end demo | P1 |
-| 09:35–10:15 | **P1 · Agent architecture** | P1 |
+| 09:00–09:15 | Welcome & framing | P1 · John |
+| 09:15–09:35 | Live end-to-end demo | P1 · John |
+| 09:35–10:15 | **P1 · Agent architecture** | P1 · John |
 | 10:15–10:30 | ☕ Break | |
-| 10:30–11:10 | **P2 · Knowledge & identity** | P2 |
-| 11:10–11:50 | **P3 · AgentOps & platform** | P3 |
+| 10:30–11:10 | **P2 · Knowledge & identity** | P2 · Rickard |
+| 11:10–11:50 | **P3 · AgentOps & platform** | P3 · Louise |
 | 11:50–12:00 | Fork & adapt + Q&A | All |
 
-## 09:00–09:35 · Opening (P1)
+## 09:00–09:35 · Opening (P1 · John)
 
 | Time | Item | Type | Content |
 |---|---|---|---|
 | 09:00–09:15 | Welcome & framing | Slides | Why a *pattern*, not just an agent. The Documentation Agent story, the [reference architecture](../diagrams/reference-architecture.html), and what you take home. |
 | 09:15–09:35 | Live end-to-end demo | Demo | PR on the sample integration → `AgentResult` → Teams approval → wiki updated |
 
-## 09:35–10:15 · P1 · Agent architecture
+## 09:35–10:15 · P1 · Agent architecture · John
 
 | Time | Feature | F | Type | Content |
 |---|---|---|---|---|
@@ -41,7 +41,7 @@ The agenda follows the three **swimlanes** in the [feature map](feature-map.md) 
 | 10:05–10:10 | State & audit | – | Demo | Cosmos DB run record: versions, decision, approver |
 | 10:10–10:15 | *A2A hand-over* | – | Slides | Analyst + Publisher agent with separate identities ([#43](https://github.com/wdhm/foundry-agentic-pattern/issues/43)) |
 
-## 10:30–11:10 · P2 · Knowledge & identity
+## 10:30–11:10 · P2 · Knowledge & identity · Rickard
 
 | Time | Feature | F | Type | Content |
 |---|---|---|---|---|
@@ -52,7 +52,7 @@ The agenda follows the three **swimlanes** in the [feature map](feature-map.md) 
 | 10:57–11:03 | Identities & resource org | – | Demo | Agent ID, least privilege per source, project vs agent scope ([#22](https://github.com/wdhm/foundry-agentic-pattern/issues/22), [#45](https://github.com/wdhm/foundry-agentic-pattern/issues/45)) |
 | 11:03–11:10 | *Agent 365 · Work IQ · PDF/SharePoint* | – | Slides | Fleet governance across M365 ([#46](https://github.com/wdhm/foundry-agentic-pattern/issues/46)), work context ([#47](https://github.com/wdhm/foundry-agentic-pattern/issues/47)), document sources ([#48](https://github.com/wdhm/foundry-agentic-pattern/issues/48)) |
 
-## 11:10–11:50 · P3 · AgentOps & platform
+## 11:10–11:50 · P3 · AgentOps & platform · Louise
 
 | Time | Feature | F | Type | Content |
 |---|---|---|---|---|

@@ -22,4 +22,4 @@ documentation-agent/
 └── policies/             # Versioned policies (e.g. "never fabricate")
 ```
 
-**Owner:** P1 (Agent architecture)
+**Owner:** P1 (Agent architecture): John ([@johnsward](https://github.com/johnsward))

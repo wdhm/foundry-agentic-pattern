@@ -22,4 +22,4 @@ Default region: **Sweden Central** ([ADR 0018](../docs/adr/0018-region-sweden-ce
 
 Landing zone and subscription vending, Agent 365, Work IQ, and advanced model deployment strategy (PTU/spillover/multi-region) are covered in [docs/next-steps.md](../docs/next-steps.md).
 
-**Owner:** P3 (AgentOps & platform)
+**Owner:** P3 (AgentOps & platform): Louise ([@llandinl](https://github.com/llandinl))

@@ -82,7 +82,7 @@ The workshop reference architecture is also available as a diagram ([HTML](docs/
 
 ## Feature map
 
-Features are grouped into three swimlanes, each with one owner: **P1** Agent architecture, **P2** Knowledge & identity, **P3** AgentOps & platform. The **F1–F8** tags match the diagrams. Items marked *slides* are covered as next steps only. For the full table with issues, see [docs/workshop/feature-map.md](docs/workshop/feature-map.md), and for the swimlane diagram see [HTML](docs/diagrams/feature-swimlanes.html) · [PNG](docs/diagrams/feature-swimlanes.png).
+Features are grouped into three swimlanes, each with one owner: **P1** Agent architecture (John, [@johnsward](https://github.com/johnsward)), **P2** Knowledge & identity (Rickard, [@wdhm](https://github.com/wdhm)), **P3** AgentOps & platform (Louise, [@llandinl](https://github.com/llandinl)). The **F1–F8** tags match the diagrams. Items marked *slides* are covered as next steps only. For the full table with issues, see [docs/workshop/feature-map.md](docs/workshop/feature-map.md), and for the swimlane diagram see [HTML](docs/diagrams/feature-swimlanes.html) · [PNG](docs/diagrams/feature-swimlanes.png).
 
 | Lane | F | Capability | How it is implemented | ADR |
 |---|---|---|---|---|

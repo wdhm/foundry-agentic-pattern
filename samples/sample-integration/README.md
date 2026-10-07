@@ -18,4 +18,4 @@ The sample is designed so that typical documentation drift can be **planted** on
 
 All names, systems and data are fictional.
 
-**Owner:** P2 (Knowledge & identity: mock data)
+**Owner:** P2 (Knowledge & identity: mock data): Rickard ([@wdhm](https://github.com/wdhm))

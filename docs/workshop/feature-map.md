@@ -1,6 +1,6 @@
 # Feature map: three swimlanes
 
-Every workshop feature has **one owner** (P1, P2 or P3). It is either **built in the repo and demoed live**, or covered **on slides only** as a next step. The feature numbers **F1–F8** are the same as in the diagrams.
+Every workshop feature has **one owner**: **P1** John ([@johnsward](https://github.com/johnsward)), **P2** Rickard ([@wdhm](https://github.com/wdhm)) or **P3** Louise ([@llandinl](https://github.com/llandinl)). It is either **built in the repo and demoed live**, or covered **on slides only** as a next step. The feature numbers **F1–F8** are the same as in the diagrams.
 
 | Diagram | HTML | PNG |
 |---|---|---|
@@ -24,7 +24,7 @@ Every workshop feature has **one owner** (P1, P2 or P3). It is either **built in
 | F7 | Versioning & CI/CD | P3 |
 | F8 | Mock data | P2 |
 
-## P1: Agent architecture (area 01)
+## P1: Agent architecture (area 01) · John
 
 | Feature | F-tag | Built/Slides | Issue(s) |
 |---|---|---|---|
@@ -35,7 +35,7 @@ Every workshop feature has **one owner** (P1, P2 or P3). It is either **built in
 | App / Foundry architecture + fleet registry | – | Built | [#42](https://github.com/wdhm/foundry-agentic-pattern/issues/42), [#38](https://github.com/wdhm/foundry-agentic-pattern/issues/38) |
 | A2A hand-over | – | Slides | [#43](https://github.com/wdhm/foundry-agentic-pattern/issues/43) |
 
-## P2: Knowledge & identity (areas 02 + 03)
+## P2: Knowledge & identity (areas 02 + 03) · Rickard
 
 | Feature | F-tag | Built/Slides | Issue(s) |
 |---|---|---|---|
@@ -48,7 +48,7 @@ Every workshop feature has **one owner** (P1, P2 or P3). It is either **built in
 | Work IQ (Microsoft 365 work context) | – | Slides | [#47](https://github.com/wdhm/foundry-agentic-pattern/issues/47) |
 | PDF · SharePoint (document sources) | – | Slides | [#48](https://github.com/wdhm/foundry-agentic-pattern/issues/48) |
 
-## P3: AgentOps & platform (area 04)
+## P3: AgentOps & platform (area 04) · Louise
 
 | Feature | F-tag | Built/Slides | Issue(s) |
 |---|---|---|---|
