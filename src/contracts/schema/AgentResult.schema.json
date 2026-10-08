@@ -1,0 +1,86 @@
+{
+  "$defs": {
+    "Provenance": {
+      "additionalProperties": false,
+      "properties": {
+        "agent_name": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Agent Name",
+          "type": "string"
+        },
+        "agent_version": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Agent Version",
+          "type": "string"
+        },
+        "contract_version": {
+          "const": "0.1.0",
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "model": {
+          "description": "Model deployment name.",
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Model",
+          "type": "string"
+        },
+        "model_version": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Model Version",
+          "type": "string"
+        },
+        "policy_version": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Policy Version",
+          "type": "string"
+        },
+        "prompt_version": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Prompt Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "agent_name",
+        "agent_version",
+        "model",
+        "model_version",
+        "prompt_version",
+        "policy_version",
+        "contract_version"
+      ],
+      "title": "Provenance",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "contract_version": {
+      "const": "0.1.0",
+      "title": "Contract Version",
+      "type": "string"
+    },
+    "provenance": {
+      "$ref": "#/$defs/Provenance"
+    },
+    "request_id": {
+      "format": "uuid",
+      "title": "Request Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "contract_version",
+    "request_id",
+    "provenance"
+  ],
+  "title": "AgentResult",
+  "type": "object"
+}

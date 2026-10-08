@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=77,<83"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "foundry-agentic-pattern"
+version = "0.1.0"
+description = "Shared contracts for the Foundry agentic reference pattern"
+requires-python = ">=3.11"
+dependencies = ["pydantic>=2.12,<3"]
+
+[project.optional-dependencies]
+dev = [
+  "jsonschema>=4.23,<5",
+  "mypy>=1.15,<2",
+  "pytest>=8.3,<10",
+  "ruff>=0.11,<1",
+]
+
+[project.scripts]
+generate-contract-schemas = "contracts.generate_schema:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["contracts*"]
+
+[tool.setuptools.package-data]
+contracts = ["schema/*.json", "py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+plugins = ["pydantic.mypy"]
+files = ["src/contracts"]

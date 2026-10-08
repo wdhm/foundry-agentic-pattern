@@ -1,0 +1,139 @@
+{
+  "$defs": {
+    "RequestContext": {
+      "additionalProperties": false,
+      "properties": {
+        "adr_refs": {
+          "items": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "title": "Adr Refs",
+          "type": "array"
+        },
+        "wiki_page_paths": {
+          "items": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "title": "Wiki Page Paths",
+          "type": "array"
+        },
+        "work_item_ids": {
+          "items": {
+            "exclusiveMinimum": 0,
+            "type": "integer"
+          },
+          "title": "Work Item Ids",
+          "type": "array"
+        }
+      },
+      "title": "RequestContext",
+      "type": "object"
+    },
+    "Subject": {
+      "additionalProperties": false,
+      "properties": {
+        "changed_paths": {
+          "items": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "title": "Changed Paths",
+          "type": "array"
+        },
+        "commit_sha": {
+          "description": "Full Git commit SHA; branches and short SHAs are not accepted.",
+          "pattern": "^[0-9a-fA-F]{40}$",
+          "title": "Commit Sha",
+          "type": "string"
+        },
+        "pr_reference": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pr Reference"
+        },
+        "repo": {
+          "description": "Repository URL or owner/repository identifier.",
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Repo",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo",
+        "commit_sha"
+      ],
+      "title": "Subject",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "context": {
+      "$ref": "#/$defs/RequestContext"
+    },
+    "contract_version": {
+      "const": "0.1.0",
+      "title": "Contract Version",
+      "type": "string"
+    },
+    "correlation_id": {
+      "format": "uuid",
+      "title": "Correlation Id",
+      "type": "string"
+    },
+    "documentation_standard_ref": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Documentation Standard Ref",
+      "type": "string"
+    },
+    "request_id": {
+      "format": "uuid",
+      "title": "Request Id",
+      "type": "string"
+    },
+    "requested_by": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Requested By",
+      "type": "string"
+    },
+    "subject": {
+      "$ref": "#/$defs/Subject"
+    },
+    "trigger": {
+      "description": "Adapter-defined trigger name, for example cli or github_pr.",
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Trigger",
+      "type": "string"
+    }
+  },
+  "required": [
+    "contract_version",
+    "request_id",
+    "correlation_id",
+    "trigger",
+    "requested_by",
+    "subject",
+    "documentation_standard_ref"
+  ],
+  "title": "AgentRequest",
+  "type": "object"
+}
