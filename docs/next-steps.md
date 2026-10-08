@@ -13,6 +13,7 @@ In the workshop, each topic is presented **on slides only**, at the end of its o
 | Landing zones & subscription vending | P3 | [2](#2-landing-zone--subscription-vending) | [#50](https://github.com/wdhm/foundry-agentic-pattern/issues/50) |
 | Deploy strategy (PTU · spillover · regions) | P3 | [5](#5-model-deployment-strategy) | [#51](https://github.com/wdhm/foundry-agentic-pattern/issues/51) |
 | On-behalf-of identity, more agents | – | [6](#6-on-behalf-of-obo-identity), [7](#7-more-agents-on-the-same-pattern) | – |
+| Production hardening (out of MVP scope) | All | [9](#9-production-hardening-out-of-mvp-scope) | [ADR 0022](adr/0022-mvp-scope-platform-first.md) |
 
 ## 1. Agent-to-Agent (A2A): separate Publisher agent
 
@@ -65,3 +66,20 @@ v1 reads code, configuration and IaC from Git, and reads wiki pages and work ite
 - Keep **evidence exact**. Cite the document URL plus a version (SharePoint version / ETag, or blob hash) and the page or section, so the "evidence at an exact version" rule still holds.
 - Respect **document permissions**. Either index only libraries that the agent identity may read, or use OBO / permission-trimmed retrieval ([section 6](#6-on-behalf-of-obo-identity)).
 - Optionally make SharePoint a **write target** as well as a source, behind the same approval-gated tool pattern as the wiki.
+
+## 9. Production hardening (out of MVP scope)
+
+The workshop builds an MVP that shows the platform ([ADR 0022](adr/0022-mvp-scope-platform-first.md)). These items make it production-grade. They are explained on slides, not built. Items marked *proposal* are pending P1/P3 confirmation.
+
+| Item | Why it matters | Lane |
+|---|---|---|
+| Least-privilege Azure DevOps access: a custom group with only work item read and wiki contribute, plus a role-based access matrix per source | Smaller blast radius than Basic + Contributors | P2 ([#22](https://github.com/wdhm/foundry-agentic-pattern/issues/22)) |
+| Run id + approver in the wiki commit message, and ETag optimistic concurrency on wiki writes | Stronger audit trail, no lost updates | P2 ([#21](https://github.com/wdhm/foundry-agentic-pattern/issues/21)) |
+| Azure Repos as an additional code source | Same pattern as GitHub, via the Azure DevOps MCP server | P2 ([#44](https://github.com/wdhm/foundry-agentic-pattern/issues/44)) |
+| Multi-agent identity gateway (agent identity → agent user map), private ingress, logs in Log Analytics | Serve many agents from one gateway; no public endpoint | P2 ([ADR 0021](adr/0021-agent-user-and-ado-mcp-gateway.md)) |
+| Mock data generator with seed/reset scripts | Repeatable demo state at scale | P2 ([#17](https://github.com/wdhm/foundry-agentic-pattern/issues/17)) |
+| Dedicated audit store in Cosmos DB (runs, decisions, pending approvals) *(proposal)* | Long-term, queryable audit beyond trace retention | P1 ([ADR 0016](adr/0016-state-and-audit-cosmos-db.md)) |
+| Hosted agent with custom code *(proposal: one demo or slide)* | Full control of orchestration | P1 ([ADR 0009](adr/0009-hosted-agent-runtime.md)) |
+| Onboarding new agents from CI *(proposal)* | No manual step per new agent | P3 ([#28](https://github.com/wdhm/foundry-agentic-pattern/issues/28)) |
+| Custom eval metrics, ground-truth gate and a custom monitoring workbook *(proposal)* | Quality bar tailored to the organisation | P3 ([ADR 0013](adr/0013-evaluation-gate-in-ci.md)) |
+| APIM AI Gateway with FinOps cost attribution per agent/version *(proposal)* | Cost control and chargeback | P3 ([R4](risks.md#r4)) |

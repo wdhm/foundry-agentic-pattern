@@ -43,6 +43,20 @@ Significant design decisions are recorded in [`docs/adr/`](docs/adr/README.md).
 
 Spikes (`type:spike`) answer a specific question with a **go/no-go** outcome. Record the result as an issue comment. If the outcome changes a decision, record it in an ADR or in [`docs/risks.md`](docs/risks.md).
 
+## Document what you learn (every step)
+
+This repo is also workshop material, so every setup or integration step we do must leave a written trail that others can repeat:
+
+- **What we did:** the portal path or command, with placeholders instead of IDs and secrets.
+- **What failed and why:** error messages and the fix (a "gotchas" table).
+- **Official references:** link each step to **Microsoft Learn** (or other first-party docs). Check that the links resolve.
+- **Where:**
+  - environment values and the change log go in [`docs/setup.md`](docs/setup.md);
+  - how-to and learnings go in [`docs/workshop/`](docs/workshop/) (e.g. the [agent identity guide](docs/workshop/agent-identity-guide.md));
+  - decisions go in an ADR.
+
+Do this in the same PR as the change.
+
 ## Code style (from M1)
 
 - Python 3.11+, formatted and linted with `ruff`, and type-checked.
