@@ -6,6 +6,8 @@ This document describes **Agentic Pattern v1** and the **Documentation Agent v1*
 
 ![Reference architecture](diagrams/reference-architecture.png)
 
+> **MVP scope:** the workshop builds a simple MVP that shows the platform ([ADR 0022](adr/0022-mvp-scope-platform-first.md)). Sections 6 (identity & RBAC matrix), 7 (audit record) and 9 (cost & limits) describe the **target** architecture. In the MVP, they are partly covered by platform features and partly shown on slides ([next steps §9](next-steps.md#9-production-hardening-out-of-mvp-scope)).
+
 ## 1. Principles
 
 - **The contract is the interface.** Agents accept an `AgentRequest` and return an `AgentResult`. They are trigger-agnostic.

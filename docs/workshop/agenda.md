@@ -47,9 +47,8 @@ The agenda follows the three **swimlanes** in the [feature map](feature-map.md) 
 |---|---|---|---|---|
 | 10:30–10:35 | Mock data | F8 | Demo | Fictional sample integration, wiki, work items, planted gaps + ground truth |
 | 10:35–10:45 | Foundry IQ | F3 | Demo | Stable knowledge: documentation standard, ADRs, wiki |
-| 10:45–10:53 | Toolbox (MCP · REST · DevOps) | F1 | Demo | Live calls for code/IaC/config at commit, work items, current wiki page |
-| 10:53–10:57 | Integration patterns | – | Demo | Azure DevOps wiki + Azure Repos as source and target ([#44](https://github.com/wdhm/foundry-agentic-pattern/issues/44)) |
-| 10:57–11:03 | Identities & resource org | – | Demo | Agent ID, least privilege per source, project vs agent scope ([#22](https://github.com/wdhm/foundry-agentic-pattern/issues/22), [#45](https://github.com/wdhm/foundry-agentic-pattern/issues/45)) |
+| 10:45–10:55 | Toolbox (MCP · DevOps · GitHub) | F1 | Demo | Live calls for code at commit, work items, current wiki page; approval-gated wiki write |
+| 10:55–11:03 | Identities & resource org | – | Demo | The agent's own identity and agent user: the wiki commit is authored by the agent, not a person ([guide](agent-identity-guide.md)); project vs agent scope ([#45](https://github.com/wdhm/foundry-agentic-pattern/issues/45)). Least privilege on slides. |
 | 11:03–11:10 | *Agent 365 · Work IQ · PDF/SharePoint* | – | Slides | Fleet governance across M365 ([#46](https://github.com/wdhm/foundry-agentic-pattern/issues/46)), work context ([#47](https://github.com/wdhm/foundry-agentic-pattern/issues/47)), document sources ([#48](https://github.com/wdhm/foundry-agentic-pattern/issues/48)) |
 
 ## 11:10–11:50 · P3 · AgentOps & platform · Louise

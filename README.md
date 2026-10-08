@@ -2,7 +2,9 @@
 
 Reference pattern for building **governed, versioned, evaluated agents on Microsoft Foundry**, with a minimal **Documentation Agent** as the first implementation.
 
-> **Status:** early implementation (M0/M1). This repo contains architecture docs, decision records (ADRs), the v0 Python contract and generated JSON Schemas. Hosted agent code and infrastructure are not implemented yet — see [Roadmap](#status--roadmap).
+> **Status:** building the **MVP** (M1). The repo contains architecture docs, decision records (ADRs), the v0 Python contract and the Azure DevOps identity gateway. An agent already reads work items and writes to the wiki under its own identity, after approval. See [Roadmap](#status--roadmap).
+>
+> **Scope:** this is a workshop that **shows Microsoft Foundry's tools and platform**. We keep the flow simple and use platform-native features first; production hardening is covered as [next steps](docs/next-steps.md#9-production-hardening-out-of-mvp-scope) ([ADR 0022](docs/adr/0022-mvp-scope-platform-first.md)).
 
 ---
 
@@ -131,9 +133,9 @@ Features are grouped into three swimlanes, each with one owner: **P1** Agent arc
 
 | Milestone | Goal | Status |
 |---|---|---|
-| **M0 · Spikes** | Close the open risks R1–R4 ([risks](docs/risks.md)) | 🟡 In progress |
-| **M1 · Walking skeleton** | A hosted agent, deployed to the manually set-up environment ([docs/setup.md](docs/setup.md), [ADR 0020](docs/adr/0020-manual-setup-first.md)), that accepts an `AgentRequest` and returns a schema-valid stub `AgentResult`. The run produces a trace in App Insights and a row in Cosmos DB, and can be triggered from the CLI. | ⚪ Planned |
-| **M2 · Pattern tracks** | Agent architecture, knowledge & identity, and AgentOps & platform built in parallel | ⚪ Planned |
+| **M0 · Spikes** | Close the open risks R1–R4 ([risks](docs/risks.md)). R3 (identity) is done. | 🟡 In progress |
+| **M1 · MVP slice** | One simple happy path on the manually set-up environment ([ADR 0020](docs/adr/0020-manual-setup-first.md), [ADR 0022](docs/adr/0022-mvp-scope-platform-first.md)): Foundry agent + Azure DevOps tools + approval + structured result + Foundry IQ + GitHub source + tracing, triggered from a CLI | 🟡 In progress |
+| **M2 · Showcase increments** | One feature, one owner, one demo each: Teams publish, evals in CI, versions & rollback, AI gateway, fleet management, hosted agent | ⚪ Planned |
 | **M3 · End-to-end demo** | PR → result → Teams approval → wiki updated. The eval gate blocks a bad version and a rollback is shown. | ⚪ Planned |
 | **M4 · Workshop packaging** | Docs per area, final diagrams, slides, dry run | ⚪ Planned |
 
