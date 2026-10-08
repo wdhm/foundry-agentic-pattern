@@ -65,8 +65,9 @@ Placeholders: `<tenant>`, `<blueprint-app-id>`, `<agent-identity-id>`, `<agent-u
 
 Create a prompt agent in the Foundry project (portal or `POST {project}/agents/{name}/versions`). Foundry creates the **agent identity blueprint** and the **agent identity**. In Entra, the agent identity appears as `<account>-<project>-<agent>-AgentIdentity`.
 
-- Learn: [Agent identity concepts](https://learn.microsoft.com/azure/foundry/agents/concepts/agent-identity)
-- Gotcha: **publishing** an agent creates a **new** agent identity ([R3](../risks.md#r3)), so the steps below must be repeated for it, which means automating them in CI later.
+- Learn: [Agent identity concepts](https://learn.microsoft.com/azure/foundry/agents/concepts/agent-identity), [Agent types during the transition](https://learn.microsoft.com/azure/foundry/agents/how-to/migrate-agent-applications#agent-types-during-the-transition)
+- **Every new agent gets its own identity and blueprint** when you create it. New versions of the same agent keep that identity: we checked versions v1 → v3. So steps 2–6 are needed **once per agent**, and [`onboard-agent.ps1`](#onboard-another-agent-automated) does them for you.
+- Gotcha: older material says publishing creates a new identity. That applies to **legacy** agents and to the legacy *Agent Application* publish flow ([Publish as an Agent Application](https://learn.microsoft.com/azure/foundry/agents/how-to/agent-applications)). Legacy agents (with `instance_identity` set to `null`) use the shared project identity. Check which model your agent uses with `GET {project}/agents/{name}?api-version=2025-11-15-preview` and the header `Foundry-Features: AgentEndpoints=V1Preview`: `instance_identity` and `blueprint` are set for new-model agents.
 
 ### 2. Create the agent user
 
@@ -126,7 +127,7 @@ The remote MCP server's Entra application is **"Azure DevOps MCP"** (appId `2a72
 
 - Learn: [Configure credentials for the blueprint](https://learn.microsoft.com/entra/agent-id/create-blueprint#configure-credentials-for-the-agent-identity-blueprint), [Workload identity federation with managed identities](https://learn.microsoft.com/entra/workload-id/workload-identity-federation-config-app-trust-managed-identity)
 - Result: the gateway can run the agent user flow **with no secrets**.
-- Open question: Foundry manages this blueprint. Check after publish and upgrades that our extra credential survives ([R3](../risks.md#r3)).
+- Verified: our extra credential survives new agent versions, next to Foundry's own `fmi-fic` credential. Still open: whether it survives publishing to Microsoft 365 / Teams, which is tested in [#4](https://github.com/wdhm/foundry-agentic-pattern/issues/4) ([R3](../risks.md#r3)).
 
 ### 6. Protect the gateway with its own Entra app
 
@@ -193,6 +194,53 @@ az containerapp create -g <rg> -n ca-doc-agent-mcp --environment cae-doc-agent-m
    - The wiki commit author is `doc-agent-spike (agent user)`.
    - The gateway log shows `authorized caller oid=<agent-identity-id>` and `rpc=tools/call tool=wiki_upsert_page`.
 
+## Onboard another agent (automated)
+
+[`infra/scripts/onboard-agent.ps1`](../../infra/scripts/onboard-agent.ps1) runs steps 2, 3, 4, 5.2 and 6.2 for an existing agent, then points the gateway at it. The script is idempotent: it skips any step that is already done, so it's safe to run again.
+
+Prerequisites:
+- The agent already exists and has the MCP tool from step 8.
+- You are signed in with the Azure CLI as an account that can create users and grants in Entra and add users in Azure DevOps.
+
+```powershell
+./infra/scripts/onboard-agent.ps1 -AgentName <agent> `
+    -ProjectEndpoint https://<account>.services.ai.azure.com/api/projects/<project> `
+    -ResourceGroup <rg> -GatewayAppId <gateway-app-id> -AdoOrg <org> -AdoProject <project>
+```
+
+| Step | What it does | API |
+|---|---|---|
+| 1 | Reads `instance_identity` and `blueprint` of the agent | Foundry `GET agents/{name}` |
+| 2 | Creates the agent user `<agent>@<default domain>` | [Create agentUser](https://learn.microsoft.com/graph/api/agentuser-post?view=graph-rest-1.0) |
+| 3 | Gives Azure DevOps access: Basic + project Contributors (retries while the new user replicates) | [User entitlements REST](https://learn.microsoft.com/rest/api/azure/devops/memberentitlementmanagement/user-entitlements/add?view=azure-devops-rest-7.1) |
+| 4 | Grants delegated consent for the agent user only | [Create oauth2PermissionGrant](https://learn.microsoft.com/graph/api/oauth2permissiongrant-post?view=graph-rest-1.0) |
+| 5 | Adds the gateway's managed identity as a credential on the agent's blueprint | [Create federatedIdentityCredential](https://learn.microsoft.com/graph/api/application-post-federatedidentitycredentials?view=graph-rest-beta) |
+| 6 | Assigns the gateway app role to the agent identity | [Grant an app role](https://learn.microsoft.com/graph/api/serviceprincipal-post-approleassignedto?view=graph-rest-1.0) |
+| 7 | Re-points the gateway's environment variables, then waits for the new revision and `/healthz` | [`az containerapp update`](https://learn.microsoft.com/cli/azure/containerapp#az-containerapp-update) |
+
+**Single-agent gateway:** the gateway serves **one** agent at a time. Step 7 switches it to the onboarded agent, and calls from any other agent get `403`. To serve several agents at once, deploy one gateway per agent (use `-SkipGateway` and your own deployment). Another option is to extend the gateway with an identity → agent user map.
+
+How we verified it (2026-10-08):
+1. We created a second agent, `doc-agent-test`, as a copy of `doc-agent-spike` v3. Before onboarding, its tool call failed with `AADSTS501051`.
+2. After the script: it read work item 1 and created a wiki page after approval. The commit author was `doc-agent-test (agent user)`, and the gateway logged the new agent identity as the caller.
+3. We ran the script again for `doc-agent-spike`. Every step reported "exists", and the gateway switched back.
+
+## Agent identity lifecycle
+
+| Event | Identity effect | What to do |
+|---|---|---|
+| Create a new agent | A new agent identity and blueprint | Run `onboard-agent.ps1` |
+| New version of the same agent | Same identity and blueprint; our credential stays | Nothing |
+| Publish to Microsoft 365 / Teams (new-model agent) | Same identity, according to [Learn](https://learn.microsoft.com/azure/foundry/agents/how-to/migrate-agent-applications#agent-types-during-the-transition) | Nothing expected; verify in [#4](https://github.com/wdhm/foundry-agentic-pattern/issues/4) |
+| Publish as a legacy *Agent Application* | A new, distinct identity ([Learn](https://learn.microsoft.com/azure/foundry/agents/how-to/agent-applications)) | Avoid; if you must, onboard that identity |
+| Delete the agent | Foundry deletes the agent identity and blueprint. That also removes our credential, the app role assignment and the grant's client. | Offboard the agent user (below) |
+
+**Offboard** an agent. We tested this on `doc-agent-test`.
+1. Remove the agent user from Azure DevOps: Organization settings → Users, or `DELETE https://vsaex.dev.azure.com/{org}/_apis/userentitlements/{id}?api-version=7.1-preview.3`. This frees its Basic license.
+2. Delete the agent user: `DELETE https://graph.microsoft.com/beta/users/{id}`. It stays in *Deleted users* for 30 days.
+3. Delete the agent: `DELETE {project}/agents/{name}?api-version=2025-11-15-preview`. Its identity and blueprint disappear from Entra.
+4. If the gateway pointed at this agent, run `onboard-agent.ps1` for the agent that should use it next.
+
 ## Gotchas we hit
 
 | Symptom | Cause | Fix |
@@ -203,6 +251,10 @@ az containerapp create -g <rg> -n ca-doc-agent-mcp --environment cae-doc-agent-m
 | `HTML 400 Bad Request` from upstream | The gateway forwarded ingress headers (`x-forwarded-*`, `x-envoy-*` …) | Forward only `content-type`, `accept`, `mcp-session-id`, `mcp-protocol-version` and `last-event-id` |
 | Container Apps environment create fails in Sweden Central | `AKSCapacityHeavyUsage` (regional capacity) | Use another region (we used North Europe). Foundry calls the gateway over HTTPS. |
 | The Azure CLI can't get a token for the gateway app | The Azure CLI is not a consented client of the custom API | Expected. Only the agent identity has the app role. |
+| A new agent's tool call fails with `AADSTS501051` (*not assigned to a role for the application*) | Foundry can't get a token for the gateway because the new agent identity lacks the app role | Run `onboard-agent.ps1` (step 6) |
+| A tool call fails with `403 Forbidden` from the gateway | The gateway points at a different agent (single-agent gateway) | Run `onboard-agent.ps1` for this agent |
+| Azure DevOps error `5101` (*user from outside your directory*) right after the agent user is created | Entra → Azure DevOps replication delay | Retry after ~10–30 s; the script retries automatically |
+| `az rest` fails on `applications(appId='…')` URLs on Windows | cmd mangles the parentheses and quotes | Use `Invoke-RestMethod` (as the script does) |
 
 ## Security notes (hardening comes later, per ADR 0020)
 

@@ -49,10 +49,11 @@ We will:
 - **Negative / trade-offs:**
   - One more runtime component (gateway) with an internet-facing endpoint.
   - The agent user needs an Azure DevOps license (Basic).
-  - We add a federated credential to a **Foundry-managed blueprint**; it's unverified whether this survives publish and upgrades.
-  - A published agent gets a new agent identity, so the agent user, the grant and the gateway config must be redone.
+  - We add a federated credential to a **Foundry-managed blueprint**. It survives new agent versions; survival of Microsoft 365 / Teams publishing is not verified yet.
+  - Every new agent gets its own agent identity, so the agent user, the grant, the app role and the gateway config are needed per agent. This is automated by [`onboard-agent.ps1`](../../infra/scripts/onboard-agent.ps1).
+  - The gateway serves one agent at a time.
 - **Follow-ups:**
-  - M2: post-deploy automation for the agent user, grant, app role and gateway env ([R3](../risks.md#r3)).
+  - M2: run `onboard-agent.ps1` from CI after deploy ([#28](https://github.com/wdhm/foundry-agentic-pattern/issues/28), [R3](../risks.md#r3)).
   - M4: Bicep for the gateway and identities ([#52](https://github.com/wdhm/foundry-agentic-pattern/issues/52)).
   - Hardening:
     - a narrower Azure DevOps group;

@@ -6,7 +6,7 @@ Verified risks and open questions for Agentic Pattern v1. Each risk has a status
 |---|---|---|---|---|---|
 | [R1](#r1) | Tool approval enforcement and approval UX in Teams | 🟡 Partly verified, spike needed | P1 · John | [0008](adr/0008-human-in-the-loop-approval.md), [0009](adr/0009-hosted-agent-runtime.md), [0016](adr/0016-state-and-audit-cosmos-db.md) | [#1](https://github.com/wdhm/foundry-agentic-pattern/issues/1) |
 | [R2](#r2) | Publish hosted agent to Teams, and rollback via `version_selector` | 🟢 OK (verify in spike) | P3 · Louise | [0008](adr/0008-human-in-the-loop-approval.md), [0009](adr/0009-hosted-agent-runtime.md), [0013](adr/0013-evaluation-gate-in-ci.md), [0018](adr/0018-region-sweden-central.md) | [#4](https://github.com/wdhm/foundry-agentic-pattern/issues/4) |
-| [R3](#r3) | Agent identity lifecycle and Azure DevOps access | 🟢 Go: agent user + gateway ([ADR 0021](adr/0021-agent-user-and-ado-mcp-gateway.md)); lifecycle automation open | P2 · Rickard | [0012](adr/0012-agent-identity-and-rbac.md), [0014](adr/0014-infrastructure-scope.md), [0021](adr/0021-agent-user-and-ado-mcp-gateway.md) | [#2](https://github.com/wdhm/foundry-agentic-pattern/issues/2) |
+| [R3](#r3) | Agent identity lifecycle and Azure DevOps access | 🟢 Go: agent user + gateway ([ADR 0021](adr/0021-agent-user-and-ado-mcp-gateway.md)); onboarding scripted, CI open | P2 · Rickard | [0012](adr/0012-agent-identity-and-rbac.md), [0014](adr/0014-infrastructure-scope.md), [0021](adr/0021-agent-user-and-ado-mcp-gateway.md) | [#2](https://github.com/wdhm/foundry-agentic-pattern/issues/2) |
 | [R4](#r4) | AI Gateway token limits and per-agent cost attribution | 🟡 Design adjusted | P3 · Louise | [0014](adr/0014-infrastructure-scope.md) | [#3](https://github.com/wdhm/foundry-agentic-pattern/issues/3) |
 
 ---
@@ -52,12 +52,12 @@ Verified risks and open questions for Agentic Pattern v1. Each risk has a status
 <a id="r3"></a>
 ## R3: Agent identity lifecycle and Azure DevOps access
 
-**Status:** 🟢 Go (spike done, 2026-10-08). The lifecycle automation is still open.
+**Status:** 🟢 Go (spike done, 2026-10-08). Per-agent onboarding is automated ([`onboard-agent.ps1`](../infra/scripts/onboard-agent.ps1)).
 
 **Findings**
-- A hosted agent gets its **own agent identity** (Entra Agent ID).
-- **Publishing creates a new agent identity**, so role assignments must be repeated. They can only be made **after** the agent exists, which rules out upfront Bicep and requires a **post-deploy CI step**.
-  Source: [Agent identity concepts](https://learn.microsoft.com/azure/foundry/agents/concepts/agent-identity)
+- Every new-model agent gets its **own agent identity and blueprint** when it is created. New versions keep the same identity. According to Learn, publishing to Microsoft 365 / Teams does not change it either. Legacy agents use the shared project identity, and the legacy *Agent Application* publish flow creates a distinct identity.
+  Sources: [Agent identity concepts](https://learn.microsoft.com/azure/foundry/agents/concepts/agent-identity), [Agent types during the transition](https://learn.microsoft.com/azure/foundry/agents/how-to/migrate-agent-applications#agent-types-during-the-transition)
+- Role assignments can only be made **after** the agent exists, which rules out upfront Bicep. They run as a post-deploy step: `infra/scripts/onboard-agent.ps1`, which is idempotent.
 - **Spike result:** Azure DevOps **rejects agent identity tokens**, both on REST and on the [remote Azure DevOps MCP server](https://learn.microsoft.com/azure/devops/mcp-server/remote-mcp-server). The error is *"Identity … is currently Deleted"*.
 - Azure DevOps **accepts the agent's user account** (agent user). Its token comes from the [agent user OAuth flow](https://learn.microsoft.com/entra/agent-id/agent-user-oauth-flow), secretless via a user-assigned managed identity as a blueprint credential.
 - End to end, verified: Foundry agent → gateway → remote Azure DevOps MCP server. The agent read a work item and updated a wiki page after approval. The commit author is `doc-agent-spike (agent user)`.
@@ -66,13 +66,9 @@ Verified risks and open questions for Agentic Pattern v1. Each risk has a status
 **Decision:** [ADR 0021](adr/0021-agent-user-and-ado-mcp-gateway.md): agent user + thin gateway to Microsoft's remote Azure DevOps MCP server.
 
 **Remaining risk**
-- After publish, the new agent identity needs:
-  - a new agent user;
-  - a consent grant;
-  - an app role assignment;
-  - gateway settings.
-  Automate this as a post-deploy step (`post-deploy-rbac.yml`).
-- We add a federated credential to a Foundry-managed blueprint; verify it survives publish and upgrades.
+- Each new agent needs a new agent user, a consent grant, an app role assignment and gateway settings. `onboard-agent.ps1` does all of this and was verified on a second agent. Still to do: run it from CI ([#28](https://github.com/wdhm/foundry-agentic-pattern/issues/28)).
+- The gateway serves one agent at a time; onboarding re-points it.
+- Our federated credential on the Foundry-managed blueprint survives new versions. Whether it survives Microsoft 365 / Teams publishing is not verified yet ([#4](https://github.com/wdhm/foundry-agentic-pattern/issues/4)).
 - Security debt:
   - the agent user has Basic + Contributors (narrow it);
   - public gateway ingress;
