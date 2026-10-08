@@ -67,7 +67,7 @@ The agenda follows the three **swimlanes** in the [feature map](feature-map.md) 
 How to fork the repo, swap in your own sources and documentation standard, and plan next steps with your team.
 
 ## Demo checklist (pre-workshop)
-- [ ] Environment deployed with `azd up` in the shared tenant (Sweden Central)
+- [ ] Environment deployed with `azd up` ([#52](https://github.com/wdhm/foundry-agentic-pattern/issues/52)) in the shared tenant (Sweden Central)
 - [ ] Mock data seeded (wiki, work items, ADRs, documentation standard)
 - [ ] Agent published to Teams; presenters have access
 - [ ] A prepared PR with planted gaps ready to open live

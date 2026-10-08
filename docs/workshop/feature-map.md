@@ -63,7 +63,7 @@ Every workshop feature has **one owner**: **P1** John ([@johnsward](https://gith
 
 | Item | Issue(s) |
 |---|---|
-| Walking skeleton (`azd up` → stub result) | [#5](https://github.com/wdhm/foundry-agentic-pattern/issues/5)–[#11](https://github.com/wdhm/foundry-agentic-pattern/issues/11) |
+| Walking skeleton (manual setup → stub result) | [#5](https://github.com/wdhm/foundry-agentic-pattern/issues/5)–[#11](https://github.com/wdhm/foundry-agentic-pattern/issues/11) |
 | End-to-end demo | [#30](https://github.com/wdhm/foundry-agentic-pattern/issues/30)–[#34](https://github.com/wdhm/foundry-agentic-pattern/issues/34) |
 | Docs per lane | [#35](https://github.com/wdhm/foundry-agentic-pattern/issues/35), [#36](https://github.com/wdhm/foundry-agentic-pattern/issues/36), [#37](https://github.com/wdhm/foundry-agentic-pattern/issues/37) |
 | Slides (one section per lane) and dry run | [#39](https://github.com/wdhm/foundry-agentic-pattern/issues/39), [#40](https://github.com/wdhm/foundry-agentic-pattern/issues/40) |
