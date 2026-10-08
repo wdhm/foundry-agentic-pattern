@@ -1,6 +1,6 @@
 # 0012. Identity: agent's own identity (Entra Agent ID), least privilege per source; OBO as alternative
 
-- **Status:** Accepted (pending spike [R3](../risks.md#r3))
+- **Status:** Accepted; Azure DevOps access refined by [0021](0021-agent-user-and-ado-mcp-gateway.md) (spike [R3](../risks.md#r3) done)
 - **Date:** 2026-10-06
 - **Deciders:** P1, P2, P3
 - **Related:** [0008](0008-human-in-the-loop-approval.md), [0011](0011-knowledge-foundry-iq-and-toolbox.md), [0014](0014-infrastructure-scope.md), risk [R3](../risks.md#r3)
