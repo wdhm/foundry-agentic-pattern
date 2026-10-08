@@ -20,12 +20,22 @@ This is **the** environment for development and the workshop. Don't create paral
 | Azure DevOps org | [`dev.azure.com/foundry-agentic`](https://dev.azure.com/foundry-agentic), connected to the **same Entra tenant** (required for agent identity, [#2](https://github.com/wdhm/foundry-agentic-pattern/issues/2)) |
 | Azure DevOps project / wiki | `integration-team` / `integration-team.wiki` (project wiki) |
 
+### Team accounts (sign in to Azure, Foundry and Azure DevOps with these)
+
+| Track | Person | Tenant account | Subscription role |
+|---|---|---|---|
+| P1 | John | `MarioR@M365CPI54615665.onmicrosoft.com` | Owner |
+| P2 | Rickard | `admin@M365CPI54615665.onmicrosoft.com` | Owner |
+| P3 | Louise | `SashaO@M365CPI54615665.onmicrosoft.com` | Owner |
+
+Passwords and MFA are never stored in this repo.
+
 Subscription and tenant IDs go in your local `.env`, not in this repo.
 
 **Getting started:**
 
 ```powershell
-az login --tenant M365CPI54615665.onmicrosoft.com
+az login --tenant M365CPI54615665.onmicrosoft.com   # sign in with your tenant account
 az account set -s ME-M365CPI54615665-rwidholm-1
 ```
 
@@ -35,7 +45,7 @@ az account set -s ME-M365CPI54615665-rwidholm-1
 |---|---|
 | Naming (new resources) | `<type>-foundry-agentic` (e.g. `cosmos-foundry-agentic`, `appi-foundry-agentic`, `srch-foundry-agentic`, `apim-foundry-agentic`); lowercase, no secrets in names |
 | Tags | `project=foundry-agentic-pattern`, `owner=<alias>` |
-| Access | All three owners are members or guests in the tenant, with **Contributor** (or Owner) on `rg-foundry-agentic-pattern` and **Azure AI User** on the Foundry project |
+| Access | Each owner signs in with their **tenant account** (below), which is **Owner** on the subscription; add **Azure AI User** on the Foundry project when needed |
 
 ## Phase 1: Base (needed by all tracks, M0/M1)
 
@@ -44,7 +54,9 @@ az account set -s ME-M365CPI54615665-rwidholm-1
 - [ ] **Model deployments**: one **chat** model (agent) and one **eval** model (evaluators). Record the model and version below.
 - [ ] **Log Analytics** + **Application Insights**, connected to the Foundry project (tracing)
 - [ ] **Cosmos DB** (NoSQL, serverless) with database `fap` and containers `runs`, `results`, `approvals` ([ADR 0016](adr/0016-state-and-audit-cosmos-db.md))
-- [ ] RBAC: Rickard ✅, Louise ✅ (guest, Owner), John ⬜ (to be invited). Project managed identity → Cosmos DB data contributor.
+- [x] Team access: tenant accounts for John, Rickard and Louise are Owner on the subscription (see the team accounts table)
+- [x] All three tenant accounts are users (Basic) in the Azure DevOps org `foundry-agentic`
+- [ ] RBAC: project managed identity → Cosmos DB data contributor
 - [x] **Azure DevOps** org `foundry-agentic`, project `integration-team`, project wiki (connected to the tenant)
 - [ ] A few fictional work items + wiki pages ([ADR 0005](adr/0005-generic-repo-with-fictional-data.md)); replaced by mock data in [#17](https://github.com/wdhm/foundry-agentic-pattern/issues/17). Needed by the P2 spike [#2](https://github.com/wdhm/foundry-agentic-pattern/issues/2).
 
