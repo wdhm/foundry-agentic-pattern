@@ -2,7 +2,7 @@
 
 Infrastructure as code for the pattern, deployed with the **Azure Developer CLI** (`azd up`) and **Bicep**.
 
-> Placeholder. Implementation starts in **M1**.
+> Placeholder. Per [ADR 0020](../docs/adr/0020-manual-setup-first.md), the environment is set up **manually** during M0–M3 following [docs/setup.md](../docs/setup.md). That runbook gets codified here as `azd` + Bicep in **M4** ([#52](https://github.com/wdhm/foundry-agentic-pattern/issues/52)).
 
 ## Planned scope ([ADR 0014](../docs/adr/0014-infrastructure-scope.md))
 

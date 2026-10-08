@@ -5,6 +5,8 @@
 - **Deciders:** P1, P2, P3
 - **Related:** [0002](0002-workshop-format.md), [0012](0012-agent-identity-and-rbac.md), [0016](0016-state-and-audit-cosmos-db.md), [0018](0018-region-sweden-central.md), risks [R3](../risks.md#r3), [R4](../risks.md#r4)
 
+> **Phasing (2026-10-08):** the scope below is unchanged, but delivery is phased by [ADR 0020](0020-manual-setup-first.md). The environment is set up **manually** per [docs/setup.md](../setup.md) during M0–M3, and codified as `azd` + Bicep in M4 ([#52](https://github.com/wdhm/foundry-agentic-pattern/issues/52)).
+
 ## Context
 
 Attendees must be able to deploy the pattern with `azd up` in their own subscription. Enterprise concerns such as landing zones, organisation-wide agent governance and capacity planning matter, but they vary by organisation and would make the repo hard to deploy.
@@ -38,4 +40,4 @@ Attendees must be able to deploy the pattern with `azd up` in their own subscrip
 
 - **Positive:** a deployable, self-contained environment that demonstrates governance features.
 - **Negative:** APIM adds deployment time and cost, and network isolation is not in v1.
-- **Follow-ups:** M0 spike (R4), and the `azd` baseline in M1.
+- **Follow-ups:** M0 spike (R4); manual baseline in M1 ([#5](https://github.com/wdhm/foundry-agentic-pattern/issues/5), [docs/setup.md](../setup.md)); `azd` + Bicep in M4 ([#52](https://github.com/wdhm/foundry-agentic-pattern/issues/52)).

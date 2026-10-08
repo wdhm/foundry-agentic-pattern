@@ -105,7 +105,7 @@ Features are grouped into three swimlanes, each with one owner: **P1** Agent arc
 
 ```text
 .
-├── infra/                          # azd + Bicep: Foundry, models, AI Search, APIM, Cosmos DB, App Insights, RBAC
+├── infra/                          # azd + Bicep (M4; manual setup until then, see docs/setup.md)
 ├── src/
 │   ├── contracts/                  # Pydantic AgentRequest / AgentResult (+ generated JSON Schema)
 │   ├── agents/
@@ -119,6 +119,7 @@ Features are grouped into three swimlanes, each with one owner: **P1** Agent arc
 │   └── workflows/                  # CI/CD (added in M1+)
 └── docs/
     ├── architecture.md
+    ├── setup.md                    # Manual Azure setup runbook (ADR 0020)
     ├── risks.md
     ├── next-steps.md
     ├── adr/                        # Architecture Decision Records
@@ -131,7 +132,7 @@ Features are grouped into three swimlanes, each with one owner: **P1** Agent arc
 | Milestone | Goal | Status |
 |---|---|---|
 | **M0 · Spikes** | Close the open risks R1–R4 ([risks](docs/risks.md)) | 🟡 In progress |
-| **M1 · Walking skeleton** | `azd up` deploys a hosted agent that accepts an `AgentRequest` and returns a schema-valid stub `AgentResult`. The run produces a trace in App Insights and a row in Cosmos DB, and can be triggered from the CLI. | ⚪ Planned |
+| **M1 · Walking skeleton** | A hosted agent, deployed to the manually set-up environment ([docs/setup.md](docs/setup.md), [ADR 0020](docs/adr/0020-manual-setup-first.md)), that accepts an `AgentRequest` and returns a schema-valid stub `AgentResult`. The run produces a trace in App Insights and a row in Cosmos DB, and can be triggered from the CLI. | ⚪ Planned |
 | **M2 · Pattern tracks** | Agent architecture, knowledge & identity, and AgentOps & platform built in parallel | ⚪ Planned |
 | **M3 · End-to-end demo** | PR → result → Teams approval → wiki updated. The eval gate blocks a bad version and a rollback is shown. | ⚪ Planned |
 | **M4 · Workshop packaging** | Docs per area, final diagrams, slides, dry run | ⚪ Planned |
@@ -147,7 +148,7 @@ The pattern is designed to be forked privately and adapted. Typical changes:
 3. **Subject.** Replace `samples/sample-integration/` with a real integration, or point the trigger at your own repos.
 4. **Ground truth.** Add your own planted gaps and expected findings in `evals/` so that the gate reflects your quality bar.
 5. **Identity.** Grant the agent identity least-privilege access to your sources ([ADR 0012](docs/adr/0012-agent-identity-and-rbac.md)).
-6. **Deploy.** Run `azd up` (available from M1).
+6. **Deploy.** Run `azd up` (available from M4; until then, follow the manual [setup runbook](docs/setup.md)).
 
 To add a *new* agent, reuse the contract, identity, approval, audit, eval and CI/CD building blocks, and implement only the agent-specific prompt, tools and ground truth.
 
