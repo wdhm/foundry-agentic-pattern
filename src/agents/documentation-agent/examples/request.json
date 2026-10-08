@@ -1,0 +1,13 @@
+{
+  "contract_version": "0.1.0",
+  "request_id": "806c4972-cfcc-4f27-9900-059a22233179",
+  "correlation_id": "70e295ec-dd1f-4946-859e-64836e458d94",
+  "trigger": "cli",
+  "requested_by": "demo-reviewer",
+  "subject": {
+    "repo": "example/sample-integration",
+    "commit_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "changed_paths": ["samples/sample-integration/config.json"]
+  },
+  "documentation_standard_ref": "data/documentation-standard.md"
+}

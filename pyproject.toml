@@ -10,7 +10,12 @@ requires-python = ">=3.11"
 dependencies = ["pydantic>=2.12,<3"]
 
 [project.optional-dependencies]
+agent = [
+  "agent-framework-core==1.19.0",
+  "agent-framework-foundry-hosting==1.0.0b260918",
+]
 dev = [
+  "httpx>=0.28,<1",
   "jsonschema>=4.23,<5",
   "mypy>=1.15,<2",
   "pytest>=8.3,<10",
@@ -19,10 +24,14 @@ dev = [
 
 [project.scripts]
 generate-contract-schemas = "contracts.generate_schema:main"
+documentation-agent = "documentation_agent.main:main"
 
-[tool.setuptools.packages.find]
-where = ["src"]
-include = ["contracts*"]
+[tool.setuptools]
+packages = ["contracts", "documentation_agent"]
+
+[tool.setuptools.package-dir]
+contracts = "src/contracts"
+documentation_agent = "src/agents/documentation-agent/app"
 
 [tool.setuptools.package-data]
 contracts = ["schema/*.json", "py.typed"]
@@ -41,4 +50,8 @@ select = ["E", "F", "I", "UP", "B"]
 python_version = "3.11"
 strict = true
 plugins = ["pydantic.mypy"]
-files = ["src/contracts"]
+files = ["src/contracts", "src/agents/documentation-agent/app"]
+
+[[tool.mypy.overrides]]
+module = ["agent_framework_foundry_hosting"]
+ignore_missing_imports = true

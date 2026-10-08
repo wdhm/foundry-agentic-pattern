@@ -72,6 +72,64 @@ az account set -s ME-M365CPI54615665-rwidholm-1
 
 Document each step here when you do it: portal path or CLI command, settings chosen, and any gotchas.
 
+### Hosted contract stub (P1, #7)
+
+`documentation-agent` version **2** is active in `proj-agentic`. It runs the
+Agent Framework contract stub, separately from `doc-agent-spike`: no model calls,
+tools, wiki writes or Cosmos persistence. Application provenance version `0.1.0`
+is distinct from Foundry deployment version `2`.
+
+The tested Linux x64 image is in the existing registry
+`acrfoundryagenticr8n3ld`, repository `documentation-agent`, tag `stub-0.1.0`.
+Deployment pins digest
+`sha256:0ea1b08788643623e49ee75ab7e7013e3103ed8d551072461e8102eb39cc0220`.
+No new registry, project, resource group or model deployment was provisioned.
+
+Build and local HTTP instructions are in the
+[agent README](../src/agents/documentation-agent/README.md). The deployment used
+an isolated local azd workspace, not repo-wide infrastructure provisioning:
+
+```powershell
+az acr login --name <existing-registry>
+docker tag documentation-agent:0.1.0 <registry-host>/documentation-agent:stub-0.1.0
+docker push <registry-host>/documentation-agent:stub-0.1.0
+
+# In a separate, non-git-ignored deployment workspace:
+azd ai agent init --no-prompt --agent-name documentation-agent `
+  --project-id <existing-project-arm-id> `
+  --image <registry-host>/documentation-agent@sha256:<image-digest> `
+  --protocol responses
+# Change directory into the generated documentation-agent folder.
+azd env set AZURE_CONTAINER_REGISTRY_ENDPOINT <registry-host>
+azd env set AZURE_CONTAINER_REGISTRY_RESOURCE_ID <existing-registry-arm-id>
+azd env set AZURE_CONTAINER_REGISTRY_NAME <existing-registry>
+# In generated azure.yaml: docker.imagePassthrough=true, docker.remoteBuild=false.
+azd deploy documentation-agent --no-prompt
+azd ai agent show --output json
+
+$request = Get-Content <path-to-example-request.json> -Raw |
+  ConvertFrom-Json | ConvertTo-Json -Depth 10 -Compress
+azd ai agent invoke documentation-agent $request --protocol responses `
+  --new-session --new-conversation
+azd ai agent invoke documentation-agent '{}' --protocol responses `
+  --new-session --new-conversation
+```
+
+Valid remote input returned a schema-valid `AgentResult` with the original
+request ID; `{}` failed explicitly with missing-field errors. Foundry evaluation
+suite generation was deferred because this stub does not perform model reasoning.
+
+| Gotcha | Resolution |
+|---|---|
+| Docker Desktop WSL engine crashed during the first build | Restarted after WSL setup; built explicitly for `linux/amd64` on the ARM64 development machine |
+| Container pip TLS handshake to the public package host failed | Used the developer machine's configured HTTPS package mirror as a credential-free build argument; no TLS bypass |
+| azd initialization inside ignored `.azure/` failed staging template files | Initialized in a separate local deployment workspace outside the repository |
+| `registryConnectionId` caused `not_a_registry_connection` | That option is for generic registries; removed it and used native ACR deployment settings. Removed the trial connection and project-level AcrPull grant |
+| Multiline JSON positional input reached the agent as only `{` | Compressed JSON to one line before passing it to azd |
+
+References: [existing ACR deployment](https://learn.microsoft.com/azure/foundry/agents/how-to/deploy-hosted-agent-private-azure-container-registry),
+[hosted agents](https://learn.microsoft.com/azure/ai-foundry/agents/concepts/hosted-agents?view=foundry).
+
 <a id="agent-identity-and-azure-devops"></a>
 ### Agent identity and Azure DevOps (P2, [#2](https://github.com/wdhm/foundry-agentic-pattern/issues/2))
 
@@ -114,6 +172,7 @@ Store these in a local `.env` (git-ignored). Never commit secrets; prefer Entra 
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-10-08 | John | Built and deployed `documentation-agent` hosted stub v2 from the existing ACR; verified valid and invalid contract requests remotely (#7) |
 | 2026-10-07 | Rickard | Resource group, Foundry resource + project created |
 | 2026-10-08 | Rickard | Azure DevOps org/project/wiki created and connected to the tenant; shared environment documented |
 | 2026-10-08 | Rickard | Agent identity → Azure DevOps end to end: agent user, consent grant, MI + blueprint federated credential, gateway app, ACR, Container App (North Europe), Foundry connection `ado-mcp-proxy`, agent v3 ([ADR 0021](adr/0021-agent-user-and-ado-mcp-gateway.md)) |

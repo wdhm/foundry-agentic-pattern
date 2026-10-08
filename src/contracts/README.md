@@ -14,10 +14,12 @@ Install from the repository root (PowerShell):
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+.\.venv\Scripts\python.exe -m pip install -e ".[agent,dev]"
 ```
 
 Requires Python 3.11+ and Pydantic 2.
+The `agent` extra enables the hosted-stub tests and project-wide type checking;
+consumers needing only contracts can install the package without extras.
 
 ### Fields
 

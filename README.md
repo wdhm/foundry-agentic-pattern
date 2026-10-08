@@ -2,7 +2,7 @@
 
 Reference pattern for building **governed, versioned, evaluated agents on Microsoft Foundry**, with a minimal **Documentation Agent** as the first implementation.
 
-> **Status:** building the **MVP** (M1). The repo contains architecture docs, decision records (ADRs), the v0 Python contract and the Azure DevOps identity gateway. An agent already reads work items and writes to the wiki under its own identity, after approval. See [Roadmap](#status--roadmap).
+> **Status:** building the **MVP** (M1). The repo contains architecture docs, decision records (ADRs), the v0 Python contract, an Agent Framework hosted stub and the Azure DevOps identity gateway. An agent already reads work items and writes to the wiki under its own identity, after approval. The hosted stub separately demonstrates contract validation, without model calls or tools. See [Roadmap](#status--roadmap).
 >
 > **Scope:** this is a workshop that **shows Microsoft Foundry's tools and platform**. We keep the flow simple and use platform-native features first; production hardening is covered as [next steps](docs/next-steps.md#9-production-hardening-out-of-mvp-scope) ([ADR 0022](docs/adr/0022-mvp-scope-platform-first.md)).
 
