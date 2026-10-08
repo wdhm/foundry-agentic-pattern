@@ -14,7 +14,7 @@ Infrastructure as code for the pattern, deployed with the **Azure Developer CLI*
 | Application Insights + Log Analytics | Traces, logs and cost-attribution queries |
 | AI Gateway (API Management) | Token limits per project/deployment and FinOps tagging ([R4](../docs/risks.md#r4)) |
 | Cosmos DB | Runs, `AgentResult`s, review decisions and pending approvals ([ADR 0016](../docs/adr/0016-state-and-audit-cosmos-db.md)) |
-| RBAC | Role assignments for the project managed identity. Agent identity role assignments run as a **post-deploy step** ([R3](../docs/risks.md#r3)). |
+| RBAC | Role assignments for the project managed identity. Agent identity role assignments run as a **post-deploy step**: [`scripts/onboard-agent.ps1`](scripts/onboard-agent.ps1) ([R3](../docs/risks.md#r3)). |
 
 Default region: **Sweden Central** ([ADR 0018](../docs/adr/0018-region-sweden-central.md)).
 

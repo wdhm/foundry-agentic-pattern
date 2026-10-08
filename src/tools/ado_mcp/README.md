@@ -28,6 +28,8 @@ Foundry agent --(agent identity token, aud = this app)--> ado_mcp --(agent user 
 | `ADO_MCP_TOOLSETS` | Toolsets exposed upstream (default `wit,wiki`) |
 | `ADO_MCP_READONLY` | `true` to expose only read tools (default `false`) |
 
+The three `AGENT_*` variables bind the gateway to **one** agent. [`infra/scripts/onboard-agent.ps1`](../../../infra/scripts/onboard-agent.ps1) sets them when it onboards an agent.
+
 ## Run
 
 ```powershell
