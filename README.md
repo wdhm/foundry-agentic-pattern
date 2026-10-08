@@ -2,7 +2,7 @@
 
 Reference pattern for building **governed, versioned, evaluated agents on Microsoft Foundry**, with a minimal **Documentation Agent** as the first implementation.
 
-> **Status:** early implementation (M0/M1). This repo contains architecture docs, decision records (ADRs), the v0 Python contract and generated JSON Schemas. Hosted agent code and infrastructure are not implemented yet — see [Roadmap](#status--roadmap).
+> **Status:** early implementation (M0/M1). This repo contains architecture docs, decision records (ADRs), the v0 Python contract, generated JSON Schemas and a local Agent Framework stub. Hosted deployment, persistence and analysis are not implemented yet — see [Roadmap](#status--roadmap).
 
 ---
 

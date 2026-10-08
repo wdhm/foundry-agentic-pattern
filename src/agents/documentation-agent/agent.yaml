@@ -1,0 +1,10 @@
+kind: hosted
+image: ${AGENT_IMAGE}
+cpu: "0.5"
+memory: 1Gi
+container_protocol_versions:
+  - protocol: responses
+    version: "2.0.0"
+environment_variables:
+  HOST: "0.0.0.0"
+  PORT: "8088"
