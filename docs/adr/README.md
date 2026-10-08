@@ -25,3 +25,4 @@ We record significant design decisions as ADRs in a [MADR](https://adr.github.io
 | [0019](0019-english-only.md) | Everything in English | Accepted | |
 | [0020](0020-manual-setup-first.md) | Manual Azure setup first ([runbook](../setup.md)); `azd` + Bicep in M4 | Accepted | |
 | [0021](0021-agent-user-and-ado-mcp-gateway.md) | Azure DevOps as the agent user, via a gateway to the remote Azure DevOps MCP server ([guide](../workshop/agent-identity-guide.md)) | Proposed | [R3](../risks.md#r3) |
+| [0022](0022-mvp-scope-platform-first.md) | MVP scope: show the platform, keep the flow simple (platform-native first, one happy path, hardening on slides) | Accepted (P2); proposed (P1, P3) | |

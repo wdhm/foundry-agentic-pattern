@@ -11,6 +11,10 @@ Every workshop feature has **one owner**: **P1** John ([@johnsward](https://gith
 
 > The HTML files are self-contained. To view the rendered version, open them locally or download them.
 
+## MVP scope
+
+We build an MVP that **shows the platform**, with one simple happy path per feature, using platform-native features first ([ADR 0022](../adr/0022-mvp-scope-platform-first.md)). Production hardening is covered on slides ([next steps §9](../next-steps.md#9-production-hardening-out-of-mvp-scope)). The P1 and P3 simplifications are proposals until John and Louise confirm them (issues labelled `mvp-proposal`).
+
 ## F-tag index
 
 | F-tag | Feature | Owner |
@@ -40,10 +44,10 @@ Every workshop feature has **one owner**: **P1** John ([@johnsward](https://gith
 | Feature | F-tag | Built/Slides | Issue(s) |
 |---|---|---|---|
 | Foundry IQ (AI Search · knowledge base) | F3 | Built | [#19](https://github.com/wdhm/foundry-agentic-pattern/issues/19) |
-| Toolbox (MCP · REST · Azure DevOps) | F1 | Built | [#20](https://github.com/wdhm/foundry-agentic-pattern/issues/20), [#21](https://github.com/wdhm/foundry-agentic-pattern/issues/21) |
-| Integration patterns (Azure DevOps wiki · Azure Repos) | – | Built | [#44](https://github.com/wdhm/foundry-agentic-pattern/issues/44) |
-| Identities & resource organisation (agent ID · RBAC · projects) | – | Built | [#2](https://github.com/wdhm/foundry-agentic-pattern/issues/2), [#22](https://github.com/wdhm/foundry-agentic-pattern/issues/22), [#45](https://github.com/wdhm/foundry-agentic-pattern/issues/45) |
-| Mock data (sample integration · planted gaps) | F8 | Built | [#17](https://github.com/wdhm/foundry-agentic-pattern/issues/17), [#18](https://github.com/wdhm/foundry-agentic-pattern/issues/18), [#32](https://github.com/wdhm/foundry-agentic-pattern/issues/32) |
+| Toolbox (MCP · Azure DevOps · GitHub) | F1 | Built (Azure DevOps ✅) | [#20](https://github.com/wdhm/foundry-agentic-pattern/issues/20), [#21](https://github.com/wdhm/foundry-agentic-pattern/issues/21) ✅ |
+| Identities & resource organisation (agent ID · agent user · projects) | – | Built (identity ✅) | [#2](https://github.com/wdhm/foundry-agentic-pattern/issues/2) ✅, [#45](https://github.com/wdhm/foundry-agentic-pattern/issues/45) |
+| Mock data (small hand-made set · planted gaps) | F8 | Built | [#17](https://github.com/wdhm/foundry-agentic-pattern/issues/17), [#18](https://github.com/wdhm/foundry-agentic-pattern/issues/18), [#32](https://github.com/wdhm/foundry-agentic-pattern/issues/32) |
+| Least privilege · Azure Repos source · multi-agent gateway | – | Slides | [#22](https://github.com/wdhm/foundry-agentic-pattern/issues/22), [#44](https://github.com/wdhm/foundry-agentic-pattern/issues/44) ([next steps §9](../next-steps.md#9-production-hardening-out-of-mvp-scope)) |
 | Agent 365 (agent governance) | – | Slides | [#46](https://github.com/wdhm/foundry-agentic-pattern/issues/46) |
 | Work IQ (Microsoft 365 work context) | – | Slides | [#47](https://github.com/wdhm/foundry-agentic-pattern/issues/47) |
 | PDF · SharePoint (document sources) | – | Slides | [#48](https://github.com/wdhm/foundry-agentic-pattern/issues/48) |
