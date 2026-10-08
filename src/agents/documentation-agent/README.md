@@ -4,6 +4,10 @@ The **Documentation Agent**: a Microsoft Foundry **hosted agent** (container) bu
 
 ## M1 local stub (#7)
 
+The same image is deployed as `documentation-agent` version **2** in the shared
+Foundry project. Deployment and remote invocation instructions are recorded in
+[the setup runbook](../../../docs/setup.md#hosted-contract-stub-p1-7).
+
 The local stub validates an `AgentRequest` and returns the v0 `AgentResult`.
 It subclasses Agent Framework's `BaseAgent` and uses the official
 `ResponsesHostServer` hosting adapter. It does not call a model, read sources,
@@ -97,7 +101,7 @@ registry image reference (prefer an immutable digest). It declares Responses
 2.0.0 and the initial CPU/memory allocation. See
 [HostedAgentDefinition](https://learn.microsoft.com/python/api/azure-ai-projects/azure.ai.projects.models.hostedagentdefinition?view=azure-python-preview).
 
-Deployment is not performed by these files. It requires an accessible registry
+Deployment is not performed automatically by these files. It requires an accessible registry
 image and the existing shared Foundry project, with the necessary identity and
 registry connection. Follow [the setup runbook](../../../docs/setup.md); do not
 provision another Foundry project or roll out IaC during M1 (ADR 0020).
