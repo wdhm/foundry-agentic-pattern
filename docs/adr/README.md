@@ -15,7 +15,7 @@ We record significant design decisions as ADRs in a [MADR](https://adr.github.io
 | [0009](0009-hosted-agent-runtime.md) | Foundry hosted agent with Microsoft Agent Framework | Accepted | [R1](../risks.md#r1), [R2](../risks.md#r2) |
 | [0010](0010-python-and-pydantic-contracts.md) | Python; Pydantic contracts as single source of truth | Accepted | |
 | [0011](0011-knowledge-foundry-iq-and-toolbox.md) | Foundry IQ for stable knowledge, Toolbox for versioned data | Accepted | |
-| [0012](0012-agent-identity-and-rbac.md) | Entra Agent ID, least privilege; OBO as alternative | Accepted (pending spike) | [R3](../risks.md#r3) |
+| [0012](0012-agent-identity-and-rbac.md) | Entra Agent ID, least privilege; OBO as alternative | Accepted; refined by 0021 | [R3](../risks.md#r3) |
 | [0013](0013-evaluation-gate-in-ci.md) | Ground-truth eval gate in CI | Accepted | [R2](../risks.md#r2) |
 | [0014](0014-infrastructure-scope.md) | Infrastructure scope (`azd up` vs. docs only); phased by 0020 | Accepted | [R3](../risks.md#r3), [R4](../risks.md#r4) |
 | [0015](0015-registry-foundry-fleet-management.md) | Registry: Foundry fleet management | Accepted | |
@@ -24,3 +24,4 @@ We record significant design decisions as ADRs in a [MADR](https://adr.github.io
 | [0018](0018-region-sweden-central.md) | Region: Sweden Central | Accepted | [R2](../risks.md#r2) |
 | [0019](0019-english-only.md) | Everything in English | Accepted | |
 | [0020](0020-manual-setup-first.md) | Manual Azure setup first ([runbook](../setup.md)); `azd` + Bicep in M4 | Accepted | |
+| [0021](0021-agent-user-and-ado-mcp-gateway.md) | Azure DevOps as the agent user, via a gateway to the remote Azure DevOps MCP server ([guide](../workshop/agent-identity-guide.md)) | Proposed | [R3](../risks.md#r3) |
