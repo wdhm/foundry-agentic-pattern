@@ -1,0 +1,295 @@
+{
+  "$defs": {
+    "Evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "excerpt": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Excerpt",
+          "type": "string"
+        },
+        "id": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Id",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "git",
+            "wiki",
+            "work_item"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "uri": {
+          "pattern": "^https://[^\\s]+$",
+          "title": "Uri",
+          "type": "string"
+        },
+        "version": {
+          "description": "Exact Git SHA, wiki ETag/version, or work-item revision; never a branch.",
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "uri",
+        "version",
+        "excerpt"
+      ],
+      "title": "Evidence",
+      "type": "object"
+    },
+    "Finding": {
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Category",
+          "type": "string"
+        },
+        "description": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Description",
+          "type": "string"
+        },
+        "evidence_refs": {
+          "items": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "severity": {
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ],
+          "title": "Severity",
+          "type": "string"
+        }
+      },
+      "required": [
+        "category",
+        "severity",
+        "description",
+        "evidence_refs"
+      ],
+      "title": "Finding",
+      "type": "object"
+    },
+    "MissingInformation": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Description",
+          "type": "string"
+        },
+        "expected_source": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Expected Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "description",
+        "expected_source"
+      ],
+      "title": "MissingInformation",
+      "type": "object"
+    },
+    "ProposedChange": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_refs": {
+          "items": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "proposed_content": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Proposed Content",
+          "type": "string"
+        },
+        "target_page": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Target Page",
+          "type": "string"
+        },
+        "target_section": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Target Section",
+          "type": "string"
+        }
+      },
+      "required": [
+        "target_page",
+        "target_section",
+        "proposed_content",
+        "evidence_refs"
+      ],
+      "title": "ProposedChange",
+      "type": "object"
+    },
+    "Provenance": {
+      "additionalProperties": false,
+      "properties": {
+        "agent_name": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Agent Name",
+          "type": "string"
+        },
+        "agent_version": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Agent Version",
+          "type": "string"
+        },
+        "contract_version": {
+          "const": "1.0.0",
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "model": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Model",
+          "type": "string"
+        },
+        "model_version": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Model Version",
+          "type": "string"
+        },
+        "policy_version": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Policy Version",
+          "type": "string"
+        },
+        "prompt_version": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Prompt Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "agent_name",
+        "agent_version",
+        "model",
+        "model_version",
+        "prompt_version",
+        "policy_version",
+        "contract_version"
+      ],
+      "title": "Provenance",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "confidence": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "contract_version": {
+      "const": "1.0.0",
+      "title": "Contract Version",
+      "type": "string"
+    },
+    "documentation_status": {
+      "enum": [
+        "up_to_date",
+        "gaps_found",
+        "insufficient_information"
+      ],
+      "title": "Documentation Status",
+      "type": "string"
+    },
+    "evidence": {
+      "items": {
+        "$ref": "#/$defs/Evidence"
+      },
+      "title": "Evidence",
+      "type": "array"
+    },
+    "findings": {
+      "items": {
+        "$ref": "#/$defs/Finding"
+      },
+      "title": "Findings",
+      "type": "array"
+    },
+    "missing_information": {
+      "items": {
+        "$ref": "#/$defs/MissingInformation"
+      },
+      "title": "Missing Information",
+      "type": "array"
+    },
+    "proposed_changes": {
+      "items": {
+        "$ref": "#/$defs/ProposedChange"
+      },
+      "title": "Proposed Changes",
+      "type": "array"
+    },
+    "provenance": {
+      "$ref": "#/$defs/Provenance"
+    },
+    "request_id": {
+      "format": "uuid",
+      "title": "Request Id",
+      "type": "string"
+    },
+    "requires_human_review": {
+      "title": "Requires Human Review",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "documentation_status",
+    "findings",
+    "proposed_changes",
+    "missing_information",
+    "evidence",
+    "confidence",
+    "requires_human_review",
+    "contract_version",
+    "request_id",
+    "provenance"
+  ],
+  "title": "AgentResult",
+  "type": "object"
+}

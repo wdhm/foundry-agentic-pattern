@@ -1,8 +1,8 @@
 # 0022. MVP scope: show the platform, keep the flow simple
 
-- **Status:** Accepted for P2; proposed for P1 and P3 (John and Louise confirm their lanes)
+- **Status:** Accepted for P1 and P2; proposed for P3 (Louise confirms her lane)
 - **Date:** 2026-10-08
-- **Deciders:** P2 (Rickard); P1 and P3 for their lanes
+- **Deciders:** P2 (Rickard); P1 (John, confirmed 2026-10-13); P3 for her lane
 - **Related:** [0002](0002-workshop-format.md), [0007](0007-single-agent-in-v1.md), [0009](0009-hosted-agent-runtime.md), [0013](0013-evaluation-gate-in-ci.md), [0014](0014-infrastructure-scope.md), [0016](0016-state-and-audit-cosmos-db.md), [0020](0020-manual-setup-first.md), [0021](0021-agent-user-and-ado-mcp-gateway.md); [next steps](../next-steps.md)
 
 ## Context
@@ -25,10 +25,10 @@ We build an **MVP**: one simple happy path that shows each platform capability o
 
 | Area | MVP approach | Status |
 |---|---|---|
-| Agent runtime (P1) | Foundry **prompt agent** (already running). The hosted agent becomes one P1 demo or a slide. | Proposal for P1 |
-| Output contract (P1) | Structured JSON output on the agent; the Pydantic models stay the schema source | Proposal for P1 |
-| Human-in-the-loop (P1) | **Foundry's native MCP tool approval** (`require_approval`), already proven; Teams as the showcase channel | Proposal for P1 |
-| State & audit (P1) | Foundry traces/conversations + the wiki history; no Cosmos DB in the MVP | Proposal for P1 |
+| Agent runtime (P1) | Foundry **prompt agent** (already running). The hosted agent remains a separate P1 demo. | Decided (P1, 2026-10-13) |
+| Output contract (P1) | Structured JSON output on the agent; the Pydantic models stay the schema source | Decided (P1, 2026-10-13) |
+| Human-in-the-loop (P1) | **Foundry's native MCP tool approval** (`require_approval`), already proven; Teams as the showcase channel | Decided (P1, 2026-10-13) |
+| State & audit (P1) | Foundry traces/conversations + the wiki history; no Cosmos DB in the MVP | Decided (P1, 2026-10-13) |
 | Knowledge (P2) | Foundry IQ knowledge base with the documentation standard and wiki | Decided |
 | Tools (P2) | Azure DevOps via the gateway (done, ADR 0021); GitHub source via MCP | Decided |
 | Identity (P2) | Agent identity + agent user (done). Least privilege goes on slides. | Decided |
@@ -58,5 +58,6 @@ We build an **MVP**: one simple happy path that shows each platform capability o
   - Some earlier ADRs describe the target, not the MVP: [0009](0009-hosted-agent-runtime.md) (hosted agent), [0013](0013-evaluation-gate-in-ci.md) (ground-truth gate), [0016](0016-state-and-audit-cosmos-db.md) (Cosmos DB). They stay valid as the target architecture.
   - The MVP is not production-ready (see the disclaimer in the README).
 - **Follow-ups:**
-  - P1 and P3 confirm or adjust their proposals (issues labelled `mvp-proposal`).
+  - P3 confirms or adjusts her proposals (issues labelled `mvp-proposal`).
+  - P1 issue descriptions still describe some pre-MVP requirements. Apply the confirmed MVP scope when scheduling them.
   - Out-of-scope items are listed in [next-steps.md](../next-steps.md#9-production-hardening-out-of-mvp-scope).
