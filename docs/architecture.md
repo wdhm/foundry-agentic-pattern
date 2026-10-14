@@ -111,6 +111,8 @@ See [src/contracts/](../src/contracts/README.md) for the field list. Key propert
 | CI (OIDC) | Role assignments | Assign roles to the new agent identity post-deploy | [R3](risks.md#r3) |
 | Reviewer (human) | Teams agent | Chat + approve | Recorded as the approver |
 
+Which identity each connection presents in the current environment (project MI, agent identity, token) is mapped in the [resource organisation guide](workshop/resource-organization-guide.md#identities-who-authenticates-where).
+
 Agent identity role assignments are made **post-deploy** because publishing creates a new identity ([R3](risks.md#r3)). On-behalf-of (OBO) is the documented alternative ([ADR 0012](adr/0012-agent-identity-and-rbac.md)).
 
 ## 7. Audit record
