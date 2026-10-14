@@ -2,7 +2,22 @@
 
 Evaluation sets, metrics and the **CI eval gate** ([ADR 0013](../docs/adr/0013-evaluation-gate-in-ci.md)).
 
-> Placeholder. Implementation starts in **M2**.
+> MVP: one hand-made scenario and a checker ([ADR 0022](../docs/adr/0022-mvp-scope-platform-first.md)). The full gate in GitHub Actions comes in M2.
+
+## MVP: planted-gap scenario
+
+| File | What |
+|---|---|
+| [`datasets/order-sync-retry.json`](datasets/order-sync-retry.json) | Ground truth for demo [PR #62](https://github.com/wdhm/foundry-agentic-pattern/pull/62): the prompt, the subject at the PR head SHA, three planted gaps (retry/backoff, `erp.timeoutSeconds`, dead-letter queue) with their `DS-xx` rules, and the allowed evidence versions |
+| [`check_planted_gaps.py`](check_planted_gaps.py) | Standard-library checker: documentation status, **gap recall** and **evidence integrity** (every reference resolves, git evidence is at the PR head SHA, git and wiki sources present) |
+
+```powershell
+az login
+python evals/check_planted_gaps.py --invoke                 # run doc-agent-spike, then check
+python evals/check_planted_gaps.py --result my-result.json  # check a saved result
+```
+
+A gap counts as found when one finding or proposed change contains a term from every `match_all` group. The script exits 1 on failure, so it can be used as a CI step later. Verified 2026-10-14 against `doc-agent-spike:6`: 3/3 gaps, no evidence problems, `PASS`.
 
 ## Gate (blocking)
 

@@ -1,0 +1,44 @@
+{
+  "scenario": "order-sync-retry",
+  "description": "Demo PR #62 changes the Order Sync retry policy and adds an ERP timeout and a dead-letter queue. The wiki page /Order Sync/Overview documents none of it.",
+  "agent": "doc-agent-spike",
+  "prompt": "Pull request 62 in wdhm/foundry-agentic-pattern changes the Order Sync integration. Read the PR diff on GitHub, compare it with the Azure DevOps wiki page /Order Sync/Overview and the documentation standard, and list what the documentation is missing. Cite evidence (source, path, version).",
+  "subject": {
+    "repo": "wdhm/foundry-agentic-pattern",
+    "pr_reference": "https://github.com/wdhm/foundry-agentic-pattern/pull/62",
+    "commit_sha": "ad623147fbb1eeb9a6423d437df199c91db15a9e",
+    "changed_paths": [
+      "samples/sample-integration/config/settings.json",
+      "samples/sample-integration/src/order_sync.py"
+    ]
+  },
+  "context": {
+    "wiki_page_paths": ["/Order Sync/Overview"],
+    "work_item_ids": [1]
+  },
+  "expected_status": "gaps_found",
+  "planted_gaps": [
+    {
+      "id": "PG1",
+      "title": "Retry policy changed: 3 fixed attempts (5 s) became 5 attempts with exponential backoff from 2 s",
+      "rules": ["DS-14", "DS-30"],
+      "match_all": [["retry", "retries"], ["exponential", "backoff", "back-off"]]
+    },
+    {
+      "id": "PG2",
+      "title": "New configuration key erp.timeoutSeconds (30) is undocumented",
+      "rules": ["DS-13", "DS-30"],
+      "match_all": [["timeoutseconds", "timeout"]]
+    },
+    {
+      "id": "PG3",
+      "title": "New dead-letter queue orders-confirmed-failed is undocumented",
+      "rules": ["DS-12", "DS-14", "DS-30"],
+      "match_all": [["dead-letter", "dead letter", "deadletterqueue", "orders-confirmed-failed"]]
+    }
+  ],
+  "expected_evidence": {
+    "git_versions": ["ad623147fbb1eeb9a6423d437df199c91db15a9e"],
+    "required_sources": ["git", "wiki"]
+  }
+}

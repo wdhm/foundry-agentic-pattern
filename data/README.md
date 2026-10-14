@@ -1,22 +1,19 @@
 # data/
 
-A **mock data generator** and seed data that make the demo reproducible in any tenant ([ADR 0005](../docs/adr/0005-generic-repo-with-fictional-data.md)).
+A **small, hand-made fictional data set** ([ADR 0005](../docs/adr/0005-generic-repo-with-fictional-data.md)) that makes the demo story work. There is no generator in the MVP ([ADR 0022](../docs/adr/0022-mvp-scope-platform-first.md)); a generator and seed/reset scripts are on slides ([next steps §9](../docs/next-steps.md#9-production-hardening-out-of-mvp-scope)).
 
-> Placeholder. Implementation starts in **M2**.
+## Contents
 
-## Planned contents
-
-| Artifact | Seeded into | Notes |
+| Artifact | Lives in | Notes |
 |---|---|---|
-| Wiki pages for the sample integration | Azure DevOps wiki (read live by the agent) | Deliberately incomplete or outdated in places |
-| Work items / requirements | Azure DevOps Boards | Linked to the sample integration |
-| ADRs for the sample integration | Foundry IQ index (later) | Fictional architecture decisions |
+| Wiki page `/Order Sync/Overview` ✅ | Azure DevOps wiki (read live by the agent) | Deliberately sparse: purpose and work item #1 only |
+| Work item #1 ✅ | Azure DevOps Boards | "Order Sync integration (webshop to ERP)" |
 | **Documentation standard** ✅ | Foundry IQ index | [`knowledge/documentation-standard.md`](knowledge/documentation-standard.md): a **swappable file** with rule IDs (`DS-xx`) for required sections, tone and **output language**. Indexed by [`setup-foundry-iq.ps1`](../infra/scripts/setup-foundry-iq.ps1) ([guide](../docs/workshop/foundry-iq-guide.md)) |
-| **Planted gaps + ground truth** | `evals/` | Expected findings per scenario, used by the eval gate |
+| Sample integration ✅ | [`samples/sample-integration/`](../samples/sample-integration/README.md) | Minimal order sync |
+| **Planted gaps + ground truth** ✅ | [PR #62](https://github.com/wdhm/foundry-agentic-pattern/pull/62) + [`evals/`](../evals/README.md) | Three drifts (retry/backoff, ERP timeout, dead-letter queue) and the expected findings |
 
 ## Principles
-- **Idempotent seeding.** Re-running the generator resets the demo state.
-- **Deterministic.** Fixed seeds make eval results comparable between versions.
 - **Fictional.** No real customer, system or personal data.
+- **Small.** Just enough for one demo story; the wiki and work item were created by hand in [#5](https://github.com/wdhm/foundry-agentic-pattern/issues/5).
 
 **Owner:** P2 (Knowledge & identity): Rickard ([@wdhm](https://github.com/wdhm))
