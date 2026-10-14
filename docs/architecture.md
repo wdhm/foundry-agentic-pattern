@@ -101,7 +101,7 @@ See [src/contracts/](../src/contracts/README.md) for the field list. Key propert
 
 | Principal | Resource | Permission | Notes |
 |---|---|---|---|
-| Agent identity | GitHub repo | Read contents/PRs | Via GitHub MCP connection |
+| Project connection `github-mcp` (fine-grained token) | GitHub repo | Read-only Contents and Pull requests, one repository | GitHub doesn't accept Entra tokens, so not the agent identity ([guide](workshop/github-mcp-guide.md)) |
 | Agent identity | ADO work items | Read | [R3](risks.md#r3) |
 | Agent identity | ADO wiki | Read; **write only via approval-gated tool** | [R3](risks.md#r3), [ADR 0008](adr/0008-human-in-the-loop-approval.md) |
 | Project managed identity | Azure AI Search | Search Index Data Reader | The Foundry IQ MCP connection authenticates as the project, not the agent ([guide](workshop/foundry-iq-guide.md)) |
