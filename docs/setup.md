@@ -64,7 +64,7 @@ az account set -s ME-M365CPI54615665-rwidholm-1
 
 | Resource | When / issue | Owner |
 |---|---|---|
-| **Azure AI Search** + Foundry IQ knowledge base | [#19](https://github.com/wdhm/foundry-agentic-pattern/issues/19) | P2 |
+| **Azure AI Search** + Foundry IQ knowledge base | [#19](https://github.com/wdhm/foundry-agentic-pattern/issues/19) | P2 ✅ `srch-foundry-agentic-r8n3ld` in **France Central** (Sweden Central had no capacity). Run [`setup-foundry-iq.ps1`](../infra/scripts/setup-foundry-iq.ps1); see the [guide](workshop/foundry-iq-guide.md) |
 | **Agent identity** role assignments (DevOps, GitHub, Search) | [#2](https://github.com/wdhm/foundry-agentic-pattern/issues/2), [#28](https://github.com/wdhm/foundry-agentic-pattern/issues/28) | P2 (Azure DevOps ✅, see below) |
 | **AI Gateway (APIM)**: token limits + FinOps tagging | [#3](https://github.com/wdhm/foundry-agentic-pattern/issues/3), [#23](https://github.com/wdhm/foundry-agentic-pattern/issues/23) | P3 |
 | Hosted agent deployment | [#7](https://github.com/wdhm/foundry-agentic-pattern/issues/7) | P1 |

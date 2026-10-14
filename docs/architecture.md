@@ -28,7 +28,7 @@ Lanes: **P1** Agent architecture · **P2** Knowledge & identity · **P3** AgentO
 | P1 | F5 | Human-in-the-loop | Agent published to Microsoft Teams | Approve / Modify / Reject | [0008](adr/0008-human-in-the-loop-approval.md) |
 | P1 | – | State & audit | Cosmos DB | Runs, results, review decisions, pending approvals | [0016](adr/0016-state-and-audit-cosmos-db.md) |
 | P1 | – | Registry | Foundry fleet management | Agent inventory, versions, endpoints | [0015](adr/0015-registry-foundry-fleet-management.md) |
-| P2 | F3 | Stable knowledge | Foundry IQ (Azure AI Search) | Documentation standard, ADRs, wiki (semantic search) | [0011](adr/0011-knowledge-foundry-iq-and-toolbox.md) |
+| P2 | F3 | Stable knowledge | Foundry IQ (Azure AI Search) | Documentation standard (MVP); ADRs and wiki discovery later | [0011](adr/0011-knowledge-foundry-iq-and-toolbox.md) |
 | P2 | F1 | Live tools | Foundry Toolbox (MCP / REST): GitHub, Azure DevOps | Code/IaC/config at commit (GitHub or Azure Repos), work items, current wiki, wiki write | [0011](adr/0011-knowledge-foundry-iq-and-toolbox.md) |
 | P2 | – | Identity & resource org | Entra Agent ID (fallback: project or user-assigned MI) | Least-privilege access per source | [0012](adr/0012-agent-identity-and-rbac.md) |
 | P2 | F8 | Mock data | `data/` generator + `samples/` | Sample integration, wiki, work items, planted gaps, ground truth | [0005](adr/0005-generic-repo-with-fictional-data.md) |
@@ -90,9 +90,9 @@ See [src/contracts/](../src/contracts/README.md) for the field list. Key propert
 
 | Data | Volatility | Access path | Why |
 |---|---|---|---|
-| Documentation standard | Stable | Foundry IQ | Semantic retrieval of rules and sections |
-| ADRs (of the subject) | Stable | Foundry IQ | Semantic retrieval of rationale |
-| Wiki (for discovery) | Medium | Foundry IQ | Find related pages |
+| Documentation standard | Stable | Foundry IQ (MVP ✅) | Semantic retrieval of rules and sections |
+| ADRs (of the subject) | Stable | Foundry IQ (later) | Semantic retrieval of rationale |
+| Wiki (for discovery) | Medium | Foundry IQ (later) | Find related pages |
 | **Current** wiki page | Volatile | Toolbox (ADO) | Exact version required for evidence and update |
 | Work items / requirements | Volatile | Toolbox (ADO) | Exact revision |
 | Code / IaC / config | Versioned | Toolbox (GitHub MCP; Azure Repos via ADO MCP/REST) | Exact commit SHA |
@@ -104,7 +104,7 @@ See [src/contracts/](../src/contracts/README.md) for the field list. Key propert
 | Agent identity | GitHub repo | Read contents/PRs | Via GitHub MCP connection |
 | Agent identity | ADO work items | Read | [R3](risks.md#r3) |
 | Agent identity | ADO wiki | Read; **write only via approval-gated tool** | [R3](risks.md#r3), [ADR 0008](adr/0008-human-in-the-loop-approval.md) |
-| Agent identity | Azure AI Search | Search Index Data Reader | |
+| Project managed identity | Azure AI Search | Search Index Data Reader | The Foundry IQ MCP connection authenticates as the project, not the agent ([guide](workshop/foundry-iq-guide.md)) |
 | Agent identity | Cosmos DB | Data contributor (agent DB only) | |
 | Agent identity | AI Gateway / models | Invoke | Via the gateway |
 | CI (OIDC) | Foundry project | Create agent versions, run evals, update `version_selector` | |
