@@ -6,7 +6,7 @@
 
 ## Shared workshop environment
 
-This is **the** environment for development and the workshop. Don't create parallel resource groups or Foundry resources; add to these.
+This is **the** environment for development and the workshop. Don't create parallel resource groups or Foundry resources; add to these. How the resource, project, connections and identities fit together: [resource organisation guide](workshop/resource-organization-guide.md).
 
 | Item | Value |
 |---|---|
@@ -178,3 +178,4 @@ Store these in a local `.env` (git-ignored). Never commit secrets; prefer Entra 
 | 2026-10-08 | Rickard | Azure DevOps org/project/wiki created and connected to the tenant; shared environment documented |
 | 2026-10-08 | Rickard | Agent identity → Azure DevOps end to end: agent user, consent grant, MI + blueprint federated credential, gateway app, ACR, Container App (North Europe), Foundry connection `ado-mcp-proxy`, agent v3 ([ADR 0021](adr/0021-agent-user-and-ado-mcp-gateway.md)) |
 | 2026-10-08 | Rickard | `onboard-agent.ps1` verified with a temporary agent `doc-agent-test` (onboarded, E2E read + approved wiki write, then offboarded); gateway points back at `doc-agent-spike` |
+| 2026-10-14 | Rickard | Inventoried resources, connections and identities into the [resource organisation guide](workshop/resource-organization-guide.md) (#45); deleted the failed, empty Container Apps environment `cae-foundry-agentic` (Sweden Central) |
