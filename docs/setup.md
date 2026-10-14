@@ -76,7 +76,7 @@ Document each step here when you do it: portal path or CLI command, settings cho
 ### Hosted contract stub (P1, #7)
 
 `documentation-agent` version **2** is active in `proj-agentic`. It runs the
-Agent Framework contract stub, separately from `doc-agent-spike`: no model calls,
+Agent Framework contract stub, separately from the prompt agent `doc-agent`: no model calls,
 tools, wiki writes or Cosmos persistence. Application provenance version `0.1.0`
 is distinct from Foundry deployment version `2`.
 
@@ -139,8 +139,8 @@ The step-by-step guide with Microsoft Learn references is [docs/workshop/agent-i
 | Resource | Name / value | Notes |
 |---|---|---|
 | Chat model deployment | `gpt-6-luna` | In `foundry-agentic-R8N3LD` |
-| Spike agent | `doc-agent-spike` (version 3 uses the gateway) | Agent identity: `foundry-agentic-R8N3LD-proj-agentic-doc-agent-spike-AgentIdentity` |
-| Agent user | `doc-agent-spike@M365CPI54615665.onmicrosoft.com` | Linked to the agent identity. Azure DevOps **Basic** + `[integration-team]\Contributors` |
+| Prompt agent | `doc-agent` (tools `knowledge`, `github`, `ado`) | Agent identity: `foundry-agentic-R8N3LD-proj-agentic-doc-agent-AgentIdentity` |
+| Agent user | `doc-agent@M365CPI54615665.onmicrosoft.com` | Linked to the agent identity. Azure DevOps **Basic** + `[integration-team]\Contributors` |
 | Consent grant | Agent identity → **Azure DevOps MCP** (`2a72489c-…`), consentType `Principal` (agent user) | Scopes `Ado.Mcp.Tools wit.read wiki.read wiki.write`. We created the Azure DevOps MCP service principal in the tenant. |
 | User-assigned MI | `id-doc-agent-mcp` | Federated credential `mcp-server-uami` on the agent's **blueprint**; AcrPull on the ACR |
 | Gateway Entra app | `doc-agent-mcp-api` (`api://<appId>`) | App role `Mcp.Tools.ReadWrite.All`, assigned to the agent identity |
@@ -149,7 +149,7 @@ The step-by-step guide with Microsoft Learn references is [docs/workshop/agent-i
 | Container app (gateway) | `ca-doc-agent-mcp` | `https://ca-doc-agent-mcp.gentlemushroom-65b5f1ef.northeurope.azurecontainerapps.io/mcp` |
 | Foundry connection | `ado-mcp-proxy` | `RemoteTool`, `AgenticIdentityToken`, audience `api://<gateway appId>` |
 
-To onboard another agent, run [`infra/scripts/onboard-agent.ps1`](../infra/scripts/onboard-agent.ps1) ([guide](workshop/agent-identity-guide.md#onboard-another-agent-automated)). The gateway serves one agent at a time and currently points at `doc-agent-spike`.
+To onboard another agent, run [`infra/scripts/onboard-agent.ps1`](../infra/scripts/onboard-agent.ps1) ([guide](workshop/agent-identity-guide.md#onboard-another-agent-automated)). The gateway serves one agent at a time and currently points at `doc-agent`.
 
 ## Outputs (environment values)
 
@@ -181,3 +181,4 @@ Store these in a local `.env` (git-ignored). Never commit secrets; prefer Entra 
 | 2026-10-14 | Rickard | Inventoried resources, connections and identities into the [resource organisation guide](workshop/resource-organization-guide.md) (#45); deleted the failed, empty Container Apps environment `cae-foundry-agentic` (Sweden Central) |
 | 2026-10-14 | Rickard | `doc-agent-spike:7` via `setup-foundry-iq.ps1`: the documentation standard is cited by rule ID, not as evidence; "Information missing" scenario added ([guide](workshop/information-missing-guide.md), #32) |
 | 2026-10-14 | Rickard | Final RBAC matrix checked against the environment ([architecture §6](architecture.md#6-identity--rbac-matrix)); [bring-your-own guide](workshop/bring-your-own-guide.md) for your own sources and standard (#36) |
+| 2026-10-14 | Rickard | Prompt agent `doc-agent:1` created as a copy of `doc-agent-spike:7` (same model, tools and instructions) and onboarded with `onboard-agent.ps1`; the gateway now points at `doc-agent`. Planted-gaps scenario `PASS`; information-missing scenario `PASS` on 2 of 3 runs (see [evals](../evals/README.md)). P2 is demoed on `doc-agent` in the playground |

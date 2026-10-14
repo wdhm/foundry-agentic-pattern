@@ -13,7 +13,7 @@ flowchart TB
             D1[gpt-6-luna]
             D2[text-embedding-3-large]
             subgraph P["Project proj-agentic<br/>project managed identity · shared project agent identity"]
-                A1["doc-agent-spike (prompt agent)<br/>own agent identity + agent user"]
+                A1["doc-agent (prompt agent)<br/>own agent identity + agent user"]
                 A2["documentation-agent (hosted agent)<br/>own agent identity"]
                 C1[["ado-mcp-proxy<br/>AgenticIdentityToken"]]
                 C2[["kb-doc-agent-mcp<br/>ProjectManagedIdentity"]]
@@ -38,7 +38,7 @@ flowchart TB
 |---|---|---|---|
 | **Foundry resource** (`Microsoft.CognitiveServices/accounts`, kind `AIServices`) | Governance: networking, security settings, **model deployments**, quota. Control-plane RBAC | `foundry-agentic-R8N3LD`, deployments `gpt-6-luna` and `text-embedding-3-large` | [Foundry architecture](https://learn.microsoft.com/azure/foundry/concepts/architecture#foundry-resource-hierarchy) |
 | **Project** (child resource) | Development isolation: **agents, connections**, evaluations, files. Data-plane RBAC can be scoped here | `proj-agentic` (default project) | [Create multiple projects on one resource](https://learn.microsoft.com/azure/foundry/how-to/create-projects#create-multiple-projects-on-the-same-resource) |
-| **Agent** (+ versions) | Instructions, model, tools. Each new version keeps the agent's identity | `doc-agent-spike` (v6), `documentation-agent` (hosted, v2) | [Agent identity concepts](https://learn.microsoft.com/azure/foundry/agents/concepts/agent-identity) |
+| **Agent** (+ versions) | Instructions, model, tools. Each new version keeps the agent's identity | `doc-agent` (v1), `documentation-agent` (hosted, v2) | [Agent identity concepts](https://learn.microsoft.com/azure/foundry/agents/concepts/agent-identity) |
 | **Connected resources** | Separate Azure resources with their own governance and RBAC | AI Search, Container App gateway, ACR. Application Insights is connected to the project when tracing lands ([#5](https://github.com/wdhm/foundry-agentic-pattern/issues/5)) | [Foundry architecture](https://learn.microsoft.com/azure/foundry/concepts/architecture#foundry-resource-hierarchy) |
 
 Region is per resource. Capacity pushed us into **three regions**: Foundry in Sweden Central, AI Search in France Central, Container Apps in North Europe. That works because the agent reaches them through connections over HTTPS.
@@ -50,7 +50,7 @@ Region is per resource. Capacity pushed us into **three regions**: Foundry in Sw
 | Account managed identity | `foundry-agentic-R8N3LD` | Resource-level access to other Azure services | None assigned; not needed in the MVP |
 | **Project managed identity** | `foundry-agentic-R8N3LD/projects/proj-agentic` | Connections with auth `ProjectManagedIdentity`; also federates the shared agent identity blueprint | **Search Index Data Reader** on AI Search (Foundry IQ) |
 | Shared project agent identity | in the project's JSON view (`agentIdentity`) | Default identity for in-development agents in the agent application model | None; our agents use their own identity |
-| **Agent identity: `doc-agent-spike`** | `foundry-agentic-R8N3LD-proj-agentic-doc-agent-spike-AgentIdentity` | Connection `ado-mcp-proxy` (`AgenticIdentityToken`) | App role `Mcp.Tools.ReadWrite.All` on the gateway app; linked **agent user** for Azure DevOps ([agent identity guide](agent-identity-guide.md)) |
+| **Agent identity: `doc-agent`** | `foundry-agentic-R8N3LD-proj-agentic-doc-agent-AgentIdentity` | Connection `ado-mcp-proxy` (`AgenticIdentityToken`) | App role `Mcp.Tools.ReadWrite.All` on the gateway app; linked **agent user** for Azure DevOps ([agent identity guide](agent-identity-guide.md)) |
 | Agent identity: `documentation-agent` | `foundry-agentic-R8N3LD-proj-agentic-documentation-agent-AgentIdentity` | Hosted agent runtime | None yet (stub) |
 | User-assigned MI `id-doc-agent-mcp` | `id-doc-agent-mcp` | Gateway: federated credential on the agent's blueprint for the agent-user token exchange | **AcrPull** on the ACR |
 
@@ -70,7 +70,7 @@ References: [MCP tool authentication](https://learn.microsoft.com/azure/foundry/
 |---|---|---|
 | Foundry resource | `foundry-<workload>-<suffix>` | `foundry-agentic-R8N3LD` |
 | Project | `proj-<workload>` | `proj-agentic` |
-| Agent | `<role>-agent` | `documentation-agent` (`doc-agent-spike` for the MVP prompt agent) |
+| Agent | `<role>-agent` | `documentation-agent` (`doc-agent` for the MVP prompt agent) |
 | Agent identity | set by Foundry: `<resource>-<project>-<agent>-AgentIdentity` | see above |
 | Connection | `<source>-mcp[-proxy]` | `github-mcp`, `kb-doc-agent-mcp` |
 | Other Azure resources | [CAF abbreviations](https://learn.microsoft.com/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations) + workload | `srch-…`, `ca-…`, `id-…`, `acr…` |
@@ -89,7 +89,7 @@ References: [MCP tool authentication](https://learn.microsoft.com/azure/foundry/
 
 1. Azure portal → resource group: the Foundry resource, the project as a child, and the connected resources in other regions.
 2. Foundry portal → project → **Connected resources**: the three connections and their auth types.
-3. Entra admin center → **Agent ID**: `doc-agent-spike`'s agent identity and its agent user. Point out: one identity per agent, the wiki history shows the agent as author.
+3. Entra admin center → **Agent ID**: `doc-agent`'s agent identity and its agent user. Point out: one identity per agent, the wiki history shows the agent as author.
 4. Show the table *the connection decides which identity is presented*.
 
 ## Gotchas

@@ -6,7 +6,7 @@
 
 The agent is asked to fill in facts that **no source contains**: the business owner (DS-10), the Security section (DS-15) and the Operations section (DS-16). It reads every source, then reports what is missing instead of guessing, and pins each piece of evidence to an exact version.
 
-Verified on 2026-10-14: the scenario passed on three runs in a row against `doc-agent-spike:7` (v6 plus the evidence fix under [Gotchas](#gotchas)), and the planted-gaps scenario still passes.
+Verified on 2026-10-14: the scenario passed on three runs in a row against `doc-agent-spike:7` (v6 plus the evidence fix under [Gotchas](#gotchas)), and the planted-gaps scenario still passes. On `doc-agent:1` (same definition) it passed on 2 of 3 runs: the failing run listed all three missing items but chose `gaps_found` as the status ([evals](../../evals/README.md)).
 
 Tool calls: `knowledge/knowledge_base_retrieve`, `ado/wiki`, `ado/wit_work_item` and `github/get_file_contents` (several files at the pinned commit).
 
@@ -31,7 +31,7 @@ No new components. It's the rules that are already in place:
 
 | Piece | Where | What it adds |
 |---|---|---|
-| Agent instructions | `doc-agent-spike` (set by the setup scripts) | *"If sources or their versions are unavailable, report `missing_information` and `documentation_status=insufficient_information`"* and *"Never invent source content, evidence, versions or findings"* |
+| Agent instructions | `doc-agent` (set by the setup scripts) | *"If sources or their versions are unavailable, report `missing_information` and `documentation_status=insufficient_information`"* and *"Never invent source content, evidence, versions or findings"* |
 | Documentation standard | [`documentation-standard.md`](../../data/knowledge/documentation-standard.md) via Foundry IQ | **DS-22:** write `Information missing:` followed by what is missing. Never guess |
 | Output contract | [architecture §4](../architecture.md#4-contract-overview) | `missing_information[]` is the only way to express unknowns; every `evidence[]` item carries a version |
 

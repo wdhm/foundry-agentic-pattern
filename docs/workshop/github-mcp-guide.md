@@ -15,7 +15,7 @@ Result (shortened): `documentation_status: gaps_found`. Finding: *"The PR diff c
 
 ```mermaid
 flowchart LR
-    A[doc-agent-spike] -- "MCP (read-only): files, PR diff, commits" --> GH[GitHub MCP server<br/>api.githubcopilot.com/mcp/readonly]
+    A[doc-agent] -- "MCP (read-only): files, PR diff, commits" --> GH[GitHub MCP server<br/>api.githubcopilot.com/mcp/readonly]
     GH --> R[(wdhm/foundry-agentic-pattern<br/>samples/sample-integration)]
     A -- MCP --> KB[Foundry IQ]
     A -- MCP --> ADO[Azure DevOps]
@@ -47,7 +47,7 @@ One idempotent script: [`infra/scripts/setup-github-mcp.ps1`](../../infra/script
 
 ```powershell
 ./infra/scripts/setup-github-mcp.ps1 -ResourceGroup rg-foundry-agentic-pattern `
-    -FoundryAccount <foundry-account> -Project <project> -AgentName doc-agent-spike
+    -FoundryAccount <foundry-account> -Project <project> -AgentName doc-agent
 ```
 
 | Step | What | Reference |

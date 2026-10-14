@@ -29,7 +29,7 @@ Slot: 11:03–11:10 in the [agenda](../agenda.md), after the Foundry IQ and iden
 ```mermaid
 flowchart LR
     subgraph Foundry["Foundry project (Azure region)"]
-        PA["doc-agent-spike<br/>prompt agent"]
+        PA["doc-agent<br/>prompt agent"]
         HA["documentation-agent<br/>hosted agent"]
     end
     PA -- "registry sync + activity" --> REG

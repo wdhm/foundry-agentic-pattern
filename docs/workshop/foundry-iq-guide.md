@@ -12,7 +12,7 @@ The agent grounds its gap analysis in the organisation's **documentation standar
 
 ```mermaid
 flowchart LR
-    A[doc-agent-spike] -- MCP: knowledge_base_retrieve --> KB[Foundry IQ knowledge base<br/>kb-doc-agent]
+    A[doc-agent] -- MCP: knowledge_base_retrieve --> KB[Foundry IQ knowledge base<br/>kb-doc-agent]
     KB --> KS[Knowledge source<br/>searchIndex] --> IX[Index doc-knowledge<br/>1 doc per section]
     A -- MCP: wiki, work items --> ADO[Azure DevOps<br/>via the agent identity gateway]
 ```
@@ -39,7 +39,7 @@ One idempotent script runs all of it: [`infra/scripts/setup-foundry-iq.ps1`](../
 
 ```powershell
 ./infra/scripts/setup-foundry-iq.ps1 -ResourceGroup rg-foundry-agentic-pattern `
-    -FoundryAccount <foundry-account> -Project <project> -SearchService <search-name> -AgentName doc-agent-spike
+    -FoundryAccount <foundry-account> -Project <project> -SearchService <search-name> -AgentName doc-agent
 ```
 
 | Step | What | Reference |

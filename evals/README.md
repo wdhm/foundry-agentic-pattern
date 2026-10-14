@@ -14,12 +14,12 @@ Evaluation sets, metrics and the **CI eval gate** ([ADR 0013](../docs/adr/0013-e
 
 ```powershell
 az login
-python evals/check_planted_gaps.py --invoke                 # planted gaps: run doc-agent-spike, then check
+python evals/check_planted_gaps.py --invoke                 # planted gaps: run doc-agent, then check
 python evals/check_planted_gaps.py --invoke --scenario evals/datasets/order-sync-information-missing.json
 python evals/check_planted_gaps.py --result my-result.json  # check a saved result
 ```
 
-An expected item counts as found when one finding or proposed change (planted gaps), or one `missing_information` entry (expected missing), contains a term from every `match_all` group. The script exits 1 on failure, so it can be used as a CI step later. Verified 2026-10-14 against `doc-agent-spike:7`: both scenarios `PASS`, the information-missing scenario three times in a row.
+An expected item counts as found when one finding or proposed change (planted gaps), or one `missing_information` entry (expected missing), contains a term from every `match_all` group. The script exits 1 on failure, so it can be used as a CI step later. Verified 2026-10-14 against `doc-agent-spike:7`: both scenarios `PASS`, the information-missing scenario three times in a row. Re-run against `doc-agent:1` (same definition, own identity) on 2026-10-14: planted gaps `PASS`; information missing `PASS` on 2 of 3 runs. The failing run found all three missing items but set `documentation_status=gaps_found`, because the instructions don't say which status wins when there are both gaps and missing information.
 
 ## Gate (blocking)
 
