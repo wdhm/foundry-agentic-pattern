@@ -100,6 +100,6 @@ References: [MCP tool authentication](https://learn.microsoft.com/azure/foundry/
 
 ## Production notes (slides)
 
-- Least privilege per identity and a full RBAC matrix ([#22](https://github.com/wdhm/foundry-agentic-pattern/issues/22), [architecture §6](../architecture.md#6-identity--rbac-matrix-target)).
+- Least privilege per identity and a full RBAC matrix ([#22](https://github.com/wdhm/foundry-agentic-pattern/issues/22), [architecture §6](../architecture.md#6-identity--rbac-matrix)).
 - Landing zone and subscription vending per workload ([#50](https://github.com/wdhm/foundry-agentic-pattern/issues/50)).
 - Codify the hierarchy as `azd` + Bicep ([#52](https://github.com/wdhm/foundry-agentic-pattern/issues/52)).

@@ -11,6 +11,9 @@ A **small, hand-made fictional data set** ([ADR 0005](../docs/adr/0005-generic-r
 | **Documentation standard** ✅ | Foundry IQ index | [`knowledge/documentation-standard.md`](knowledge/documentation-standard.md): a **swappable file** with rule IDs (`DS-xx`) for required sections, tone and **output language**. Indexed by [`setup-foundry-iq.ps1`](../infra/scripts/setup-foundry-iq.ps1) ([guide](../docs/workshop/foundry-iq-guide.md)) |
 | Sample integration ✅ | [`samples/sample-integration/`](../samples/sample-integration/README.md) | Minimal order sync |
 | **Planted gaps + ground truth** ✅ | [PR #62](https://github.com/wdhm/foundry-agentic-pattern/pull/62) + [`evals/`](../evals/README.md) | Three drifts (retry/backoff, ERP timeout, dead-letter queue) and the expected findings |
+| **Information missing** ✅ | [`evals/`](../evals/README.md) ([guide](../docs/workshop/information-missing-guide.md)) | No source has the business owner (DS-10), data classification (DS-15) or logs/runbook (DS-16); the agent must say so, not guess |
+
+Use your own data instead: see the [bring-your-own guide](../docs/workshop/bring-your-own-guide.md).
 
 ## Principles
 - **Fictional.** No real customer, system or personal data.

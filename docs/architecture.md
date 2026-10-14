@@ -97,21 +97,33 @@ See [src/contracts/](../src/contracts/README.md) for the field list. Key propert
 | Work items / requirements | Volatile | Toolbox (ADO) | Exact revision |
 | Code / IaC / config | Versioned | Toolbox (GitHub MCP; Azure Repos via ADO MCP/REST) | Exact commit SHA |
 
-## 6. Identity & RBAC matrix (target)
+## 6. Identity & RBAC matrix
+
+### Built (MVP, checked against the environment 2026-10-14)
+
+| Principal | Resource | Permission | Granted by | Notes |
+|---|---|---|---|---|
+| Agent identity `doc-agent-spike` | Gateway app (`ado_mcp`) | App role `Mcp.Tools.ReadWrite.All` | [`onboard-agent.ps1`](../infra/scripts/onboard-agent.ps1) | The gateway accepts only this identity ([ADR 0021](adr/0021-agent-user-and-ado-mcp-gateway.md)) |
+| Agent **user** `doc-agent-spike` (linked to the agent identity) | Azure DevOps org and project | Access level **Basic**, project **Contributors**; delegated consent to the Azure DevOps MCP app for this user only | `onboard-agent.ps1` | Reads work items and wiki; **wiki write only through the approval-gated tool** ([R3](risks.md#r3), [ADR 0008](adr/0008-human-in-the-loop-approval.md)) |
+| User-assigned MI `id-doc-agent-mcp` | Agent identity blueprint | Federated identity credential | `onboard-agent.ps1` | Secretless agent-user token exchange in the gateway |
+| User-assigned MI `id-doc-agent-mcp` | Container registry | AcrPull | [setup](setup.md) | Pulls the gateway image |
+| Project managed identity | Azure AI Search | Search Index Data Reader | [`setup-foundry-iq.ps1`](../infra/scripts/setup-foundry-iq.ps1) | The Foundry IQ connection authenticates as the project, so every agent in it can read the standard ([guide](workshop/foundry-iq-guide.md)) |
+| Connection `github-mcp` (fine-grained token) | One GitHub repo | Contents and Pull requests: read-only | [`setup-github-mcp.ps1`](../infra/scripts/setup-github-mcp.ps1) | GitHub doesn't accept Entra tokens. The token expires after 90 days ([guide](workshop/github-mcp-guide.md)) |
+| Agent identity `documentation-agent` (hosted stub) | – | None | – | Gets the same rows as `doc-agent-spike` when it replaces it |
+| Operator (whoever runs the setup scripts) | Azure AI Search | Search Service Contributor, Search Index Data Contributor | `setup-foundry-iq.ps1` | Creates the index and uploads the standard |
+| Workshop participants (team accounts) | Foundry resource | Foundry User | [setup](setup.md#team-accounts-sign-in-to-azure-foundry-and-azure-devops-with-these) | Use the playground and run agents |
+
+Which identity each connection presents is mapped in the [resource organisation guide](workshop/resource-organization-guide.md#identities-who-authenticates-where). The agent user's Basic + Contributors is broader than needed: narrowing it to a custom group with *work item read* and *wiki contribute* is on slides ([#22](https://github.com/wdhm/foundry-agentic-pattern/issues/22)).
+
+### Target (other lanes and production, not built in the MVP)
 
 | Principal | Resource | Permission | Notes |
 |---|---|---|---|
-| Project connection `github-mcp` (fine-grained token) | GitHub repo | Read-only Contents and Pull requests, one repository | GitHub doesn't accept Entra tokens, so not the agent identity ([guide](workshop/github-mcp-guide.md)) |
-| Agent identity | ADO work items | Read | [R3](risks.md#r3) |
-| Agent identity | ADO wiki | Read; **write only via approval-gated tool** | [R3](risks.md#r3), [ADR 0008](adr/0008-human-in-the-loop-approval.md) |
-| Project managed identity | Azure AI Search | Search Index Data Reader | The Foundry IQ MCP connection authenticates as the project, not the agent ([guide](workshop/foundry-iq-guide.md)) |
-| Agent identity | Cosmos DB | Data contributor (agent DB only) | |
+| Agent identity | Cosmos DB | Data contributor (agent DB only) | Audit record ([§7](#7-audit-record)) |
 | Agent identity | AI Gateway / models | Invoke | Via the gateway |
 | CI (OIDC) | Foundry project | Create agent versions, run evals, update `version_selector` | |
 | CI (OIDC) | Role assignments | Assign roles to the new agent identity post-deploy | [R3](risks.md#r3) |
 | Reviewer (human) | Teams agent | Chat + approve | Recorded as the approver |
-
-Which identity each connection presents in the current environment (project MI, agent identity, token) is mapped in the [resource organisation guide](workshop/resource-organization-guide.md#identities-who-authenticates-where).
 
 Agent identity role assignments are made **post-deploy** because publishing creates a new identity ([R3](risks.md#r3)). On-behalf-of (OBO) is the documented alternative ([ADR 0012](adr/0012-agent-identity-and-rbac.md)).
 
