@@ -2,7 +2,7 @@
 
 These topics are **intentionally out of scope** for the v1 repo. They are covered in the workshop and in the slides as the natural evolution of the pattern.
 
-In the workshop, each topic is presented **on slides only**, at the end of its owner's lane (see the [feature map](workshop/feature-map.md)):
+In the workshop, each topic is presented **on slides only**, at the end of its owner's lane (see the [feature map](workshop/feature-map.md)). Slide content lives in [workshop/slides](workshop/slides/README.md).
 
 | Topic | Lane | Section | Issue |
 |---|---|---|---|
@@ -36,9 +36,13 @@ In the workshop, each topic is presented **on slides only**, at the end of its o
 
 Bring the agent fleet under **Agent 365** for enterprise-wide agent inventory, governance, lifecycle and access control across Microsoft 365. This complements Foundry fleet management, which covers build and runtime.
 
+Slides: [Agent 365](workshop/slides/agent-365.md).
+
 ## 4. Work IQ
 
 Use **Work IQ** to let agents ground on organisational work context (people, meetings, documents, conversations) where appropriate. For the Documentation Agent, this could mean finding the right reviewer or related discussions. It needs careful scoping of data access and consent.
+
+Slide: [Work IQ](workshop/slides/work-iq.md).
 
 ## 5. Model deployment strategy
 
@@ -66,6 +70,8 @@ v1 reads code, configuration and IaC from Git, and reads wiki pages and work ite
 - Keep **evidence exact**. Cite the document URL plus a version (SharePoint version / ETag, or blob hash) and the page or section, so the "evidence at an exact version" rule still holds.
 - Respect **document permissions**. Either index only libraries that the agent identity may read, or use OBO / permission-trimmed retrieval ([section 6](#6-on-behalf-of-obo-identity)).
 - Optionally make SharePoint a **write target** as well as a source, behind the same approval-gated tool pattern as the wiki.
+
+Slide: [PDF and SharePoint document sources](workshop/slides/document-sources.md) (knowledge source types, and indexing vs live tool calls).
 
 ## 9. Production hardening (out of MVP scope)
 
