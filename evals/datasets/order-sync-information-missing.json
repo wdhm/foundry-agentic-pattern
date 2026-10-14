@@ -1,7 +1,7 @@
 {
   "scenario": "order-sync-information-missing",
   "description": "The documentation standard requires a business owner (DS-10), security details (DS-15) and operations links (DS-16), but no source contains them. The agent must report them as missing information and must not invent values.",
-  "agent": "doc-agent-spike",
+  "agent": "doc-agent",
   "prompt": "Complete the Security and Operations sections and the business owner for the Order Sync integration page /Order Sync/Overview in the Azure DevOps wiki. Use the integration code and configuration in GitHub repository wdhm/foundry-agentic-pattern at commit 8a9c9f2acff643ed15a41e6b43f2f8eb18502b4f (path samples/sample-integration), work item 1, the current wiki page and the documentation standard. Cite evidence (source, path, version).",
   "subject": {
     "repo": "wdhm/foundry-agentic-pattern",

@@ -9,7 +9,7 @@ This guide explains how the Documentation Agent reads work items and updates the
 ```mermaid
 sequenceDiagram
     participant U as User / CI
-    participant F as Foundry Agent Service<br/>(agent doc-agent-spike)
+    participant F as Foundry Agent Service<br/>(agent doc-agent)
     participant G as ado-mcp gateway<br/>(Container Apps, user-assigned MI)
     participant E as Microsoft Entra ID
     participant M as Azure DevOps remote MCP server<br/>mcp.dev.azure.com/{org}
@@ -24,7 +24,7 @@ sequenceDiagram
     Note over F: wiki_upsert_page pauses for approval<br/>(require_approval: always)
 ```
 
-What the wiki history shows: the commit author is **`doc-agent-spike (agent user)`**, not a person.
+What the wiki history shows: the commit author is **`doc-agent (agent user)`**, not a person.
 
 ## Concepts in one minute
 
@@ -77,9 +77,9 @@ Create the agent user with Microsoft Graph, linked to the agent identity:
 POST https://graph.microsoft.com/beta/users
 {
   "@odata.type": "microsoft.graph.agentUser",
-  "displayName": "doc-agent-spike (agent user)",
-  "userPrincipalName": "doc-agent-spike@<tenant-domain>",
-  "mailNickname": "doc-agent-spike",
+  "displayName": "doc-agent (agent user)",
+  "userPrincipalName": "doc-agent@<tenant-domain>",
+  "mailNickname": "doc-agent",
   "accountEnabled": true,
   "identityParentId": "<agent-identity-id>"
 }
@@ -191,7 +191,7 @@ az containerapp create -g <rg> -n ca-doc-agent-mcp --environment cae-doc-agent-m
 1. **Read:** call `POST {project}/openai/v1/responses` with `agent_reference` and the prompt "Read work item 1 …". The output contains `mcp_list_tools` → `mcp_call wit_work_item` → `message`.
 2. **Write with approval:** ask the agent to update a wiki page. The output contains `mcp_approval_request` for `wiki_upsert_page`. Send a second call with `previous_response_id` and an input item `{"type": "mcp_approval_response", "approve": true, "approval_request_id": "<id>"}`.
 3. **Audit:**
-   - The wiki commit author is `doc-agent-spike (agent user)`.
+   - The wiki commit author is `doc-agent (agent user)`.
    - The gateway log shows `authorized caller oid=<agent-identity-id>` and `rpc=tools/call tool=wiki_upsert_page`.
 
 ## Onboard another agent (automated)

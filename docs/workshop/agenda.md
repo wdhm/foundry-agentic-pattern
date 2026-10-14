@@ -43,6 +43,8 @@ The agenda follows the three **swimlanes** in the [feature map](feature-map.md) 
 
 ## 10:30–11:10 · P2 · Knowledge & identity · Rickard
 
+Demos run on the prompt agent **`doc-agent`** in the Foundry playground (Foundry portal → Agents → `doc-agent` → Playground). It has the three P2 tools (`knowledge`, `github`, `ado`), its own agent identity and agent user. The hosted `documentation-agent` (P1) takes over the same tools and identity when it has a model and tools.
+
 | Time | Feature | F | Type | Content |
 |---|---|---|---|---|
 | 10:30–10:35 | Mock data | F8 | Demo | Fictional sample integration, wiki, work items, planted gaps + ground truth; "Information missing" when no source has the fact, evidence at exact versions ([guide](information-missing-guide.md)) |
