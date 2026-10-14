@@ -29,7 +29,7 @@ We build an **MVP**: one simple happy path that shows each platform capability o
 | Output contract (P1) | Structured JSON output on the agent; the Pydantic models stay the schema source | Proposal for P1 |
 | Human-in-the-loop (P1) | **Foundry's native MCP tool approval** (`require_approval`), already proven; Teams as the showcase channel | Proposal for P1 |
 | State & audit (P1) | Foundry traces/conversations + the wiki history; no Cosmos DB in the MVP | Proposal for P1 |
-| Knowledge (P2) | Foundry IQ knowledge base with the documentation standard and wiki | Decided |
+| Knowledge (P2) | Foundry IQ knowledge base with the documentation standard; the wiki is read live via Azure DevOps (no indexed copy) | Decided |
 | Tools (P2) | Azure DevOps via the gateway (done, ADR 0021); GitHub source via MCP | Decided |
 | Identity (P2) | Agent identity + agent user (done). Least privilege goes on slides. | Decided |
 | Mock data (P2) | A small hand-made set with 2–3 planted gaps; no generator | Decided |

@@ -43,7 +43,7 @@ We build an MVP that **shows the platform**, with one simple happy path per feat
 
 | Feature | F-tag | Built/Slides | Issue(s) |
 |---|---|---|---|
-| Foundry IQ (AI Search · knowledge base) | F3 | Built | [#19](https://github.com/wdhm/foundry-agentic-pattern/issues/19) |
+| Foundry IQ (AI Search · knowledge base) | F3 | Built ✅ ([guide](foundry-iq-guide.md)) | [#19](https://github.com/wdhm/foundry-agentic-pattern/issues/19) |
 | Toolbox (MCP · Azure DevOps · GitHub) | F1 | Built (Azure DevOps ✅) | [#20](https://github.com/wdhm/foundry-agentic-pattern/issues/20), [#21](https://github.com/wdhm/foundry-agentic-pattern/issues/21) ✅ |
 | Identities & resource organisation (agent ID · agent user · projects) | – | Built (identity ✅) | [#2](https://github.com/wdhm/foundry-agentic-pattern/issues/2) ✅, [#45](https://github.com/wdhm/foundry-agentic-pattern/issues/45) |
 | Mock data (small hand-made set · planted gaps) | F8 | Built | [#17](https://github.com/wdhm/foundry-agentic-pattern/issues/17), [#18](https://github.com/wdhm/foundry-agentic-pattern/issues/18), [#32](https://github.com/wdhm/foundry-agentic-pattern/issues/32) |

@@ -10,7 +10,7 @@ Infrastructure as code for the pattern, deployed with the **Azure Developer CLI*
 |---|---|
 | Microsoft Foundry resource + project | Hosts the agent, Toolbox, Foundry IQ connection and evaluations |
 | Model deployments | One **chat** model for the agent and one **eval** model for evaluators |
-| Azure AI Search | Backs Foundry IQ knowledge (documentation standard, ADRs, wiki) |
+| Azure AI Search | Backs Foundry IQ knowledge (documentation standard in the MVP). Set up by [`scripts/setup-foundry-iq.ps1`](scripts/setup-foundry-iq.ps1) |
 | Application Insights + Log Analytics | Traces, logs and cost-attribution queries |
 | AI Gateway (API Management) | Token limits per project/deployment and FinOps tagging ([R4](../docs/risks.md#r4)) |
 | Cosmos DB | Runs, `AgentResult`s, review decisions and pending approvals ([ADR 0016](../docs/adr/0016-state-and-audit-cosmos-db.md)) |

@@ -21,6 +21,8 @@ An index is always somewhat stale, so it cannot reliably provide an exact versio
   - **Azure DevOps MCP/REST**: **work items** (with revision) and the **current wiki page** (with version/ETag), plus the approval-gated **wiki write**.
 - **Evidence always points to an exact version.** Index hits are used for discovery. When a hit is cited, the agent re-reads the source live to pin its version.
 
+**MVP scope** ([ADR 0022](0022-mvp-scope-platform-first.md)): the knowledge base holds only the **documentation standard**. The wiki is read live through Azure DevOps MCP, so the MVP needs no index refresh pipeline. ADRs and wiki discovery come later. See the [Foundry IQ guide](../workshop/foundry-iq-guide.md).
+
 ## Alternatives considered
 
 | Option | Why not chosen |

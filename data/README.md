@@ -8,10 +8,10 @@ A **mock data generator** and seed data that make the demo reproducible in any t
 
 | Artifact | Seeded into | Notes |
 |---|---|---|
-| Wiki pages for the sample integration | Azure DevOps wiki + Foundry IQ index | Deliberately incomplete or outdated in places |
+| Wiki pages for the sample integration | Azure DevOps wiki (read live by the agent) | Deliberately incomplete or outdated in places |
 | Work items / requirements | Azure DevOps Boards | Linked to the sample integration |
-| ADRs for the sample integration | Foundry IQ index | Fictional architecture decisions |
-| **Documentation standard** | Foundry IQ index | A **swappable file** that defines required sections, tone and **output language** |
+| ADRs for the sample integration | Foundry IQ index (later) | Fictional architecture decisions |
+| **Documentation standard** ✅ | Foundry IQ index | [`knowledge/documentation-standard.md`](knowledge/documentation-standard.md): a **swappable file** with rule IDs (`DS-xx`) for required sections, tone and **output language**. Indexed by [`setup-foundry-iq.ps1`](../infra/scripts/setup-foundry-iq.ps1) ([guide](../docs/workshop/foundry-iq-guide.md)) |
 | **Planted gaps + ground truth** | `evals/` | Expected findings per scenario, used by the eval gate |
 
 ## Principles
