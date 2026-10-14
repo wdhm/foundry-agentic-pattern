@@ -47,7 +47,7 @@ The agenda follows the three **swimlanes** in the [feature map](feature-map.md) 
 |---|---|---|---|---|
 | 10:30–10:35 | Mock data | F8 | Demo | Fictional sample integration, wiki, work items, planted gaps + ground truth |
 | 10:35–10:45 | Foundry IQ | F3 | Demo | Stable knowledge: the documentation standard as a knowledge base, called as an MCP tool; findings cite rule IDs ([guide](foundry-iq-guide.md)). ADRs and wiki discovery on slides. |
-| 10:45–10:55 | Toolbox (MCP · DevOps · GitHub) | F1 | Demo | Live calls for code at commit, work items, current wiki page; approval-gated wiki write |
+| 10:45–10:55 | Toolbox (MCP · DevOps · GitHub) | F1 | Demo | Live calls for code at commit ([GitHub guide](github-mcp-guide.md): PR #62 diff vs the wiki), work items, current wiki page; approval-gated wiki write |
 | 10:55–11:03 | Identities & resource org | – | Demo | The agent's own identity and agent user: the wiki commit is authored by the agent, not a person ([guide](agent-identity-guide.md)); project vs agent scope ([#45](https://github.com/wdhm/foundry-agentic-pattern/issues/45)). Least privilege on slides. |
 | 11:03–11:10 | *Agent 365 · Work IQ · PDF/SharePoint* | – | Slides | Fleet governance across M365 ([#46](https://github.com/wdhm/foundry-agentic-pattern/issues/46)), work context ([#47](https://github.com/wdhm/foundry-agentic-pattern/issues/47)), document sources ([#48](https://github.com/wdhm/foundry-agentic-pattern/issues/48)) |
 
