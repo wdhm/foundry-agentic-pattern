@@ -2,6 +2,7 @@
 
 Trigger: a message on the Service Bus queue configured in ``config/settings.json``.
 Output: one sales order created in Fabrikam ERP through its REST API.
+Failure: after the last retry the message goes to the dead-letter queue.
 """
 
 import json
@@ -26,7 +27,7 @@ def map_order(order: dict) -> dict:
 
 
 def send_to_erp(sales_order: dict) -> None:
-    """POST the sales order to Fabrikam ERP, retrying with a fixed delay."""
+    """POST the sales order to Fabrikam ERP, retrying with exponential backoff."""
     erp = SETTINGS["erp"]
     retry = SETTINGS["retry"]
     request = urllib.request.Request(
@@ -37,14 +38,22 @@ def send_to_erp(sales_order: dict) -> None:
     )
     for attempt in range(1, retry["maxAttempts"] + 1):
         try:
-            urllib.request.urlopen(request)
+            urllib.request.urlopen(request, timeout=erp["timeoutSeconds"])
             return
         except OSError:
             if attempt == retry["maxAttempts"]:
                 raise
-            time.sleep(retry["delaySeconds"])
+            time.sleep(retry["initialDelaySeconds"] * 2 ** (attempt - 1))
+
+
+def dead_letter(body: str, reason: str) -> None:
+    """Forward a failed message to the dead-letter queue (stubbed in the sample)."""
+    print(f"dead-letter -> {SETTINGS['source']['deadLetterQueue']}: {reason}")
 
 
 def handle_message(body: str) -> None:
     """Entry point for one queue message."""
-    send_to_erp(map_order(json.loads(body)))
+    try:
+        send_to_erp(map_order(json.loads(body)))
+    except OSError as error:
+        dead_letter(body, str(error))
