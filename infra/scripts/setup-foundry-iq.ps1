@@ -188,7 +188,8 @@ $aiToken = Get-Token 'https://ai.azure.com'
 $headers = @{ 'Foundry-Features' = 'AgentEndpoints=V1Preview' }
 $latest = (Invoke-Api GET "$projectEndpoint/agents/${AgentName}?api-version=$AgentApi" $aiToken -Headers $headers).versions.latest
 $definition = $latest.definition
-$hint = 'Use the knowledge tool (knowledge_base_retrieve) to retrieve the documentation standard before assessing documentation, and cite its rule IDs (for example DS-14) in findings and missing information.'
+$legacyHint = 'Use the knowledge tool (knowledge_base_retrieve) to retrieve the documentation standard before assessing documentation, and cite its rule IDs (for example DS-14) in findings and missing information.'
+$hint = "$legacyHint The standard is a rule set, not evidence: don't add it to the evidence array."
 $current = $definition.tools | Where-Object { $_.server_label -eq 'knowledge' }
 if ($current.server_url -eq $mcpEndpoint -and $definition.instructions.Contains($hint)) {
     Done "already has the knowledge tool ($($latest.id))"
@@ -204,7 +205,11 @@ $tool = [pscustomobject]@{
     project_connection_id = $ConnectionName
 }
 $definition.tools = @($definition.tools | Where-Object { $_.server_label -ne 'knowledge' }) + $tool
-if (-not $definition.instructions.Contains($hint)) { $definition.instructions = "$($definition.instructions)`n`n$hint" }
+if (-not $definition.instructions.Contains($hint)) {
+    $definition.instructions = if ($definition.instructions.Contains($legacyHint)) {
+        $definition.instructions.Replace($legacyHint, $hint)
+    } else { "$($definition.instructions)`n`n$hint" }
+}
 $version = Invoke-Api POST "$projectEndpoint/agents/$AgentName/versions?api-version=$AgentApi" $aiToken `
     @{ definition = $definition; description = $latest.description; metadata = $latest.metadata } -Headers $headers
 Done "created $($version.id)"
