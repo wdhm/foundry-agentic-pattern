@@ -1,10 +1,12 @@
-"""Check an agent result against a planted-gap scenario.
+"""Check an agent result against a scenario (planted gaps or information missing).
 
-Standard library only. Reports gap recall and evidence integrity, which are the
-MVP versions of the eval-gate metrics in evals/README.md.
+Standard library only. Reports recall of the expected findings or missing
+information, evidence integrity and a no-fabrication guard on proposals, which
+are the MVP versions of the eval-gate metrics in evals/README.md.
 
     python evals/check_planted_gaps.py --invoke              # run the agent, then check
     python evals/check_planted_gaps.py --result result.json  # check a saved result
+    python evals/check_planted_gaps.py --invoke --scenario evals/datasets/order-sync-information-missing.json
 """
 
 from __future__ import annotations
@@ -12,9 +14,11 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -75,12 +79,36 @@ def text_of(value: object) -> str:
     return str(value)
 
 
+def matches(item: dict, texts: list[str]) -> bool:
+    return any(all(any(term in text for term in group) for group in item["match_all"]) for text in texts)
+
+
+def fabrication_problems(rules: dict, proposals: list[dict]) -> list[str]:
+    text = text_of(proposals).lower()
+    problems = [
+        f"proposal asserts a value no source supports: {text[match.start() : match.end() + 40]!r}"
+        for pattern in rules.get("patterns", [])
+        for match in re.finditer(pattern, text)
+    ]
+    allowed = rules.get("allowed_url_hosts")
+    if allowed is not None:
+        for url in sorted(set(re.findall(r"https?://[^\s)\"'\]>]+", text))):
+            host = urllib.parse.urlparse(url).hostname or ""
+            if not any(host == a or host.endswith(f".{a}") for a in allowed):
+                problems.append(f"proposal links to {url}, which is not from a source")
+    return problems
+
+
 def check(scenario: dict, result: dict) -> dict:
     claims = [text_of(item).lower() for item in result.get("findings", []) + result.get("proposed_changes", [])]
-    gaps = []
-    for gap in scenario["planted_gaps"]:
-        found = any(all(any(term in claim for term in group) for group in gap["match_all"]) for claim in claims)
-        gaps.append({"id": gap["id"], "title": gap["title"], "found": found})
+    missing = [text_of(item).lower() for item in result.get("missing_information", [])]
+    gaps = [
+        {"id": gap["id"], "title": gap["title"], "found": matches(gap, claims)}
+        for gap in scenario.get("planted_gaps", [])
+    ] + [
+        {"id": item["id"], "title": item["title"], "found": matches(item, missing)}
+        for item in scenario.get("expected_missing", [])
+    ]
 
     evidence = {item.get("id"): item for item in result.get("evidence", [])}
     referenced = {
@@ -104,6 +132,7 @@ def check(scenario: dict, result: dict) -> dict:
         "recall": sum(g["found"] for g in gaps) / len(gaps),
         "evidence_problems": problems,
         "missing_sources": missing_sources,
+        "fabrication": fabrication_problems(scenario.get("must_not_propose", {}), result.get("proposed_changes", [])),
     }
 
 
@@ -132,17 +161,20 @@ def main() -> int:
     print(f"Status {result.get('documentation_status')!r}: {status_note}")
     for gap in report["gaps"]:
         print(f"  [{'x' if gap['found'] else ' '}] {gap['id']} {gap['title']}")
-    print(f"Gap recall: {report['recall']:.0%}")
+    print(f"Recall: {report['recall']:.0%}")
     for problem in report["evidence_problems"]:
         print(f"  Evidence problem: {problem}")
     for source_name in report["missing_sources"]:
         print(f"  Missing evidence source: {source_name}")
+    for problem in report["fabrication"]:
+        print(f"  Possible fabrication: {problem}")
 
     passed = (
         report["status_ok"]
         and report["recall"] >= args.min_recall
         and not report["evidence_problems"]
         and not report["missing_sources"]
+        and not report["fabrication"]
     )
     print("PASS" if passed else "FAIL")
     return 0 if passed else 1
