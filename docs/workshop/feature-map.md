@@ -51,6 +51,7 @@ We build an MVP that **shows the platform**, with one simple happy path per feat
 | Agent 365 (agent governance) | – | Slides ✅ ([content](slides/agent-365.md)) | [#46](https://github.com/wdhm/foundry-agentic-pattern/issues/46) ✅ |
 | Work IQ (Microsoft 365 work context) | – | Slides ✅ ([content](slides/work-iq.md)) | [#47](https://github.com/wdhm/foundry-agentic-pattern/issues/47) ✅ |
 | PDF · SharePoint (document sources) | – | Slides ✅ ([content](slides/document-sources.md)) | [#48](https://github.com/wdhm/foundry-agentic-pattern/issues/48) ✅ |
+| Docs: bring your own sources and standard · final RBAC matrix | – | Built ✅ ([how-to](bring-your-own-guide.md), [architecture §6](../architecture.md#6-identity--rbac-matrix)) | [#36](https://github.com/wdhm/foundry-agentic-pattern/issues/36) |
 
 ## P3: AgentOps & platform (area 04) · Louise
 

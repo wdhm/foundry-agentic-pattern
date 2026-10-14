@@ -15,6 +15,10 @@ sample-integration/
 
 PR #62 plants typical drift against the wiki: a changed retry policy (exponential backoff), a new config key (`erp.timeoutSeconds`) and a new dead-letter queue. Infra (Bicep) for the integration is out of MVP scope. The matching ground truth lives in [`data/`](../../data/README.md) and [`evals/`](../../evals/README.md).
 
+The code on `main` is also the subject of the **information-missing** scenario: it has no business owner, data classification or runbook, so the agent must report them as missing ([guide](../../docs/workshop/information-missing-guide.md)).
+
+To document your own integration instead, see the [bring-your-own guide](../../docs/workshop/bring-your-own-guide.md).
+
 All names, systems and data are fictional.
 
 **Owner:** P2 (Knowledge & identity: mock data): Rickard ([@wdhm](https://github.com/wdhm))
