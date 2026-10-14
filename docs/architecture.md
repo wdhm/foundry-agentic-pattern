@@ -2,7 +2,7 @@
 
 This document describes **Agentic Pattern v1** and the **Documentation Agent v1** reference implementation. Each design choice is recorded as an ADR in [adr/](adr/README.md), and open risks are listed in [risks.md](risks.md).
 
-**Diagrams:** the reference architecture ([HTML](diagrams/reference-architecture.html) · [PNG](diagrams/reference-architecture.png)) and the feature swimlanes ([HTML](diagrams/feature-swimlanes.html) · [PNG](diagrams/feature-swimlanes.png)). The feature tags **F1–F8** and lane owners **P1/P2/P3** used below match these diagrams and the [workshop feature map](workshop/feature-map.md).
+**Diagrams:** the reference architecture ([HTML](diagrams/reference-architecture.html) · [PNG](diagrams/reference-architecture.png)) the feature swimlanes ([HTML](diagrams/feature-swimlanes.html) · [PNG](diagrams/feature-swimlanes.png)), and what P2 has built so far ([HTML](diagrams/p2-built-state.html) · [PNG](diagrams/p2-built-state.png)). The feature tags **F1–F8** and lane owners **P1/P2/P3** used below match these diagrams and the [workshop feature map](workshop/feature-map.md).
 
 ![Reference architecture](diagrams/reference-architecture.png)
 

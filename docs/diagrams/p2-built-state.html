@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>P2 Knowledge &amp; identity · What's built</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #f5f5f5;
+      --color-ink:     #2d3142;
+      --color-muted:   #4f5d75;
+      --color-soft:    #7a8399;
+      --color-rule:    rgba(45,49,66,0.12);
+      --color-accent:  #eb6c36;
+      --color-link:    #2e5aa8;
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1200px; width: 100%; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      margin-bottom: 0.4rem;
+    }
+    .sub { color: var(--color-muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
+    svg { width: 100%; min-width: 960px; display: block; }
+    .cards { display: grid; grid-template-columns: 1.2fr 1fr 0.9fr; gap: 1rem; margin-top: 1.5rem; }
+    .card { background: #ffffff; border: 1px solid var(--color-rule); border-radius: 6px; padding: 1.25rem; }
+    .card .eyebrow { margin-bottom: 0.4rem; }
+    .card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.6rem; }
+    .card-header h3 { font-size: 0.95rem; font-weight: 600; }
+    .card-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+    .card-dot.coral { background: var(--color-accent); }
+    .card-dot.ink { background: var(--color-ink); }
+    .card-dot.link { background: var(--color-link); }
+    .card ul { list-style: none; font-size: 0.82rem; line-height: 1.55; color: var(--color-ink); }
+    .card li { padding-left: 0.9rem; position: relative; }
+    .card li::before { content: "–"; position: absolute; left: 0; color: var(--color-soft); }
+    .card code { font-family: var(--font-mono); font-size: 0.76rem; color: var(--color-muted); }
+    footer { margin-top: 1.5rem; padding-top: 0.75rem; border-top: 1px solid var(--color-rule);
+             font-family: var(--font-mono); font-size: 0.66rem; color: var(--color-soft); letter-spacing: 0.06em; }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">P2 · Knowledge &amp; identity · built state 2026-10-14</p>
+    <h1>What P2 has built, and how it plugs into the rest</h1>
+    <p class="sub">One agent, grounded on Foundry IQ, reading live sources through the Toolbox as its own Entra identity. P1 and P3 build on top of this.</p>
+
+    <svg viewBox="0 0 1100 700" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="p2-built-state-title p2-built-state-desc">
+      <title id="p2-built-state-title">P2 knowledge and identity: what is built</title>
+      <desc id="p2-built-state-desc">The doc-agent-spike prompt agent answers a participant by reading the documentation standard from a Foundry IQ knowledge base and live sources through Toolbox MCP tools: GitHub at a commit and Azure DevOps wiki and work items through a gateway that acts as the agent's Entra agent user; mock data seeds all three sources, and the P1 and P3 lanes will replace the spike with the hosted agent and add triggers, gateway, evals and CI/CD.</desc>
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
+        <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+      </defs>
+      <rect width="100%" height="100%" fill="#f5f5f5"/>
+
+      <!-- Zones (painted first) -->
+      <rect x="544" y="60" width="232" height="124" rx="8" fill="rgba(45,49,66,0.025)" stroke="rgba(45,49,66,0.18)" stroke-width="0.8"/>
+      <text x="552" y="76" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">FOUNDRY IQ · STABLE KNOWLEDGE</text>
+      <rect x="544" y="244" width="232" height="236" rx="8" fill="rgba(45,49,66,0.025)" stroke="rgba(45,49,66,0.18)" stroke-width="0.8"/>
+      <text x="552" y="260" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">TOOLBOX · LIVE TOOLS (MCP)</text>
+
+      <!-- Arrows (before boxes) -->
+      <!-- Participant -> Agent -->
+      <line x1="200" y1="316" x2="258" y2="316" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <rect x="214" y="296" width="32" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="230" y="305" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">ASK</text>
+
+      <!-- Agent -> Foundry IQ -->
+      <path d="M460,294 H472 A8,8 0 0 0 480,286 V140 A8,8 0 0 1 488,132 H558" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <rect x="504" y="112" width="36" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="522" y="121" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">RULES</text>
+
+      <!-- Agent -> GitHub MCP -->
+      <line x1="460" y1="316" x2="558" y2="316" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <rect x="494" y="296" width="52" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="520" y="305" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">AT COMMIT</text>
+
+      <!-- Agent -> ADO gateway -->
+      <path d="M460,338 H472 A8,8 0 0 1 480,346 V420 A8,8 0 0 0 488,428 H558" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <rect x="494" y="408" width="52" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="520" y="417" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">WI + WIKI</text>
+
+      <!-- ADO gateway -> Azure DevOps -->
+      <line x1="760" y1="428" x2="858" y2="428" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+      <rect x="776" y="408" width="76" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="814" y="417" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">AS AGENT USER</text>
+
+      <!-- ADO gateway -> Entra Agent ID -->
+      <line x1="660" y1="464" x2="660" y2="538" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+      <rect x="668" y="496" width="80" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="708" y="505" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">TOKEN EXCHANGE</text>
+
+      <!-- Mock data -> Foundry IQ (seed) -->
+      <line x1="860" y1="132" x2="762" y2="132" stroke="#4f5d75" stroke-width="1" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+      <rect x="796" y="112" width="32" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="812" y="121" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">SEED</text>
+      <!-- Mock data -> GitHub (seed) -->
+      <path d="M920,168 V308 A8,8 0 0 1 912,316 H762" fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+      <!-- Mock data -> Azure DevOps (seed) -->
+      <line x1="1000" y1="168" x2="1000" y2="390" stroke="#4f5d75" stroke-width="1" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+
+      <!-- Next lanes -> Agent -->
+      <line x1="360" y1="520" x2="360" y2="362" stroke="#4f5d75" stroke-width="1" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+      <rect x="368" y="430" width="76" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="406" y="439" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">REPLACES SPIKE</text>
+
+      <!-- Nodes -->
+      <!-- 1 Participant (input) -->
+      <rect x="40" y="280" width="160" height="72" rx="6" fill="#f5f5f5"/>
+      <rect x="40" y="280" width="160" height="72" rx="6" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+      <rect x="48" y="286" width="32" height="12" rx="2" fill="transparent" stroke="rgba(122,131,153,0.5)" stroke-width="0.8"/>
+      <text x="64" y="295" fill="#7a8399" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">USER</text>
+      <text x="120" y="320" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Participant</text>
+      <text x="120" y="336" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">Foundry playground</text>
+
+      <!-- 2 Agent (focal) -->
+      <rect x="260" y="272" width="200" height="88" rx="6" fill="#f5f5f5"/>
+      <rect x="260" y="272" width="200" height="88" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1.4"/>
+      <rect x="268" y="278" width="40" height="12" rx="2" fill="transparent" stroke="rgba(235,108,54,0.5)" stroke-width="0.8"/>
+      <text x="288" y="287" fill="#eb6c36" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">AGENT</text>
+      <text x="360" y="314" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">doc-agent-spike v7</text>
+      <text x="360" y="330" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">prompt agent · Sweden Central</text>
+      <text x="360" y="344" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">tools: knowledge · github · ado</text>
+
+      <!-- 3 Foundry IQ -->
+      <rect x="560" y="96" width="200" height="72" rx="6" fill="#f5f5f5"/>
+      <rect x="560" y="96" width="200" height="72" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <rect x="568" y="102" width="24" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.4)" stroke-width="0.8"/>
+      <text x="580" y="111" fill="rgba(45,49,66,0.8)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">KB</text>
+      <rect x="716" y="102" width="36" height="12" rx="2" fill="rgba(45,49,66,0.06)"/>
+      <text x="734" y="111" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">#19 ✓</text>
+      <text x="660" y="136" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Foundry IQ knowledge base</text>
+      <text x="660" y="152" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">AI Search · France Central</text>
+
+      <!-- 4 GitHub MCP -->
+      <rect x="560" y="280" width="200" height="72" rx="6" fill="#f5f5f5"/>
+      <rect x="560" y="280" width="200" height="72" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <rect x="568" y="286" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.4)" stroke-width="0.8"/>
+      <text x="582" y="295" fill="rgba(45,49,66,0.8)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">MCP</text>
+      <rect x="716" y="286" width="36" height="12" rx="2" fill="rgba(45,49,66,0.06)"/>
+      <text x="734" y="295" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">#20 ✓</text>
+      <text x="660" y="320" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">GitHub MCP (read-only)</text>
+      <text x="660" y="336" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">sample repo · files, PRs</text>
+
+      <!-- 5 ADO MCP gateway -->
+      <rect x="560" y="392" width="200" height="72" rx="6" fill="#f5f5f5"/>
+      <rect x="560" y="392" width="200" height="72" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <rect x="568" y="398" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.4)" stroke-width="0.8"/>
+      <text x="582" y="407" fill="rgba(45,49,66,0.8)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">MCP</text>
+      <rect x="716" y="398" width="36" height="12" rx="2" fill="rgba(45,49,66,0.06)"/>
+      <text x="734" y="407" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">#21 ✓</text>
+      <text x="660" y="432" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Azure DevOps MCP gateway</text>
+      <text x="660" y="448" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">Container App · North Europe</text>
+
+      <!-- 6 Azure DevOps (external) -->
+      <rect x="860" y="392" width="200" height="72" rx="6" fill="#f5f5f5"/>
+      <rect x="860" y="392" width="200" height="72" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+      <rect x="868" y="398" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.3)" stroke-width="0.8"/>
+      <text x="882" y="407" fill="rgba(45,49,66,0.7)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">EXT</text>
+      <text x="960" y="432" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Azure DevOps</text>
+      <text x="960" y="448" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">wiki · work items · approval write</text>
+
+      <!-- 7 Entra Agent ID (security) -->
+      <rect x="560" y="540" width="200" height="72" rx="6" fill="#f5f5f5"/>
+      <rect x="560" y="540" width="200" height="72" rx="6" fill="rgba(235,108,54,0.05)" stroke="rgba(235,108,54,0.5)" stroke-width="1" stroke-dasharray="4,4"/>
+      <rect x="568" y="546" width="24" height="12" rx="2" fill="transparent" stroke="rgba(235,108,54,0.5)" stroke-width="0.8"/>
+      <text x="580" y="555" fill="rgba(235,108,54,0.9)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">ID</text>
+      <rect x="716" y="546" width="36" height="12" rx="2" fill="rgba(45,49,66,0.06)"/>
+      <text x="734" y="555" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">#22 ✓</text>
+      <text x="660" y="580" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Entra Agent ID</text>
+      <text x="660" y="596" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">agent identity → agent user</text>
+
+      <!-- 8 Mock data (store) -->
+      <rect x="860" y="96" width="200" height="72" rx="6" fill="#f5f5f5"/>
+      <rect x="860" y="96" width="200" height="72" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+      <rect x="868" y="102" width="32" height="12" rx="2" fill="transparent" stroke="rgba(79,93,117,0.5)" stroke-width="0.8"/>
+      <text x="884" y="111" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">DATA</text>
+      <rect x="1016" y="102" width="36" height="12" rx="2" fill="rgba(45,49,66,0.06)"/>
+      <text x="1034" y="111" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">#17 ✓</text>
+      <text x="960" y="136" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Mock data + planted gaps</text>
+      <text x="960" y="152" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">data/ · samples/</text>
+
+      <!-- 9 P1 + P3 lanes (not built yet) -->
+      <rect x="40" y="520" width="420" height="96" rx="6" fill="#f5f5f5"/>
+      <rect x="40" y="520" width="420" height="96" rx="6" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.30)" stroke-width="1" stroke-dasharray="4,3"/>
+      <rect x="48" y="526" width="32" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.3)" stroke-width="0.8"/>
+      <text x="64" y="535" fill="rgba(45,49,66,0.7)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">NEXT</text>
+      <text x="250" y="560" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">P1 + P3 lanes (in progress)</text>
+      <text x="250" y="578" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">P1 · hosted agent (stub ✓) · workflow · Cosmos · Teams HITL</text>
+      <text x="250" y="594" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">P3 · PR/CLI trigger · AI Gateway · evals · CI/CD</text>
+
+      <!-- Legend -->
+      <line x1="40" y1="644" x2="1060" y2="644" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <text x="40" y="672" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">LEGEND</text>
+      <rect x="112" y="664" width="16" height="10" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+      <text x="134" y="672" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace">Agent (focal)</text>
+      <rect x="220" y="664" width="16" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <text x="242" y="672" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace">Built by P2 (#issue ✓)</text>
+      <rect x="360" y="664" width="16" height="10" rx="2" fill="rgba(235,108,54,0.05)" stroke="rgba(235,108,54,0.5)" stroke-dasharray="3,2" stroke-width="1"/>
+      <text x="382" y="672" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace">Identity</text>
+      <rect x="440" y="664" width="16" height="10" rx="2" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+      <text x="462" y="672" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace">External</text>
+      <rect x="520" y="664" width="16" height="10" rx="2" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.30)" stroke-dasharray="3,2" stroke-width="1"/>
+      <text x="542" y="672" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace">Not built yet</text>
+      <line x1="632" y1="669" x2="656" y2="669" stroke="#4f5d75" stroke-width="1.2"/>
+      <text x="662" y="672" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace">Tool call</text>
+      <line x1="744" y1="669" x2="768" y2="669" stroke="#2e5aa8" stroke-width="1.2"/>
+      <text x="774" y="672" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace">Identity / external</text>
+      <line x1="876" y1="669" x2="900" y2="669" stroke="#4f5d75" stroke-width="1" stroke-dasharray="5,4"/>
+      <text x="906" y="672" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace">Seed / future</text>
+    </svg>
+
+    <div class="cards">
+      <div class="card">
+        <p class="eyebrow">Built by P2</p>
+        <div class="card-header"><span class="card-dot coral"></span><h3>Knowledge, tools and identity</h3></div>
+        <ul>
+          <li>Foundry IQ knowledge base for the documentation standard (#19)</li>
+          <li>GitHub MCP, read-only, one repo (#20)</li>
+          <li>Azure DevOps MCP gateway with approval-gated wiki write (#21, #44)</li>
+          <li>Secretless agent identity → agent user (#2, #22)</li>
+          <li>Mock data, sample integration, planted gaps (#17, #18)</li>
+          <li>“Information missing” scenario with exact-version evidence (#32)</li>
+          <li>Resource organisation, docs and slides (#36, #45–#48)</li>
+        </ul>
+      </div>
+      <div class="card">
+        <p class="eyebrow">How it plugs in</p>
+        <div class="card-header"><span class="card-dot ink"></span><h3>P1 and P3 build on it</h3></div>
+        <ul>
+          <li>P1’s hosted <code>documentation-agent</code> takes over the same three tools and identity rows</li>
+          <li>P1 Teams HITL resumes the approval-gated <code>wiki_upsert_page</code></li>
+          <li>P3 evals reuse the planted gaps and the information-missing dataset</li>
+          <li>P3 trigger sends the <code>AgentRequest</code>; the AI Gateway fronts the model</li>
+        </ul>
+      </div>
+      <div class="card">
+        <p class="eyebrow">Evidence contract</p>
+        <div class="card-header"><span class="card-dot link"></span><h3>Exact versions</h3></div>
+        <ul>
+          <li>GitHub → commit SHA</li>
+          <li>Wiki → page ETag</li>
+          <li>Work item → revision</li>
+          <li>Standard → rule ID (<code>DS-xx</code>)</li>
+        </ul>
+      </div>
+    </div>
+
+    <footer>foundry-agentic-pattern · P2 owner Rickard (@wdhm) · see docs/architecture.md §2, §5, §6</footer>
+  </div>
+</body>
+</html>
