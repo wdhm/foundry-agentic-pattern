@@ -401,7 +401,7 @@ Document each step here when you do it: portal path or CLI command, settings cho
 
 ### Hosted contract stub (P1, #7)
 
-`documentation-agent` version **2** is active in `proj-agentic`. It runs the
+`documentation-agent` version **2** is the
 Agent Framework contract stub, separately from the prompt agent `doc-agent`: no model calls,
 tools, wiki writes or Cosmos persistence. Application provenance version `0.1.0`
 is distinct from Foundry deployment version `2`.
@@ -466,7 +466,8 @@ The step-by-step guide with Microsoft Learn references is [docs/workshop/agent-i
 |---|---|---|
 | Chat model deployment | `gpt-6-luna` | In `foundry-agentic-R8N3LD` |
 | Prompt agent | `doc-agent` (tools `knowledge`, `github`, `ado`) | Agent identity: `foundry-agentic-R8N3LD-proj-agentic-doc-agent-AgentIdentity` |
-| Hosted agent | `documentation-agent` | Agent identity: `foundry-agentic-R8N3LD-proj-agentic-documentation-agent-AgentIdentity`. **The gateway points at this agent** (read-only) |
+| Hosted agent | `documentation-agent` (version 6, assessment mode) | Agent identity: `foundry-agentic-R8N3LD-proj-agentic-documentation-agent-AgentIdentity`. **The gateway points at this agent** (read-only). Foundry User on the project, Monitoring Metrics Publisher on App Insights |
+| Toolbox | `documentation-agent-readonly` (version 1) | Four read tools over `kb-doc-agent-mcp`, `github-mcp`, `ado-mcp-proxy` ([`setup-toolbox.ps1`](../infra/scripts/setup-toolbox.ps1)) |
 | Agent user (hosted) | `documentation-agent@M365CPI54615665.onmicrosoft.com` | Linked to the hosted agent identity. Azure DevOps **Stakeholder** + `[integration-team]\Readers` |
 | Consent grant (hosted) | Hosted agent identity → **Azure DevOps MCP**, consentType `Principal` | Scopes `Ado.Mcp.Tools wit.read wiki.read` (no `wiki.write`) |
 | Agent user | `doc-agent@M365CPI54615665.onmicrosoft.com` | Linked to the agent identity. Azure DevOps **Basic** + `[integration-team]\Contributors`. Kept for rollback |
@@ -525,21 +526,71 @@ artifacts are saved only in ignored `evals/results/`.
 
 ### Hosted migration status (P1, #13; 2026-10-16)
 
-P1 is implementing the assessment inside the existing hosted Python app, per
-[ADR 0024](adr/0024-hosted-documentation-runtime.md). The application has an
-opt-in v1 assessment mode and retains the v0 stub default. Its new code has
-only been checked locally with model/tool doubles, not deployed.
+P1 implemented the assessment inside the existing hosted Python app, per
+[ADR 0024](adr/0024-hosted-documentation-runtime.md). P2 then supplied the
+toolbox and permissions and deployed it: **`documentation-agent:6` runs
+assessment mode against live sources** (see below). `doc-agent:3` remains the
+prompt reference.
 
-A read-only toolbox inventory returned no toolbox resources in `proj-agentic`.
-The existing source connections alone do not supply a toolbox MCP endpoint.
-P2 must provide that endpoint and verify the hosted identity's source/model
-access. The [hosted README](../src/agents/documentation-agent/README.md)
-specifies the four read tools and runtime configuration.
+### Read-only toolbox and hosted assessment (P2; 2026-10-16)
 
-No toolbox, connection, permission or gateway change was made during local
-hosted implementation. `doc-agent:3` continues working as the prompt reference;
-deployed `documentation-agent:2` is still the stub. Do not count the prompt
-agent's earlier scenario passes as hosted migration acceptance.
+**Toolbox** `documentation-agent-readonly`, version **1** (default), created
+with [`infra/scripts/setup-toolbox.ps1`](../infra/scripts/setup-toolbox.ps1).
+It reuses the existing connections and exposes only the four read tools the
+runtime allows:
+
+| Tool | Connection |
+|---|---|
+| `knowledge___knowledge_base_retrieve` | `kb-doc-agent-mcp` (Foundry IQ) |
+| `github___get_file_contents` | `github-mcp` (GitHub read-only MCP) |
+| `ado___wiki`, `ado___wit_work_item` | `ado-mcp-proxy` (gateway, read-only, agent user `documentation-agent@…`) |
+
+Endpoint (pinned to the version):
+`{project-endpoint}/toolboxes/documentation-agent-readonly/versions/1/mcp?api-version=v1`.
+The `ado` tools fail when called with a human token ("AgenticIdentityToken …
+requires AgentInstanceClientId"): the connection only works from an agent.
+
+**Hosted version 6**: image
+`acrfoundryagenticr8n3ld.azurecr.io/documentation-agent@sha256:1a00ba37c7923b171fc13b36f16dde2592aead1e02cd5fc4fdd9ef7f75c5f863`
+(tag `assessment-p2-toolbox`, built with `az acr build`), created with
+`POST {project-endpoint}/agents/documentation-agent/versions?api-version=2025-11-15-preview`
+(header `Foundry-Features: AgentEndpoints=V1Preview`), `kind: hosted`, 0.5 CPU,
+1 GiB, protocol `responses` 2.0.0. Environment variables:
+
+| Variable | Value |
+|---|---|
+| `DOCUMENTATION_MODE` / `DOCUMENTATION_AUTH_MODE` | `assessment` / `managed_identity` |
+| `DOCUMENTATION_PROJECT_ENDPOINT` | project endpoint |
+| `TOOLBOX_ENDPOINT` | toolbox endpoint above |
+| `AZURE_AI_MODEL_DEPLOYMENT_NAME` / `DOCUMENTATION_MODEL_VERSION` | `gpt-6-luna` / `2026-09-22` |
+| `DOCUMENTATION_ADO_PROJECT` / `DOCUMENTATION_ADO_WIKI` | `integration-team` / `integration-team.wiki` |
+| `HOST` | `0.0.0.0` |
+
+**End-to-end proof**: `examples/assessment-request.json` (planted-gaps commit
+`ad623147`, wiki `/Order Sync/Overview`, work item 1) returned HTTP 200 in 46 s
+with a contract-valid `AgentResult`: one medium finding citing DS-11 to DS-14,
+seven evidence items from git, wiki and work item, all verified against the
+observed tool calls. Gateway logs show `authorized caller oid=<hosted agent
+identity>` for `wiki` and `wit_work_item`.
+
+| Gotcha | Resolution |
+|---|---|
+| Image build failed: `src/tools` missing | The Dockerfile now copies `src/tools`, which `pyproject.toml` packages |
+| `PORT` rejected as an environment variable | `PORT`, `FOUNDRY_*` and `AGENT_*` are reserved; removed |
+| Version failed with `ImageError` | The **project managed identity** pulls the image: granted it AcrPull on the ACR |
+| Model calls `403` | Granted the hosted agent identity **Foundry User** on `proj-agentic` |
+| App Insights `403` flooding the logs | Granted the hosted agent identity **Monitoring Metrics Publisher** on `appi-foundry-agentic` |
+| "ADO reads must use the configured project" | `project` is optional on `wit_work_item`; the instructions now tell the model to always pass it (the guard stays strict) |
+| `JSONDecodeError` in evidence checks | GitHub returns the file as an embedded `resource`; `parse_read_result` now maps it to `documents[].content` |
+
+Versions: `2` (stub) and `1` are kept for rollback; failed or buggy
+intermediates `3` to `5` were deleted (`DELETE …/versions/{n}?force=true` when
+idle sessions block it). Logs: `GET {project-endpoint}/agents/documentation-agent/versions/6/sessions/{session}:logstream?api-version=v1`.
+
+References: [toolbox](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/toolbox),
+[use a toolbox from a hosted agent](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/use-toolbox-hosted-agent),
+[deploy a hosted agent](https://learn.microsoft.com/azure/foundry/agents/how-to/deploy-hosted-agent),
+[manage hosted agents](https://learn.microsoft.com/azure/foundry/agents/how-to/manage-hosted-agent).
 
 ### Approval spike status (P1, #1)
 
@@ -587,3 +638,4 @@ Store these in a local `.env` (git-ignored). Never commit secrets; prefer Entra 
 | 2026-10-14 | Rickard | Prompt agent `doc-agent:1` created as a copy of `doc-agent-spike:7` (same model, tools and instructions) and onboarded with `onboard-agent.ps1`; the gateway now points at `doc-agent`. Planted-gaps scenario `PASS`; information-missing scenario `PASS` on 2 of 3 runs (see [evals](../evals/README.md)). P2 is demoed on `doc-agent` in the playground |
 | 2026-10-14 | Rickard | Offboarded `doc-agent-spike`: Azure DevOps entitlement removed, agent user deleted, agent deleted (its identity and blueprint go with it). Agents in `proj-agentic`: `doc-agent`, `documentation-agent` |
 | 2026-10-16 | Rickard | Read-only gateway cutover to the hosted `documentation-agent` (P3 request, ADR 0024) with `onboard-agent.ps1 -ReadOnly`: agent user `documentation-agent@…` (Stakeholder + Readers), grant `Ado.Mcp.Tools wit.read wiki.read`, new app role `Mcp.Tools.Read.All`, gateway revision `--0000005` with `ADO_MCP_READONLY=true`. `doc-agent`'s grants are kept for rollback; its `ado` tool now gets `403`. Hosted runtime proof pending |
+| 2026-10-16 | Rickard | Read-only toolbox `documentation-agent-readonly:1` (`setup-toolbox.ps1`); hosted identity granted Foundry User and Monitoring Metrics Publisher, project MI granted AcrPull. Deployed `documentation-agent:6` in assessment mode; end-to-end assessment passed through the toolbox and gateway. Fixed the Dockerfile, the ADO `project` instruction and GitHub resource parsing. Deleted versions 3–5 |

@@ -23,7 +23,7 @@ from documentation_agent.main import create_server
 from documentation_agent.read_policy import READ_TOOLS, ReadOnlyPolicy, parse_read_result, require_read
 from documentation_agent.settings import AssessmentSettings
 from httpx import ASGITransport, AsyncClient
-from mcp.types import CallToolResult, TextContent
+from mcp.types import CallToolResult, EmbeddedResource, TextContent, TextResourceContents
 from pydantic import ValidationError
 
 from contracts.v1 import AgentRequest, AgentResult
@@ -265,6 +265,20 @@ def test_mcp_errors_fail_closed():
     assert parse_read_result(CallToolResult(content=[], structuredContent={"documents": []})) == '{"documents": []}'
     with pytest.raises(MiddlewareFailure):
         parse_read_result(CallToolResult(content=[]))
+
+
+def test_embedded_file_resource_becomes_document():
+    uri = "repo://owner/repo/sha/abc/contents/config/settings.json"
+    result = CallToolResult(
+        content=[
+            TextContent(type="text", text="successfully downloaded text file (SHA: 5fc5)"),
+            EmbeddedResource(
+                type="resource",
+                resource=TextResourceContents(uri=uri, mimeType="text/plain", text='{"maxAttempts": 5}'),
+            ),
+        ]
+    )
+    assert json.loads(parse_read_result(result)) == {"documents": [{"uri": uri, "content": '{"maxAttempts": 5}'}]}
 
 
 def test_unknown_mode_and_missing_settings_fail(monkeypatch):

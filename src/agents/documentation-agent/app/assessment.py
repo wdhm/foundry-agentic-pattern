@@ -111,6 +111,8 @@ class AssessmentAgent(DocumentationAgent):
                 "Git get_file_contents accepts a directory path for discovery and a file path for content; "
                 "use sha=<request commit_sha> on every read. "
                 "Use ado wiki action=get_page with includeContent=true, or wit_work_item action=get. "
+                "Pass the configured project on every ADO call, including wit_work_item get, "
+                "and the configured wikiIdentifier on every wiki call. "
                 "Only pages and work items listed in the request are available. "
                 "If necessary context is omitted, report missing_information rather than expanding source access.",
                 "ADO source configuration: "
