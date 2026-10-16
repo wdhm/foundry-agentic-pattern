@@ -1,6 +1,31 @@
 # Hosted assessment deployment: preparation and gates
 
-**Status, 2026-10-16: blocked before deployment.** This prepares the committed
+**Latest read-only follow-up, 2026-10-16:** after P1 reported fixing access,
+the approved configuration-only tool setup was independently observed already
+present. Hosted `documentation-agent:4` is active with assessment configuration,
+an immutable image and version-specific `documentation-agent-readonly:1` endpoint.
+Its named selector remains `@latest` at 100%, so it now selects version 4.
+The prompt agent remains version 3. These changes were not deployed by this
+preparation session; no duplicate setup or reconciliation writes were performed.
+
+The existing gateway is ready at revision `ca-doc-agent-mcp--0000005`, with the
+hosted identity chain, `Mcp.Tools.Read.All`, read-only upstream filtering and the
+previous gateway image. The hosted-linked agent user, Principal-only read consent,
+gateway federation/role assignment and active ADO Stakeholder/Readers membership
+were observed. Toolbox version 1 references the original IQ/GitHub/ADO
+connections with exactly the planned labels and read filters.
+
+**This is configuration evidence, not successful assessment evidence.** No
+assessment or tool invocation was made, and backend schemas/results, effective
+ADO ACLs, provenance and hosted traces remain unverified by this session. Await
+P1's completion/runtime evidence and writer handoff before further changes.
+Do not repeat authentication or deployment merely because this session's admin
+login did not complete. Environment-specific evidence stays in ignored `.azure`.
+
+### Earlier preparation baseline
+
+The record below describes the pre-P1 baseline, not the latest deployment.
+This prepares the committed
 P1 hosted runtime under [ADR 0024](../adr/0024-hosted-documentation-runtime.md).
 It does not complete hosted source integration, approval enforcement, release
 certification or Teams publication. No Azure mutations or remote invocations

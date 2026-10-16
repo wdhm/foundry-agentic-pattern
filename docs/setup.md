@@ -563,8 +563,8 @@ The bounded plan, exact prerequisites, build limitations, approval gates and
 future smoke contract are in the
 [hosted deployment preparation guide](workshop/hosted-deployment-guide.md).
 The canonical execution plan and subscription/tenant identifiers stay in the
-deployment owner's ignored `.azure/deployment-plan.md`. It is not validated or
-approved for execution.
+deployment owner's ignored `.azure/deployment-plan.md`. It is not validated for
+further execution.
 
 The user subsequently accepted transitioning the existing ADO gateway from the
 prompt agent to the hosted agent's own identity/user, including prompt ADO
@@ -572,9 +572,26 @@ interruption. The proposed least-privilege grants, existing gateway settings,
 single reusable toolbox, operator-authority requirements and rollback are in the
 same guide. The user approved that configuration-only plan and accepted an ADO
 access gap until hosted deployment and authorized immediate cutover timing.
-Execution remains **held on supported authorized admin execution**; Azure remains unchanged. Hosted version 2
-is still a stub, so actual hosted tool access also requires separately approved
-assessment runtime verification.
+At that preparation baseline, execution was held on supported authorized admin
+execution and this session had left Azure unchanged. Hosted version 2 was still
+a stub; the later externally performed changes are recorded below.
+
+#### Follow-up after P1 access changes
+
+Read-only inspection subsequently found hosted `documentation-agent:4` active
+with assessment/managed-identity configuration and the version-specific
+`documentation-agent-readonly:1` toolbox. Its unchanged `@latest`/100% selector
+now selects version 4; prompt `doc-agent:3` remains unchanged. Gateway revision
+`ca-doc-agent-mcp--0000005` already uses the hosted identity chain and read-only
+role/filtering. The own linked agent user, Principal-only read consent,
+federation, app-role assignment and ADO Stakeholder/Readers membership were
+observed, along with the toolbox's original-connection references/read filters.
+
+Those changes were performed outside this preparation session; it made no
+reconciliation writes or remote invocations. Configuration existence does not
+prove successful hosted assessment, real tool schema/result compatibility,
+effective source access or trace/provenance evidence. P1's exact completion and
+runtime handoff remains required; do not redeploy or repeat setup.
 
 ### Approval spike status (P1, #1)
 
