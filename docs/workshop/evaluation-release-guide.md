@@ -8,17 +8,19 @@ prompt-agent container build, canary or untrusted-PR execution.
 
 ## Dependencies and target
 
-This branch includes dependency commits from open PRs:
+The runner reuses these dependencies, now merged into main:
 
 | Dependency | Original commit | Purpose |
 |---|---|---|
 | [#71](https://github.com/wdhm/foundry-agentic-pattern/pull/71) | `5e5e42b3753466b122d6509498b08f93f8921b36` | `tools.cli` assessment parsing and selected-version provenance |
 | [#72](https://github.com/wdhm/foundry-agentic-pattern/pull/72) | `a48ab8d58719375ded2db254c20663b5c5e2c219` | dataset/contract v1, five cases and pinned snapshots |
 
-Cherry-picks are separate from the runner implementation commit. Integration
-preserves main's hosted runtime type-check scope and latest checker observation
-in the dataset README. Merge the dependency PRs first or explicitly reconcile
-their equivalent cherry-picks; neither is merged by this package.
+Original dependency cherry-picks remain separate from the runner implementation
+commit. After the coordinator merged both dependency PRs, this branch integrated
+main at `40a43d2b559dd2d9bfc4fce62106726204855591`, preserving the canonical CLI,
+datasets, checker, dataset README and complete packaging/type-check configuration.
+The integration also retains the merged monitoring, rollback guide, slides and
+hosted approval spike; this package did not merge those PRs.
 
 Target: **prompt `doc-agent`**, not PR #74's hosted `documentation-agent`.
 The no-tools `contracts.prompt` demonstration is unchanged. CLI public behavior,

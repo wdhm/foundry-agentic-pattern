@@ -59,7 +59,12 @@ select = ["E", "F", "I", "UP", "B"]
 python_version = "3.11"
 strict = true
 plugins = ["pydantic.mypy"]
-files = ["src/contracts", "src/agents/documentation-agent/app", "src/agents/documentation-prompt/configure.py", "src/tools/cli.py"]
+files = [
+  "src/contracts",
+  "src/agents/documentation-agent/app",
+  "src/agents/documentation-prompt/configure.py",
+  "src/tools/cli.py",
+]
 
 [[tool.mypy.overrides]]
 module = ["agent_framework_foundry_hosting"]
