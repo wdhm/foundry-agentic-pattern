@@ -57,9 +57,10 @@ onboarding as an incidental deployment step.
 The user has now accepted transitioning the existing single-identity gateway to
 the hosted agent, including interruption of prompt-agent ADO access. The exact
 configuration-only plan/context are approved, with an accepted access gap until
-hosted deployment. An authorized operator and exclusive writer window are still
-required. No duplicate gateway or multi-identity implementation is proposed.
-The deployment owner must wait for those gates rather than downgrade to a stub.
+hosted deployment. The user has also authorized immediate cutover timing.
+An authorized administrator execution context is still required; stop on
+conflicting live writers. No duplicate gateway or multi-identity implementation
+is proposed. Do not downgrade to a stub.
 
 ## Reuse the prompt agent's tools
 
@@ -71,7 +72,7 @@ the tools must be rebuilt or that a second gateway is necessarily required.
 |-------------------------------|-----------------------------|
 | Foundry IQ / `kb-doc-agent-mcp` | Reference the existing connection in a toolbox as `knowledge`, allowing only `knowledge_base_retrieve`. Preserve project-managed-identity auth and existing Search Index Data Reader grant. No hosted Search grant is established as necessary. |
 | GitHub MCP / `github-mcp` | Reference the existing CustomKeys connection as `github`, allowing only `get_file_contents`. Keep the readonly endpoint and credentials on the connection; do not retrieve or copy the PAT into the container. |
-| ADO / `ado-mcp-proxy` | Reuse the same Microsoft remote MCP backend/data and transition the existing gateway to the hosted agent's own identity/user. A role assignment alone is insufficient; federation, user consent and all three identity-chain settings must agree. Configuration-only cutover and prompt ADO interruption are approved; operator authority and writer coordination remain outstanding. |
+| ADO / `ado-mcp-proxy` | Reuse the same Microsoft remote MCP backend/data and transition the existing gateway to the hosted agent's own identity/user. A role assignment alone is insufficient; federation, user consent and all three identity-chain settings must agree. Configuration-only cutover, immediate timing and prompt ADO interruption are approved; authorized admin execution remains outstanding. |
 
 Foundry officially supports [toolbox entries referencing existing project
 connections](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/toolbox#create-a-toolbox-version).
@@ -141,10 +142,59 @@ no active directory-admin role for the current operator, and its CLI Graph token
 includes `Directory.AccessAsUser.All`; Agent ID guidance requires a supported
 explicit-scope Graph credential for these mutations. Do not treat Azure access
 or a plan approval as Entra admin authority, initiate login or create an auth app
-as a workaround. ADO membership-management authority also needs confirmation.
+as a workaround. The user has separately approved the official first-party
+Microsoft Graph PowerShell enterprise application and exactly the five operator
+scopes below; no custom app or runtime admin grants are included. ADO
+membership-management authority also needs confirmation.
 
-Require an exclusive P1/P2/portal writer window and a fresh nonsecret before
-snapshot. For reviewed rollback, restore the original three prompt identity
+#### Supported administrator sign-in
+
+The deployment owner installed official portable PowerShell 7.6.7 in user scope,
+verified its release checksum and valid Microsoft executable signature, and
+installed `Microsoft.Graph.Authentication` 2.41.2 from PSGallery in CurrentUser
+scope. No elevation, global shell replacement or TLS bypass was used.
+
+The human operator needs active **Agent ID Administrator** for linked agent-user
+creation and appropriate existing-application authority, normally **Cloud
+Application Administrator** or **Application Administrator**, for gateway app
+configuration and delegated grants. PIM-eligible roles must be activated first.
+ADO entitlement management needs an existing organization owner or Project
+Collection Administrator; project/wiki/area ACL changes need the corresponding
+Manage permissions authority. These are operator roles, never agent permissions.
+
+Use an explicit tenant and the approved official Graph PowerShell client:
+
+```powershell
+$scopes = @(
+    'User.Read'
+    'AgentIdUser.ReadWrite.All'
+    'Application.ReadWrite.All'
+    'AppRoleAssignment.ReadWrite.All'
+    'DelegatedPermissionGrant.ReadWrite.All'
+)
+Connect-MgGraph -TenantId '<approved-tenant-id>' `
+    -ClientId '14d82eec-204b-4c2f-b7e8-296a70dab67e' `
+    -Scopes $scopes -ContextScope Process -UseDeviceAuthentication
+Get-MgContext | Select-Object TenantId,ClientId,AuthType,ContextScope,Scopes
+```
+
+The [supported device flow](https://learn.microsoft.com/powershell/microsoftgraph/authentication-commands#delegated-access)
+avoids a hidden WAM sign-in window in an embedded terminal. Complete the login
+only through the official Microsoft address displayed in that terminal. Do not
+paste device codes, tokens or credentials into chat. Confirm the actual returned
+Graph context, required scopes and successful target GETs; a browser success page
+alone is insufficient. Read success is not proof of administrative authority.
+Do not request `.default`, `Directory.AccessAsUser.All`, create-blueprint/
+create-identity scopes or extra consent automatically.
+
+Keep that same process open for later reviewed `Invoke-MgGraphRequest` operations.
+`-ContextScope Process` does not authenticate a fresh shell or WSL Azure CLI.
+The ignored bootstrap writes nonsecret context/target IDs locally, never tokens,
+and performs no migration writes. If a required permission is denied, stop with
+the exact operation/role rather than broadening scopes or copying credentials.
+
+Use the authorized immediate cutover window, stop on conflicting live writers
+and take a fresh nonsecret before snapshot. For reviewed rollback, restore the original three prompt identity
 settings and remove the two newly introduced role/read-only overrides, which
 were previously absent; retain the original image and unrelated settings.
 Preserving prompt grants and federation keeps that restoration possible.
@@ -171,7 +221,7 @@ Until then report **configured, awaiting hosted runtime proof** only after actua
 configuration changes, not deployment success. The user has explicitly accepted
 configuration-only cutover and the resulting ADO access gap until hosted
 deployment; that decision does not authorize a hosted version, serving change or
-billable invocation. Cutover still awaits an authorized operator and writer window.
+billable invocation. Cutover still awaits supported authorized admin execution.
 
 ## Container preparation
 
