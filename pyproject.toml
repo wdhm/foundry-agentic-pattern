@@ -30,13 +30,15 @@ dev = [
 generate-contract-schemas = "contracts.generate_schema:main"
 documentation-agent = "documentation_agent.main:main"
 documentation-prompt = "contracts.prompt:main"
+documentation-trigger = "tools.cli:main"
 
 [tool.setuptools]
-packages = ["contracts", "documentation_agent"]
+packages = ["contracts", "documentation_agent", "tools"]
 
 [tool.setuptools.package-dir]
 contracts = "src/contracts"
 documentation_agent = "src/agents/documentation-agent/app"
+tools = "src/tools"
 
 [tool.setuptools.package-data]
 contracts = ["schema/*.json", "schema/v1/*.json", "py.typed"]
@@ -55,7 +57,7 @@ select = ["E", "F", "I", "UP", "B"]
 python_version = "3.11"
 strict = true
 plugins = ["pydantic.mypy"]
-files = ["src/contracts", "src/agents/documentation-agent/app"]
+files = ["src/contracts", "src/agents/documentation-agent/app", "src/tools/cli.py"]
 
 [[tool.mypy.overrides]]
 module = ["agent_framework_foundry_hosting"]
