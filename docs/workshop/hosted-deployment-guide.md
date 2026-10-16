@@ -54,12 +54,11 @@ connections can be reused without changing the prompt agent. The current gateway
 serves a single agent identity; running onboarding re-points it. Do not run
 onboarding as an incidental deployment step.
 
-If hosted ADO access cannot reuse the current configuration safely, P2 must
-propose a reviewed extension of the existing gateway, a separately scoped gateway,
-or an explicitly coordinated identity transition. That proposal needs its own
-code/configuration, cost, consent, entitlement and permission review.
-**Neither shared gateway changes, new infrastructure nor gateway repointing is
-approved here.** The deployment owner must wait rather than downgrade to a stub.
+The user has now accepted transitioning the existing single-identity gateway to
+the hosted agent, including interruption of prompt-agent ADO access. The exact
+execution plan, permissions and writer window still need approval. No duplicate
+gateway or multi-identity implementation is proposed. The deployment owner must
+wait for those gates rather than downgrade to a stub.
 
 ## Reuse the prompt agent's tools
 
@@ -71,7 +70,7 @@ the tools must be rebuilt or that a second gateway is necessarily required.
 |-------------------------------|-----------------------------|
 | Foundry IQ / `kb-doc-agent-mcp` | Reference the existing connection in a toolbox as `knowledge`, allowing only `knowledge_base_retrieve`. Preserve project-managed-identity auth and existing Search Index Data Reader grant. No hosted Search grant is established as necessary. |
 | GitHub MCP / `github-mcp` | Reference the existing CustomKeys connection as `github`, allowing only `get_file_contents`. Keep the readonly endpoint and credentials on the connection; do not retrieve or copy the PAT into the container. |
-| ADO / `ado-mcp-proxy` | Reuse the same Microsoft remote MCP backend/data. The current gateway cannot accept the hosted identity unchanged, even if an app role is granted; it requires a reviewed gateway extension or separately approved alternative. |
+| ADO / `ado-mcp-proxy` | Reuse the same Microsoft remote MCP backend/data and transition the existing gateway to the hosted agent's own identity/user. A role assignment alone is insufficient; federation, user consent and all three identity-chain settings must agree. Prompt ADO interruption is accepted, but execution approval is pending. |
 
 Foundry officially supports [toolbox entries referencing existing project
 connections](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/toolbox#create-a-toolbox-version).
@@ -106,45 +105,70 @@ binds an agent user to one agent identity. Sharing the prompt agent's user or
 swapping its client ID is not a supported shortcut. Direct MCP wiring also does
 not remove the gateway's checks or Azure DevOps' need for the agent-user flow.
 
-### Smallest next P1/P2 decision
+### Proposed existing-gateway transition
 
-The user prefers coordination with P1/P2 over duplicate infrastructure or custom
-compatibility work. **No gateway implementation is included in this preparation.**
+**Direction accepted; execution not approved.** Fresh read-only checks still
+show the prompt identity chain, empty toolbox inventory and missing hosted
+user/grants/federation. The plan is now configuration-only, not agent deployment.
+The proposed operations, in dependency order, are:
 
-P2 should decide whether to transition the existing gateway from the prompt agent
-to the hosted agent. This reuses the existing service and ADO connection, but
-requires the hosted agent's own linked agent user, read-only ADO membership and
-delegated consent, gateway app-role authorization and blueprint federation.
-The gateway's three `AGENT_*` settings then identify that hosted chain.
-**That change would stop the old prompt agent's ADO access**; it is not a
-transparent permission addition and requires explicit P1/P2 coordination.
+| Owner | Proposed change requiring review |
+|-------|----------------------------------|
+| Entra administrator | Create one agent user linked only to the existing hosted identity. Preserve the prompt user and existing blueprint/runtime credentials. |
+| ADO owner | Add that user as **Stakeholder + project Readers** in `integration-team`, with effective project/work-item/wiki reads and no contribution permissions. |
+| Entra administrator | Grant only that user Principal-scoped `Ado.Mcp.Tools wit.read wiki.read` consent to the existing ADO MCP application. No `AllPrincipals` or `wiki.write`. |
+| Hosted blueprint owner | Trust the existing gateway managed identity through one additional federated identity credential; preserve the existing runtime credential. |
+| Gateway app owner | Add an Application role `Mcp.Tools.Read.All` to the existing gateway app and assign it only to the hosted identity. Preserve the existing prompt role/assignment. This is proposed app configuration, not a new app or permission already granted. |
+| Coordinated deployment writer | In one existing Container App revision, set the hosted `AGENT_BLUEPRINT_CLIENT_ID`, `AGENT_IDENTITY_CLIENT_ID`, `AGENT_USER_UPN`, plus `MCP_REQUIRED_ROLE=Mcp.Tools.Read.All` and `ADO_MCP_READONLY=true`. Preserve `wit,wiki`, image, managed identity, audience, ingress and scaling. |
+| Coordinated deployment writer | Create one versioned `documentation-agent-readonly` toolbox referencing the three existing connections, labels `knowledge`, `github`, `ado`, and only P1's four tool names. Record the returned immutable version-specific endpoint. |
 
-P2 must review appropriate ADO access level/cost, scopes
-`Ado.Mcp.Tools wit.read wiki.read`, read-only upstream filtering and a suitable
-gateway role. The only current gateway role is read/write; do not silently grant
-it or run the unmodified onboarding script, which grants Contributors/write scope
-and re-points the gateway unless skipped.
+The wiki is verified as a **provisioned project wiki**, not a code wiki.
+[Current wiki permissions](https://learn.microsoft.com/azure/devops/project/wiki/manage-readme-wiki-permissions#stakeholder-access-and-wikis)
+allow Stakeholder reads of this wiki type even in a private project; a new Basic
+license is not assumed necessary. P2 must verify effective ACLs and area access.
+Stop on denied reads rather than upgrading licenses, overriding denies or adding
+Contributors. Do not run the unmodified onboarding script, whose defaults include
+Basic, Contributors, a write scope and the read/write gateway role.
 
-If both agents must retain ADO access simultaneously, the current gateway cannot
-provide it by configuration alone. P2 must separately own and review a multi-identity
-gateway change or alternative, including caller/token-cache/MCP-session isolation.
-A new gateway is not automatically required, and none is proposed for execution.
+The gateway change deliberately stops prompt ADO access. Preserve prompt IQ,
+GitHub and serving configuration. It adds no gateway, model capacity, Foundry
+agent or ARM compute resource; existing compute/startup, retrieval and telemetry
+can still incur usage charges. No paid invocation has occurred.
 
-Once P2 resolves that decision, one versioned toolbox can reference the existing
-three connections with labels `knowledge`, `github`, `ado`, exposing only the four
-P1 read tools. P1 supplies the assessment configuration and retains its action,
-repository/SHA/project/wiki guards. No new Foundry agent, backend data, Search
-service or copied credentials are needed for this reuse plan.
+Before writes, an authorized Entra operator is required. Read-only checks found
+no active directory-admin role for the current operator, and its CLI Graph token
+includes `Directory.AccessAsUser.All`; Agent ID guidance requires a supported
+explicit-scope Graph credential for these mutations. Do not treat Azure access
+or a plan approval as Entra admin authority, initiate login or create an auth app
+as a workaround. ADO membership-management authority also needs confirmation.
+
+Require an exclusive P1/P2/portal writer window and a fresh nonsecret before
+snapshot. For reviewed rollback, restore the original three prompt identity
+settings and remove the two newly introduced role/read-only overrides, which
+were previously absent; retain the original image and unrelated settings.
+Preserving prompt grants and federation keeps that restoration possible.
+No automatic rollback, agent serving PATCH or deletion of added objects is
+included; cleanup needs separate dependency review and approval.
 
 Remaining verification: actual toolbox `tools/list` must return P1's four
 `server_label___tool_name` names with compatible arguments/results. P1 expects Git
 `documents[].content`, wiki `page` plus `eTag`, and work-item `fields` plus `rev`;
-connection reuse alone does not prove those shapes. Hosted model/toolbox access
-must be verified before deciding whether an additional project role is needed.
-Before a live rollout, require offline tests for unknown callers, token-cache and
-MCP-session isolation, hosted write rejection and unchanged prompt behavior.
-Later, separately approved read-only integration must verify correct downstream
-identity and source evidence. No paid invocation was performed for this analysis.
+connection reuse alone does not prove those shapes. The alignment owner confirmed
+there is no captured live schema evidence: passing offline doubles are not
+backend compatibility proof. Actual service/installed-SDK names are authoritative
+if documentation differs. Stop for P1/P2 on mismatches; no custom adapter or
+broader allowlist is included. Hosted model/toolbox access must be verified
+before deciding whether an additional project role is needed.
+
+**Verification boundary:** deployed hosted version 2 is a stub and never calls
+the toolbox. Configuration existence and gateway health cannot prove actual
+hosted reads. Agentic identity also requires a genuine agent request context;
+standalone human `tools/list` is not hosted proof. Do not spoof context or use
+prompt/gateway credentials. A functional assessment version, serving isolation,
+build and one bounded assessment invocation require separate approval.
+Until then report **configured, awaiting hosted runtime proof**, not deployment
+success. If verified access is required before interrupting prompt ADO, defer
+gateway cutover until that runtime scope is approved.
 
 ## Container preparation
 

@@ -566,6 +566,14 @@ The canonical execution plan and subscription/tenant identifiers stay in the
 deployment owner's ignored `.azure/deployment-plan.md`. It is not validated or
 approved for execution.
 
+The user subsequently accepted transitioning the existing ADO gateway from the
+prompt agent to the hosted agent's own identity/user, including prompt ADO
+interruption. The proposed least-privilege grants, existing gateway settings,
+single reusable toolbox, operator-authority requirements and rollback are in the
+same guide. This settles the migration direction, **not execution approval**:
+Azure remains unchanged. Hosted version 2 is still a stub, so actual hosted tool
+access also requires separately approved assessment runtime verification.
+
 ### Approval spike status (P1, #1)
 
 The native approval experiment is local-only, started explicitly with
