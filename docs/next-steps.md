@@ -32,6 +32,8 @@ In the workshop, each topic is presented **on slides only**, at the end of its o
 - Use **subscription vending** to give each agent product team a pre-governed subscription or resource group with Foundry, AI Search, Cosmos DB and Monitor already wired.
 - Make **private networking** (private endpoints, VNet-injected agents) and **Azure Policy** (allowed regions/models, diagnostic settings) the default.
 
+Slides: [Landing zones and subscription vending](workshop/slides/landing-zones.md) (platform/team ownership and shared vs isolated Foundry resources).
+
 ## 3. Agent 365
 
 Bring the agent fleet under **Agent 365** for enterprise-wide agent inventory, governance, lifecycle and access control across Microsoft 365. This complements Foundry fleet management, which covers build and runtime.
@@ -51,6 +53,8 @@ The v1 repo deploys one chat model and one eval model in a single region. At pro
 - **Spillover** from PTU to standard/global deployments for peaks.
 - **Multi-region** deployments behind the AI Gateway for resilience and data-residency constraints.
 - **Model version pinning and upgrades** gated by the same eval gate.
+
+Slides: [Model deployment strategy](workshop/slides/deployment-strategy.md) (processing scope, PTU/spillover and gateway/regional recovery trade-offs).
 
 ## 6. On-behalf-of (OBO) identity
 

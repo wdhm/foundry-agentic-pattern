@@ -13,6 +13,12 @@ The plan had grown to more than 45 issues, and M1 was still not done. Several it
 
 ## Decision
 
+> **P1 runtime update (2026-10-16):** John selected the hosted Agent Framework
+> app as the main runtime. [ADR 0024](0024-hosted-documentation-runtime.md)
+> records the revised direction and transition constraints. The table below
+> preserves the earlier MVP decision; this change does not automatically
+> restore Cosmos DB or make native prompt-agent approvals apply to hosted code.
+
 We build an **MVP**: one simple happy path that shows each platform capability once.
 
 **Rules for every feature**

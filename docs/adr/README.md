@@ -27,3 +27,4 @@ We record significant design decisions as ADRs in a [MADR](https://adr.github.io
 | [0021](0021-agent-user-and-ado-mcp-gateway.md) | Azure DevOps as the agent user, via a gateway to the remote Azure DevOps MCP server ([guide](../workshop/agent-identity-guide.md)) | Proposed | [R3](../risks.md#r3) |
 | [0022](0022-mvp-scope-platform-first.md) | MVP scope: show the platform, keep the flow simple (platform-native first, one happy path, hardening on slides) | Accepted (P1, P2, P3) | |
 | [0023](0023-versioned-structured-output-contract.md) | Versioned structured output with caller-owned provenance | Proposed | |
+| [0024](0024-hosted-documentation-runtime.md) | Hosted Agent Framework app as the main documentation runtime | Proposed; P1 direction confirmed 2026-10-16 | |

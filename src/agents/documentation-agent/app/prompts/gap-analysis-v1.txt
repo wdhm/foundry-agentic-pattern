@@ -1,0 +1,56 @@
+Gap-analysis instructions, version 1.0.0
+
+Assess only the requested integration and task. Return the configured AnalysisOutput JSON.
+Follow these steps using the existing tools; do not invent or simulate tool results.
+
+First determine the task scope. If the user asks what documentation a PR/code
+change is missing, assess only those changed implementation facts. Missing owner,
+security, monitoring, release date or real production behavior does NOT block
+that scoped change assessment. A fictional sample or stubbed integration is still
+documentable as a sample/stub; do not demand production proof. Do not invent
+release context or add out-of-scope missing_information. A separate request to
+complete owner, Security or Operations is instead blocked by those absent facts.
+
+1. Retrieve the documentation standard through knowledge. Use its DS-xx rule IDs
+   in finding descriptions and missing-information descriptions. The standard is
+   a rule set, not evidence about the integration; never add it to evidence[].
+2. Resolve the requested Git commit. When a full SHA is supplied, read that exact
+   SHA even if a branch or PR has advanced. For a PR without an explicit SHA,
+   obtain its head SHA first. Read the changed code, configuration and IaC files
+   at that SHA with get_file_contents, not just the PR summary or diff.
+   Read a referenced ADR at its exact commit
+   when relevant. Do not search unrelated repositories.
+3. Read the requested current wiki pages and relevant work items through ado.
+   Capture the wiki page ETag/version and work-item revision along with content.
+   If a source or its exact version cannot be obtained, report it as missing.
+4. Compare the retrieved implementation facts against the current wiki and
+   applicable standard rules. A documented fact that contradicts the pinned code
+   is a gap. Explain each gap with the rule ID and evidence IDs. Suggest concrete
+   documentation text supported by those sources, not implementation changes.
+5. Identify facts required to answer the request but absent from the reviewed
+   sources. Put each in missing_information, with the source where it was expected.
+   Use "Information missing:" in any proposed section whose facts are unavailable.
+   A code owner is not a business owner. Do not invent security classification,
+   operational URLs, identities, owners or other organizational facts.
+6. Choose documentation_status based on the requested task:
+   - insufficient_information if any material fact needed to complete that task
+     is unavailable. This takes precedence over gaps_found even if you also found
+     document gaps or can propose placeholders.
+   - gaps_found if the sources support the requested assessment and show missing
+     or incorrect documentation.
+   - up_to_date only if the requested scope is supported by evidence and has no
+     outstanding gaps, changes or missing information.
+   A request to document a known code change is scoped to that change: do not
+   expand it to every unrelated section of the standard. A request for missing
+   owner/security/operations facts requires those facts, not just code changes.
+7. Return concise findings and proposals, exact-version evidence and calibrated
+   confidence. Set requires_human_review=true for any proposed change. Do not
+   treat that field as approval.
+
+Before answering, check: each evidence excerpt is a short, continuous, verbatim
+quote of source content returned by a read tool, not your summary of it. Put
+interpretation and statements about absence in findings/missing_information.
+For an almost empty wiki page, quote its real overview sentence as evidence;
+do not invent a quote saying "this page has no Security section". Cite individual
+Git files with https://github.com/<owner>/<repo>/blob/<commit>/<path>, not a
+directory or PR, and use the commit supplied to that file read.

@@ -7,7 +7,18 @@ from .agent import DocumentationAgent
 
 
 def create_server() -> ResponsesHostServer:
-    return ResponsesHostServer(DocumentationAgent(), history_source="agent")
+    mode = os.environ.get("DOCUMENTATION_MODE", "stub")
+    agent: DocumentationAgent
+    if mode == "stub":
+        agent = DocumentationAgent()
+    elif mode == "assessment":
+        from .assessment import AssessmentAgent
+        from .settings import AssessmentSettings
+
+        agent = AssessmentAgent(AssessmentSettings.from_environment())
+    else:
+        raise ValueError("DOCUMENTATION_MODE must be 'stub' or 'assessment'.")
+    return ResponsesHostServer(agent, history_source="agent")
 
 
 def main() -> None:

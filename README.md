@@ -6,6 +6,12 @@ Reference pattern for building **governed, versioned, evaluated agents on Micros
 >
 > **Scope:** this is a workshop that **shows Microsoft Foundry's tools and platform**. We keep the flow simple and use platform-native features first; production hardening is covered as [next steps](docs/next-steps.md#9-production-hardening-out-of-mvp-scope) ([ADR 0022](docs/adr/0022-mvp-scope-platform-first.md)).
 
+The [gap-analysis demo](docs/workshop/gap-analysis-guide.md) uses `doc-agent`
+with the existing source tools to assess real sample changes and report missing
+facts. It is a proposal-only reference during migration. P1 is moving the main
+runtime into the [hosted application](src/agents/documentation-agent/README.md);
+its local assessment code awaits P2 toolbox/access integration and live verification.
+
 ---
 
 ## What and why

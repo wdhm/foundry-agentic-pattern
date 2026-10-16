@@ -1,0 +1,17 @@
+{
+  "action": "propose",
+  "arguments": {
+    "run_id": "806c4972-cfcc-4f27-9900-059a22233179",
+    "page": "/approval-spike",
+    "content": "Fictional proposal: document the sample retry limit."
+  },
+  "evidence": [
+    {
+      "id": "sample-evidence",
+      "source": "git",
+      "uri": "https://example.com/fictional/integration",
+      "version": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "excerpt": "Fictional example evidence for approval rendering, not a retrieved source."
+    }
+  ]
+}
