@@ -13,7 +13,7 @@ Every workshop feature has **one owner**: **P1** John ([@johnsward](https://gith
 
 ## MVP scope
 
-We build an MVP that **shows the platform**, with one simple happy path per feature, using platform-native features first ([ADR 0022](../adr/0022-mvp-scope-platform-first.md)). Production hardening is covered on slides ([next steps §9](../next-steps.md#9-production-hardening-out-of-mvp-scope)). The P1 and P3 simplifications are proposals until John and Louise confirm them (issues labelled `mvp-proposal`).
+We build an MVP that **shows the platform**, with one simple happy path per feature, using platform-native features first ([ADR 0022](../adr/0022-mvp-scope-platform-first.md)). Production hardening is covered on slides ([next steps §9](../next-steps.md#9-production-hardening-out-of-mvp-scope)). P1 confirmed on 2026-10-13 and P3 on 2026-10-16. The tables below include the original target backlog; use ADR 0022 for the confirmed MVP scope even where issues still carry `mvp-proposal` labels.
 
 ## F-tag index
 

@@ -1,8 +1,8 @@
 # 0022. MVP scope: show the platform, keep the flow simple
 
-- **Status:** Accepted for P1 and P2; proposed for P3 (Louise confirms her lane)
+- **Status:** Accepted for P1, P2 and P3
 - **Date:** 2026-10-08
-- **Deciders:** P2 (Rickard); P1 (John, confirmed 2026-10-13); P3 for her lane
+- **Deciders:** P2 (Rickard); P1 (John, confirmed 2026-10-13); P3 (Louise, confirmed 2026-10-16)
 - **Related:** [0002](0002-workshop-format.md), [0007](0007-single-agent-in-v1.md), [0009](0009-hosted-agent-runtime.md), [0013](0013-evaluation-gate-in-ci.md), [0014](0014-infrastructure-scope.md), [0016](0016-state-and-audit-cosmos-db.md), [0020](0020-manual-setup-first.md), [0021](0021-agent-user-and-ado-mcp-gateway.md); [next steps](../next-steps.md)
 
 ## Context
@@ -33,11 +33,11 @@ We build an **MVP**: one simple happy path that shows each platform capability o
 | Tools (P2) | Azure DevOps via the gateway (done, ADR 0021); GitHub source via MCP | Decided |
 | Identity (P2) | Agent identity + agent user (done). Least privilege goes on slides. | Decided |
 | Mock data (P2) | A small hand-made set with 2–3 planted gaps; no generator | Decided |
-| Observability (P3) | Foundry tracing and monitoring views; no custom workbook | Proposal for P3 |
-| Evals (P3) | Foundry built-in evaluators on about 5 cases, run from one GitHub Action | Proposal for P3 |
-| CI/CD (P3) | One workflow: create the agent version, then run evals. Rollback via `version_selector` is shown manually. | Proposal for P3 |
-| AI Gateway (P3) | Foundry's AI gateway option if setup is simple; otherwise slides | Proposal for P3 |
-| IaC (P3) | Runbook + scripts are enough for the demo; `azd up` only if time allows | Proposal for P3 |
+| Observability (P3) | Foundry tracing and monitoring views; no custom workbook | Decided (P3, 2026-10-16) |
+| Evals (P3) | Foundry built-in evaluators on about 5 cases, run from one GitHub Action | Decided (P3, 2026-10-16) |
+| CI/CD (P3) | One workflow: create the agent version, then run evals. Rollback via `version_selector` is shown manually. | Decided (P3, 2026-10-16) |
+| AI Gateway (P3) | Foundry's AI gateway option if setup is simple; otherwise slides | Decided (P3, 2026-10-16) |
+| IaC (P3) | Runbook + scripts are enough for the demo; `azd up` only if time allows | Decided (P3, 2026-10-16) |
 
 **Milestones**
 - **M1: MVP slice.** Agent + Azure DevOps tools + approval + structured result + Foundry IQ + GitHub source + tracing, triggered from a CLI.
@@ -58,6 +58,6 @@ We build an **MVP**: one simple happy path that shows each platform capability o
   - Some earlier ADRs describe the target, not the MVP: [0009](0009-hosted-agent-runtime.md) (hosted agent), [0013](0013-evaluation-gate-in-ci.md) (ground-truth gate), [0016](0016-state-and-audit-cosmos-db.md) (Cosmos DB). They stay valid as the target architecture.
   - The MVP is not production-ready (see the disclaimer in the README).
 - **Follow-ups:**
-  - P3 confirms or adjusts her proposals (issues labelled `mvp-proposal`).
+  - P3 confirmed the platform-first MVP on 2026-10-16. Older issue bodies and `mvp-proposal` labels may still describe the original scope; apply this confirmed scope when scheduling P3 work.
   - P1 issue descriptions still describe some pre-MVP requirements. Apply the confirmed MVP scope when scheduling them.
   - Out-of-scope items are listed in [next-steps.md](../next-steps.md#9-production-hardening-out-of-mvp-scope).
