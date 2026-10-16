@@ -1,0 +1,219 @@
+{
+  "dataset_version": "1.0.0",
+  "contract_version": "1.0.0",
+  "documentation_standard": {
+    "path": "data/knowledge/documentation-standard.md",
+    "commit_sha": "2dd57c18bb0589e85c556ddbc032bce688d059f5",
+    "git_blob_sha": "0cddaa68614bb6219479e1e91642c101c4d93d15",
+    "role": "rules_only"
+  },
+  "sources": [
+    {
+      "id": "base-settings",
+      "source": "git",
+      "uri": "https://github.com/wdhm/foundry-agentic-pattern/blob/8a9c9f2acff643ed15a41e6b43f2f8eb18502b4f/samples/sample-integration/config/settings.json",
+      "version": "8a9c9f2acff643ed15a41e6b43f2f8eb18502b4f",
+      "snapshot": "fixtures/base-settings.json",
+      "git_blob_sha": "cacd44dc10e71f1f2896efd300ba1c8d99981ebf",
+      "availability": "snapshot",
+      "note": "Exact historical configuration; no timeoutSeconds, exponential backoff or deadLetterQueue."
+    },
+    {
+      "id": "pr62-settings",
+      "source": "git",
+      "uri": "https://github.com/wdhm/foundry-agentic-pattern/blob/ad623147fbb1eeb9a6423d437df199c91db15a9e/samples/sample-integration/config/settings.json",
+      "version": "ad623147fbb1eeb9a6423d437df199c91db15a9e",
+      "snapshot": "fixtures/pr62-settings.json",
+      "git_blob_sha": "5fc547cf3e37be6fc8ec2754e4e0c7a54badfaba",
+      "availability": "snapshot",
+      "note": "Exact demo PR head configuration; live PR changes must not silently replace this version."
+    },
+    {
+      "id": "pr62-code",
+      "source": "git",
+      "uri": "https://github.com/wdhm/foundry-agentic-pattern/blob/ad623147fbb1eeb9a6423d437df199c91db15a9e/samples/sample-integration/src/order_sync.py",
+      "version": "ad623147fbb1eeb9a6423d437df199c91db15a9e",
+      "snapshot": "fixtures/pr62-order_sync.py",
+      "git_blob_sha": "a4b615b583c1e78724cd296249d356ac9434bff9",
+      "availability": "snapshot",
+      "note": "Exact demo PR head code; dead_letter is explicitly stubbed and only prints."
+    },
+    {
+      "id": "base-code",
+      "source": "git",
+      "uri": "https://github.com/wdhm/foundry-agentic-pattern/blob/8a9c9f2acff643ed15a41e6b43f2f8eb18502b4f/samples/sample-integration/src/order_sync.py",
+      "version": "8a9c9f2acff643ed15a41e6b43f2f8eb18502b4f",
+      "snapshot": "fixtures/base-order_sync.py",
+      "git_blob_sha": "6806b3c2d281d5d36b729c81c268103039fbef1a",
+      "availability": "snapshot",
+      "note": "Exact historical implementation with fixed-delay retry and no dead-letter forwarding."
+    },
+    {
+      "id": "base-readme",
+      "source": "git",
+      "uri": "https://github.com/wdhm/foundry-agentic-pattern/blob/8a9c9f2acff643ed15a41e6b43f2f8eb18502b4f/samples/sample-integration/README.md",
+      "version": "8a9c9f2acff643ed15a41e6b43f2f8eb18502b4f",
+      "snapshot": "fixtures/base-README.md",
+      "git_blob_sha": "ef1f8b3c98ccb1596abe2c9535cf730783b739f3",
+      "availability": "snapshot",
+      "note": "Exact historical README. Its mock-data Owner entry does not establish business ownership. Its prose mentions the later PR; historical configuration remains authoritative."
+    },
+    {
+      "id": "order-sync-wiki",
+      "source": "wiki",
+      "uri": "https://dev.azure.com/foundry-agentic/integration-team/_apis/wiki/wikis/integration-team.wiki/pages?path=%2FOrder%20Sync%2FOverview&includeContent=true&api-version=7.1",
+      "version": "d897eaf7cd02c4da6bd70df5cae951ba6790df9f",
+      "snapshot": "fixtures/order-sync-wiki.json",
+      "git_blob_sha": "d897eaf7cd02c4da6bd70df5cae951ba6790df9f",
+      "availability": "snapshot",
+      "note": "Read-only retrieval 2026-10-16: full page content and ETag captured. The ETag is a wiki Git blob ID, not a commit. The snapshot content hashes to this blob."
+    },
+    {
+      "id": "order-sync-work-item",
+      "source": "work_item",
+      "uri": "https://dev.azure.com/foundry-agentic/integration-team/_workitems/edit/1",
+      "version": "2",
+      "snapshot": "fixtures/order-sync-work-item.json",
+      "git_blob_sha": null,
+      "availability": "snapshot",
+      "note": "Revision 2 retrieved read-only on 2026-10-16. Snapshot retains all title/description text plus type/state and lists all returned field names; personal identity and process metadata values are omitted."
+    }
+  ],
+  "cases": [
+    {
+      "id": "order-sync-retry",
+      "scenario_file": "order-sync-retry.json",
+      "input_mode": "live_sources",
+      "source_ids": ["pr62-settings", "pr62-code", "order-sync-wiki"],
+      "request": {
+        "contract_version": "1.0.0",
+        "request_id": "ad694c8a-e65b-4fe6-b8cb-e1dac7eed001",
+        "correlation_id": "50ee7b0e-3027-4d08-822d-1cd6e0afd001",
+        "trigger": "eval",
+        "requested_by": "p3-eval-dataset",
+        "subject": {
+          "repo": "wdhm/foundry-agentic-pattern",
+          "pr_reference": "https://github.com/wdhm/foundry-agentic-pattern/pull/62",
+          "commit_sha": "ad623147fbb1eeb9a6423d437df199c91db15a9e",
+          "changed_paths": ["samples/sample-integration/config/settings.json", "samples/sample-integration/src/order_sync.py"]
+        },
+        "context": {"wiki_page_paths": ["/Order Sync/Overview"], "work_item_ids": [1]},
+        "documentation_standard_ref": "https://github.com/wdhm/foundry-agentic-pattern/blob/2dd57c18bb0589e85c556ddbc032bce688d059f5/data/knowledge/documentation-standard.md"
+      },
+      "rationale": "Reuse the existing positive drift case and its three planted gaps, not three redundant per-gap cases.",
+      "reference_answer": "With the sparse wiki verified at an exact version, report gaps_found: document the change from 3 fixed attempts at 5 seconds to 5 attempts with exponential backoff from 2 seconds (DS-14/30), erp.timeoutSeconds=30 (DS-13/30), and orders-confirmed-failed (DS-12/14/30). Cite the PR head Git sources and the actual wiki version. The sample queue forwarding is stubbed; do not claim proven real delivery.",
+      "forbidden_claims": ["Wiki omissions without reading the wiki", "Real Service Bus dead-letter delivery is implemented"],
+      "integration_blockers": [],
+      "baseline": {
+        "state": "historical_report_only",
+        "reference": "docs/workshop/information-missing-guide.md",
+        "observations": "2026-10-14: existing README reports PASS on doc-agent-spike:7 and doc-agent:1. Raw outputs and full provenance are not committed; no v1 or built-in evaluator baseline is asserted."
+      }
+    },
+    {
+      "id": "order-sync-information-missing",
+      "scenario_file": "order-sync-information-missing.json",
+      "input_mode": "live_sources",
+      "source_ids": ["base-settings", "base-code", "base-readme", "order-sync-wiki", "order-sync-work-item"],
+      "request": {
+        "contract_version": "1.0.0",
+        "request_id": "ad694c8a-e65b-4fe6-b8cb-e1dac7eed002",
+        "correlation_id": "50ee7b0e-3027-4d08-822d-1cd6e0afd002",
+        "trigger": "eval",
+        "requested_by": "p3-eval-dataset",
+        "subject": {
+          "repo": "wdhm/foundry-agentic-pattern",
+          "commit_sha": "8a9c9f2acff643ed15a41e6b43f2f8eb18502b4f",
+          "changed_paths": ["samples/sample-integration"]
+        },
+        "context": {"wiki_page_paths": ["/Order Sync/Overview"], "work_item_ids": [1]},
+        "documentation_standard_ref": "https://github.com/wdhm/foundry-agentic-pattern/blob/2dd57c18bb0589e85c556ddbc032bce688d059f5/data/knowledge/documentation-standard.md"
+      },
+      "rationale": "Reuse the existing multi-source abstention case, including the code-owner/business-owner trap and known mixed-status failure.",
+      "reference_answer": "After checking all sources, return insufficient_information and identify the missing business owner (DS-10/22), data classification (DS-15/22), and logs/dashboards/runbook (DS-16/22). Do not promote the README mock-data owner to business owner or invent URLs or values. Reference actual Git, wiki and work-item versions. Proposals require human review, not permission to write.",
+      "forbidden_claims": ["The sample README Owner establishes business ownership", "Invented classification, operational links or owners"],
+      "integration_blockers": ["P1/P2 must resolve or explicitly accept status precedence when findings and missing information coexist; do not weaken this expected status. This is a historical observation, not a measured failure of the current agent."],
+      "baseline": {
+        "state": "historical_report_only",
+        "reference": "docs/workshop/information-missing-guide.md",
+        "observations": "2026-10-14: doc-agent-spike:7 PASS three consecutive runs; doc-agent:1 PASS 2 of 3. Failing run found all missing items but returned gaps_found. No raw results, complete runtime provenance or built-in evaluator scores are available."
+      }
+    },
+    {
+      "id": "order-sync-version-isolation",
+      "scenario_file": "order-sync-version-isolation.json",
+      "input_mode": "supplied_sources",
+      "source_ids": ["base-settings"],
+      "request": {
+        "contract_version": "1.0.0",
+        "request_id": "ad694c8a-e65b-4fe6-b8cb-e1dac7eed003",
+        "correlation_id": "50ee7b0e-3027-4d08-822d-1cd6e0afd003",
+        "trigger": "eval",
+        "requested_by": "p3-eval-dataset",
+        "subject": {
+          "repo": "wdhm/foundry-agentic-pattern",
+          "commit_sha": "8a9c9f2acff643ed15a41e6b43f2f8eb18502b4f",
+          "changed_paths": ["samples/sample-integration/config/settings.json"]
+        },
+        "context": {"wiki_page_paths": ["/Order Sync/Overview"]},
+        "documentation_standard_ref": "https://github.com/wdhm/foundry-agentic-pattern/blob/2dd57c18bb0589e85c556ddbc032bce688d059f5/data/knowledge/documentation-standard.md"
+      },
+      "rationale": "Negative control against cross-case contamination: older settings are not the later PR, and configuration alone cannot establish wiki freshness.",
+      "reference_answer": "Return insufficient_information because the wiki content is unavailable. The supplied historical settings contain maxAttempts=3, delaySeconds=5, baseUrl=https://erp.fabrikam.example and salesOrderPath=/api/v2/salesorders. They do not contain timeoutSeconds, initialDelaySeconds, backoff or deadLetterQueue. Do not infer runtime defaults from absent keys, or assert wiki omissions. Cite only the historical settings at the pinned SHA.",
+      "forbidden_claims": ["At this commit configured retry is 5 attempts with exponential backoff", "At this commit configured ERP timeout is 30 seconds", "At this commit orders-confirmed-failed is configured", "Wiki is current or has proven gaps"],
+      "integration_blockers": [],
+      "baseline": {"state": "not_run", "reference": null, "observations": "No agent run or evaluator score has been recorded."}
+    },
+    {
+      "id": "order-sync-dead-letter-stub",
+      "scenario_file": "order-sync-dead-letter-stub.json",
+      "input_mode": "supplied_sources",
+      "source_ids": ["pr62-settings", "pr62-code"],
+      "request": {
+        "contract_version": "1.0.0",
+        "request_id": "ad694c8a-e65b-4fe6-b8cb-e1dac7eed004",
+        "correlation_id": "50ee7b0e-3027-4d08-822d-1cd6e0afd004",
+        "trigger": "eval",
+        "requested_by": "p3-eval-dataset",
+        "subject": {
+          "repo": "wdhm/foundry-agentic-pattern",
+          "commit_sha": "ad623147fbb1eeb9a6423d437df199c91db15a9e",
+          "changed_paths": ["samples/sample-integration/config/settings.json", "samples/sample-integration/src/order_sync.py"]
+        },
+        "context": {},
+        "documentation_standard_ref": "https://github.com/wdhm/foundry-agentic-pattern/blob/2dd57c18bb0589e85c556ddbc032bce688d059f5/data/knowledge/documentation-standard.md"
+      },
+      "rationale": "Evidence fidelity rather than keyword recall: a real planted queue name and optimistic module docstring must not turn a print-only sample into a working transport.",
+      "reference_answer": "Return insufficient_information for guaranteed delivery. Settings name orders-confirmed-failed; send_to_erp retries up to 5 attempts with exponential delays from 2 seconds and a 30-second request timeout. On exhausted OSError, handle_message calls dead_letter, whose only action is print. Identify missing real queue-send implementation or delivery proof. Cite code and settings at the PR head; do not claim persistence, alerting, successful enqueue or actual Service Bus delivery.",
+      "forbidden_claims": ["dead_letter actually enqueues or persists the message", "Delivery to Service Bus is guaranteed", "Operational monitoring or alerts are implemented"],
+      "integration_blockers": [],
+      "baseline": {"state": "not_run", "reference": null, "observations": "No agent run or evaluator score has been recorded."}
+    },
+    {
+      "id": "order-sync-wiki-unavailable",
+      "scenario_file": "order-sync-wiki-unavailable.json",
+      "input_mode": "supplied_sources",
+      "source_ids": ["pr62-settings", "pr62-code"],
+      "request": {
+        "contract_version": "1.0.0",
+        "request_id": "ad694c8a-e65b-4fe6-b8cb-e1dac7eed005",
+        "correlation_id": "50ee7b0e-3027-4d08-822d-1cd6e0afd005",
+        "trigger": "eval",
+        "requested_by": "p3-eval-dataset",
+        "subject": {
+          "repo": "wdhm/foundry-agentic-pattern",
+          "pr_reference": "https://github.com/wdhm/foundry-agentic-pattern/pull/62",
+          "commit_sha": "ad623147fbb1eeb9a6423d437df199c91db15a9e",
+          "changed_paths": ["samples/sample-integration/config/settings.json", "samples/sample-integration/src/order_sync.py"]
+        },
+        "context": {"wiki_page_paths": ["/Order Sync/Overview"]},
+        "documentation_standard_ref": "https://github.com/wdhm/foundry-agentic-pattern/blob/2dd57c18bb0589e85c556ddbc032bce688d059f5/data/knowledge/documentation-standard.md"
+      },
+      "rationale": "Paired with the original drift case: identical new code but deliberately no wiki evidence. Tests source-unavailability abstention and rule-set/evidence separation, not whether the model memorized the known gaps.",
+      "reference_answer": "Return insufficient_information and identify unavailable wiki content and its exact ETag/version. Git facts may be summarized, but there is no evidence of actual wiki omissions or freshness. Cite only supplied Git sources at the PR head. The documentation standard supplies DS rule IDs, not an integration evidence entry; do not cite source=knowledge, version=1.0 or a fabricated wiki version.",
+      "forbidden_claims": ["The unseen wiki omits retry, timeout or dead-letter information", "An invented wiki ETag was retrieved", "The documentation standard is integration evidence"],
+      "integration_blockers": [],
+      "baseline": {"state": "not_run", "reference": null, "observations": "No agent run or evaluator score has been recorded."}
+    }
+  ]
+}

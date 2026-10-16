@@ -1,0 +1,20 @@
+{
+  "scenario": "order-sync-version-isolation",
+  "description": "A historical configuration assessment must not borrow facts from the newer demo PR. No wiki snapshot is supplied.",
+  "agent": "doc-agent",
+  "prompt": "Using only the supplied settings.json at commit 8a9c9f2acff643ed15a41e6b43f2f8eb18502b4f and the documentation standard, assess whether the Configuration section of /Order Sync/Overview is current. State the retry values and ERP settings actually present at this commit. The wiki content is unavailable in this case; do not fetch it or infer its contents. Do not use the newer PR #62 settings or claim a gap without reading the wiki. Cite exact source versions. Return a documentation assessment, not a write.",
+  "expected_status": "insufficient_information",
+  "planted_gaps": [],
+  "expected_missing": [
+    {
+      "id": "VI1",
+      "title": "Wiki content is unavailable, so configuration documentation freshness cannot be determined",
+      "rules": ["DS-13", "DS-20", "DS-22", "DS-30"],
+      "match_all": [["wiki"], ["unavailable", "missing", "not supplied", "not provided"]]
+    }
+  ],
+  "expected_evidence": {
+    "git_versions": ["8a9c9f2acff643ed15a41e6b43f2f8eb18502b4f"],
+    "required_sources": ["git"]
+  }
+}

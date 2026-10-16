@@ -1,0 +1,20 @@
+{
+  "scenario": "order-sync-dead-letter-stub",
+  "description": "The PR names a dead-letter queue, but its implementation only prints. A configuration name and docstring are not proof of actual Service Bus delivery.",
+  "agent": "doc-agent",
+  "prompt": "Using only the supplied settings.json and order_sync.py at PR #62 commit ad623147fbb1eeb9a6423d437df199c91db15a9e and the documentation standard, assess whether there is enough evidence to document guaranteed delivery to orders-confirmed-failed after ERP retries fail. Inspect the body of dead_letter, not only its docstring. Explain what the sample actually does and which implementation or operational proof is missing. This is a code-evidence assessment, not a wiki comparison; no wiki or work item is supplied. Cite exact source versions and do not perform writes.",
+  "expected_status": "insufficient_information",
+  "planted_gaps": [],
+  "expected_missing": [
+    {
+      "id": "DL1",
+      "title": "A real queue-send implementation or delivery proof is absent; dead_letter only prints",
+      "rules": ["DS-12", "DS-14", "DS-20", "DS-22"],
+      "match_all": [["dead-letter", "dead letter", "dead_letter", "queue"], ["implementation", "delivery", "proof"]]
+    }
+  ],
+  "expected_evidence": {
+    "git_versions": ["ad623147fbb1eeb9a6423d437df199c91db15a9e"],
+    "required_sources": ["git"]
+  }
+}

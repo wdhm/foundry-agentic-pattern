@@ -1,0 +1,32 @@
+{
+  "id": 1,
+  "rev": 2,
+  "retrieved_on": "2026-10-16",
+  "retrieval_uri": "https://dev.azure.com/foundry-agentic/integration-team/_apis/wit/workitems/1/revisions/2?api-version=7.1",
+  "scope": "All title/description text plus type/state. Identity, timestamp, classification-path and process metadata are intentionally omitted; this is a scoped documentary snapshot, not the complete REST response.",
+  "fields": {
+    "System.WorkItemType": "Epic",
+    "System.State": "Doing",
+    "System.Title": "Order Sync integration (webshop to ERP)",
+    "System.Description": "Fictional sample. Maintain the Order Sync integration that moves confirmed webshop orders to Fabrikam ERP."
+  },
+  "retrieved_field_names": [
+    "Microsoft.VSTS.Common.ActivatedBy",
+    "Microsoft.VSTS.Common.ActivatedDate",
+    "Microsoft.VSTS.Common.Priority",
+    "Microsoft.VSTS.Common.StateChangeDate",
+    "System.AreaPath",
+    "System.ChangedBy",
+    "System.ChangedDate",
+    "System.CommentCount",
+    "System.CreatedBy",
+    "System.CreatedDate",
+    "System.Description",
+    "System.IterationPath",
+    "System.Reason",
+    "System.State",
+    "System.TeamProject",
+    "System.Title",
+    "System.WorkItemType"
+  ]
+}
