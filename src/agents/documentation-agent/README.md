@@ -16,9 +16,9 @@ It has its own local-only entry point and a dummy state receipt; it does not
 enable writes in assessment mode or change the deployed agent.
 
 The main runtime is now the hosted Python app ([ADR 0024](../../../docs/adr/0024-hosted-documentation-runtime.md)).
-Its assessment path is implemented locally, but **not deployed or verified
-against live tools**. P2 must supply the toolbox endpoint and source access;
-the shared gateway has not been switched away from the working prompt agent.
+Assessment mode is deployed as `documentation-agent:6` and verified end to end
+against live tools through P2's read-only toolbox `documentation-agent-readonly`
+([setup](../../../docs/setup.md#read-only-toolbox-and-hosted-assessment-p2-2026-10-16)).
 
 | Mode | Input | Behaviour |
 |---|---|---|
@@ -50,9 +50,11 @@ mode is for local development. Tool/client failures, missing tools, refusals,
 invalid output, unmatched evidence and a 180-second invocation timeout fail
 explicitly, not as successful assessments.
 
-### P2 integration inputs (not provisioned by this change)
+### P2 integration inputs
 
-P2 provides a toolbox in the existing project with these exact exposed names:
+P2 provides the toolbox `documentation-agent-readonly`
+([`setup-toolbox.ps1`](../../../infra/scripts/setup-toolbox.ps1)) with these
+exact exposed names:
 
 | Tool | P1 runtime restriction |
 |---|---|
@@ -69,15 +71,17 @@ to the four filtered read tools; the runtime rejects write actions independently
 of toolbox approval metadata. Enabling writes requires #15, not a configuration
 toggle on this assessment runner.
 
-P2 must also verify the hosted identity's model/tool permissions, existing
-connection authentication, and the ADO gateway transition. The gateway serves
-one agent identity; do not run onboarding to switch it without coordination.
-This implementation creates no toolbox, connection or role assignment.
+P2 verified the hosted identity's model/tool permissions, connection
+authentication and the ADO gateway transition; see
+[setup](../../../docs/setup.md#read-only-toolbox-and-hosted-assessment-p2-2026-10-16).
+The gateway serves one agent identity; do not run onboarding to switch it
+without coordination.
 
 Evidence verification reuses `contracts.evidence`, also used by the scenario
 checker. It supports P2's documented Git `documents[].content`, wiki
-`page`/`eTag`, and work-item `fields`/`rev` outputs. Different output shapes must
-be verified during integration; unsupported evidence is rejected. This matches
+`page`/`eTag`, and work-item `fields`/`rev` outputs. GitHub MCP returns the
+file as an embedded text `resource`; `parse_read_result` maps it to
+`documents[].content`. Unsupported evidence is rejected. This matches
 actual source excerpts, not the truth of every generated inference.
 
 ### Run assessment mode after P2 supplies access

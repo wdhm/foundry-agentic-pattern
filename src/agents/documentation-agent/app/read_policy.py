@@ -4,7 +4,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from agent_framework import Content, FunctionInvocationContext, FunctionMiddleware, MiddlewareFailure
-from mcp.types import CallToolResult
+from mcp.types import CallToolResult, TextResourceContents
 from pydantic import BaseModel
 
 from contracts.evaluation import ExecutionRecord
@@ -64,6 +64,14 @@ def parse_read_result(result: CallToolResult) -> str:
         raise MiddlewareFailure("Source tool returned an error; assessment stopped.")
     if result.structuredContent is not None:
         return json.dumps(result.structuredContent)
+    # GitHub get_file_contents returns a status line plus the file as an embedded text resource.
+    documents = [
+        {"uri": str(item.resource.uri), "content": item.resource.text}
+        for item in result.content
+        if item.type == "resource" and isinstance(item.resource, TextResourceContents)
+    ]
+    if documents:
+        return json.dumps({"documents": documents})
     text = [item.text for item in result.content if item.type == "text"]
     if not text:
         raise MiddlewareFailure("Source tool returned no readable content.")
