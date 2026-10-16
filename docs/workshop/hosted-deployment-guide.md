@@ -56,9 +56,10 @@ onboarding as an incidental deployment step.
 
 The user has now accepted transitioning the existing single-identity gateway to
 the hosted agent, including interruption of prompt-agent ADO access. The exact
-execution plan, permissions and writer window still need approval. No duplicate
-gateway or multi-identity implementation is proposed. The deployment owner must
-wait for those gates rather than downgrade to a stub.
+configuration-only plan/context are approved, with an accepted access gap until
+hosted deployment. An authorized operator and exclusive writer window are still
+required. No duplicate gateway or multi-identity implementation is proposed.
+The deployment owner must wait for those gates rather than downgrade to a stub.
 
 ## Reuse the prompt agent's tools
 
@@ -70,7 +71,7 @@ the tools must be rebuilt or that a second gateway is necessarily required.
 |-------------------------------|-----------------------------|
 | Foundry IQ / `kb-doc-agent-mcp` | Reference the existing connection in a toolbox as `knowledge`, allowing only `knowledge_base_retrieve`. Preserve project-managed-identity auth and existing Search Index Data Reader grant. No hosted Search grant is established as necessary. |
 | GitHub MCP / `github-mcp` | Reference the existing CustomKeys connection as `github`, allowing only `get_file_contents`. Keep the readonly endpoint and credentials on the connection; do not retrieve or copy the PAT into the container. |
-| ADO / `ado-mcp-proxy` | Reuse the same Microsoft remote MCP backend/data and transition the existing gateway to the hosted agent's own identity/user. A role assignment alone is insufficient; federation, user consent and all three identity-chain settings must agree. Prompt ADO interruption is accepted, but execution approval is pending. |
+| ADO / `ado-mcp-proxy` | Reuse the same Microsoft remote MCP backend/data and transition the existing gateway to the hosted agent's own identity/user. A role assignment alone is insufficient; federation, user consent and all three identity-chain settings must agree. Configuration-only cutover and prompt ADO interruption are approved; operator authority and writer coordination remain outstanding. |
 
 Foundry officially supports [toolbox entries referencing existing project
 connections](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/toolbox#create-a-toolbox-version).
@@ -107,7 +108,7 @@ not remove the gateway's checks or Azure DevOps' need for the agent-user flow.
 
 ### Proposed existing-gateway transition
 
-**Direction accepted; execution not approved.** Fresh read-only checks still
+**Configuration-only plan approved; execution held.** Fresh read-only checks still
 show the prompt identity chain, empty toolbox inventory and missing hosted
 user/grants/federation. The plan is now configuration-only, not agent deployment.
 The proposed operations, in dependency order, are:
@@ -166,9 +167,11 @@ hosted reads. Agentic identity also requires a genuine agent request context;
 standalone human `tools/list` is not hosted proof. Do not spoof context or use
 prompt/gateway credentials. A functional assessment version, serving isolation,
 build and one bounded assessment invocation require separate approval.
-Until then report **configured, awaiting hosted runtime proof**, not deployment
-success. If verified access is required before interrupting prompt ADO, defer
-gateway cutover until that runtime scope is approved.
+Until then report **configured, awaiting hosted runtime proof** only after actual
+configuration changes, not deployment success. The user has explicitly accepted
+configuration-only cutover and the resulting ADO access gap until hosted
+deployment; that decision does not authorize a hosted version, serving change or
+billable invocation. Cutover still awaits an authorized operator and writer window.
 
 ## Container preparation
 
