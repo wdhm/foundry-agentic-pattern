@@ -1,18 +1,36 @@
-# .github/workflows/
+# GitHub Actions
 
-GitHub Actions workflows ([ADR 0003](../../docs/adr/0003-github-for-code-and-cicd.md)).
+[`agent-release.yml`](agent-release.yml) is the single platform-first MVP workflow
+for the offline/code portion of #25/#26/#27. It is **manual dispatch only**.
+There is no PR, merge, `pull_request_target`, container-build, promotion or rollback
+trigger. #26 is consolidated here, not an untrusted-PR agent execution path.
 
-> Placeholder. No workflows are active yet. They are added from **M1**.
+Dispatch defaults to **offline regression tests only**, without Azure login or
+OIDC permission. This implementation has not been dispatched against Azure.
+The optional cloud job requires all of: trusted `main`, successful offline checks,
+explicit execution input, `P3_RELEASE_ENABLED=true`, and the separately configured
+`p3-agent-release` environment approval. Opening this PR cannot start a cloud run.
 
-## Planned workflows
+Before an operator enables that job, configure environment required reviewers,
+prevent self-review, restrict deployment branches to protected `main`, establish
+federation for the exact environment subject, verify least-privilege Foundry
+data-plane access, and set the non-secret environment variables
+`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, and
+`EVAL_MODEL_DEPLOYMENT`. Set the enable variable **last**, after approvals and
+compatibility are verified. No environment, federation, role or model deployment
+is configured by this change. The `P3_RELEASE_ENABLED` switch is a **repository**
+variable so the job condition can read it before environment admission.
+No credential secrets are used.
 
-| Workflow | Trigger | Purpose |
-|---|---|---|
-| `ci.yml` | PR | Lint, unit tests, contract JSON Schema drift check |
-| `documentation-agent.yml` | PR touching `samples/**` | Build an `AgentRequest` from the PR and invoke the agent. The result is posted to the PR and to Teams. |
-| `agent-release.yml` | Merge to `main` (agent paths) | Build the container, create a new agent version, run the **eval gate**, then promote or block via `version_selector` |
-| `post-deploy-rbac.yml` | After agent create/publish | Assign roles to the (new) agent identity ([R3](../../docs/risks.md#r3)) |
+The runner requires a reviewed, expiring release plan, writer hold, exact live
+serving-pin GET, model-version checks and explicit evaluator thresholds before
+candidate creation. Passing means **eligible for manual review**, never promoted.
+Failed, missing, skipped and incomplete required evaluations block release.
+Raw diagnostic artifacts may contain source content; access follows repository
+artifact permissions and retention is three days. Do not enable cloud artifacts
+on a public repository without a source-data publication review.
 
-Authentication to Azure uses **OIDC workload identity federation**, with no stored secrets.
+See the [evaluation/release automation guide](../../docs/workshop/evaluation-release-guide.md)
+for the plan contract, interfaces, limits and outstanding live prerequisites.
 
 **Owner:** P3 (AgentOps & platform): Louise ([@llandinl](https://github.com/llandinl))
