@@ -356,7 +356,7 @@ def test_main_defaults_to_blocked_without_cloud(plan, monkeypatch, tmp_path):
     monkeypatch.setenv("EVAL_MODEL_DEPLOYMENT", "offline-judge")
     monkeypatch.chdir(ROOT)
     output = tmp_path / "result"
-    assert main(["--plan", str(path), "--output", str(output)]) == 1
+    assert main(["--target", "prompt", "--plan", str(path), "--output", str(output)]) == 1
     decision = json.loads((output / "decision.json").read_text())
     assert decision["status"] == "blocked" and decision["promoted"] is False
     assert "execution" in decision["error"]
@@ -414,7 +414,7 @@ def test_bad_main_run_keeps_blocked_artifact_and_serving(plan, cloud, tmp_path, 
     path = tmp_path / "plan.json"
     path.write_text(plan.model_dump_json())
     output = tmp_path / "result"
-    assert main(["--plan", str(path), "--output", str(output), "--execute-approved-cloud"]) == 1
+    assert main(["--target", "prompt", "--plan", str(path), "--output", str(output), "--execute-approved-cloud"]) == 1
     decision = json.loads((output / "decision.json").read_text())
     assert decision["status"] == "blocked" and decision["promoted"] is False
     assert "Incomplete" in decision["error"]

@@ -1,4 +1,4 @@
-"""Manual create-version -> built-in eval gate. Never changes serving traffic."""
+"""Prompt compatibility release gate; hosted is the default CLI target."""
 
 import argparse
 import hashlib
@@ -110,7 +110,7 @@ def gate(items: list[dict[str, Any]], expected_count: int, thresholds: dict[str,
                 raise ValueError(f"Blocking built-in evaluation: {result['name']}.")
 
 
-class FoundryRelease:
+class FoundryProject:
     def __init__(self, project: Any, client: Any) -> None:
         self.project = project
         self.client = client
@@ -127,6 +127,8 @@ class FoundryRelease:
             raise ValueError("Deployment GET did not return a model version.")
         return version
 
+
+class FoundryRelease(FoundryProject):
     def create(self, plan: ReleasePlan, metadata: dict[str, str]) -> dict[str, Any]:
         from azure.ai.projects.models import PromptAgentDefinition
 
@@ -359,12 +361,19 @@ def execute(
 
 
 def main(argv: list[str] | None = None) -> int:
+    target_parser = argparse.ArgumentParser(add_help=False)
+    target_parser.add_argument("--target", choices=("hosted", "prompt"), default="hosted")
+    target, remaining = target_parser.parse_known_args(argv)
+    if target.target == "hosted":
+        from tools.hosted_release import main as hosted_main
+
+        return hosted_main(remaining)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--plan", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--suite", type=Path, default=Path("evals/datasets/suite.json"))
     parser.add_argument("--execute-approved-cloud", action="store_true")
-    args = parser.parse_args(argv)
+    args = parser.parse_args(remaining)
     args.output.mkdir(parents=True, exist_ok=False)
     save(args.output / "decision.json", {"status": "blocked", "promoted": False})
     try:
