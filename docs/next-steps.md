@@ -89,8 +89,8 @@ The workshop builds an MVP that shows the platform ([ADR 0022](adr/0022-mvp-scop
 | Multi-agent identity gateway (agent identity → agent user map), private ingress, logs in Log Analytics | Serve many agents from one gateway; no public endpoint | P2 ([ADR 0021](adr/0021-agent-user-and-ado-mcp-gateway.md)) |
 | Foundry IQ at scale: ADRs and wiki discovery in the knowledge base, a Blob or SharePoint knowledge source with scheduled ingestion, query planning (`low`/`medium` effort), private networking and query-time permissions | More sources and harder questions; the MVP indexes only the documentation standard ([guide](workshop/foundry-iq-guide.md#production-notes-slides)) | P2 ([#19](https://github.com/wdhm/foundry-agentic-pattern/issues/19)) |
 | Mock data generator with seed/reset scripts | Repeatable demo state at scale | P2 ([#17](https://github.com/wdhm/foundry-agentic-pattern/issues/17)) |
-| Dedicated audit store in Cosmos DB (runs, decisions, pending approvals) | Long-term, queryable audit beyond trace retention | P1 ([ADR 0016](adr/0016-state-and-audit-cosmos-db.md)) |
-| Hosted agent with custom code (separate P1 demo) | Full control of orchestration | P1 ([ADR 0009](adr/0009-hosted-agent-runtime.md)) |
+| Dedicated audit store in Cosmos DB (runs, decisions, pending approvals) *(proposal)* | Long-term, queryable audit beyond trace retention | P1 ([ADR 0016](adr/0016-state-and-audit-cosmos-db.md)) |
+| Hosted agent with custom code *(proposal: one demo or slide)* | Full control of orchestration | P1 ([ADR 0009](adr/0009-hosted-agent-runtime.md)) |
 | Onboarding new agents from CI | No manual step per new agent | P3 ([#28](https://github.com/wdhm/foundry-agentic-pattern/issues/28)) |
 | Custom eval metrics, ground-truth gate and a custom monitoring workbook | Quality bar tailored to the organisation | P3 ([ADR 0013](adr/0013-evaluation-gate-in-ci.md)) |
 | APIM AI Gateway with FinOps cost attribution per agent/version | Cost control and chargeback | P3 ([R4](risks.md#r4)) |
