@@ -2,7 +2,7 @@
 
 This document describes **Agentic Pattern v1** and the **Documentation Agent v1** reference implementation. Each design choice is recorded as an ADR in [adr/](adr/README.md), and open risks are listed in [risks.md](risks.md).
 
-**Diagrams:** the reference architecture ([HTML](diagrams/reference-architecture.html) · [PNG](diagrams/reference-architecture.png)) and the feature swimlanes ([HTML](diagrams/feature-swimlanes.html) · [PNG](diagrams/feature-swimlanes.png)). The feature tags **F1–F8** and lane owners **P1/P2/P3** used below match these diagrams and the [workshop feature map](workshop/feature-map.md).
+**Diagrams:** the reference architecture ([HTML](diagrams/reference-architecture.html) · [PNG](diagrams/reference-architecture.png)) the feature swimlanes ([HTML](diagrams/feature-swimlanes.html) · [PNG](diagrams/feature-swimlanes.png)), and what P2 has built so far ([HTML](diagrams/p2-built-state.html) · [PNG](diagrams/p2-built-state.png)). The feature tags **F1–F8** and lane owners **P1/P2/P3** used below match these diagrams and the [workshop feature map](workshop/feature-map.md).
 
 ![Reference architecture](diagrams/reference-architecture.png)
 
@@ -28,7 +28,7 @@ Lanes: **P1** Agent architecture · **P2** Knowledge & identity · **P3** AgentO
 | P1 | F5 | Human-in-the-loop | Agent published to Microsoft Teams | Approve / Modify / Reject | [0008](adr/0008-human-in-the-loop-approval.md) |
 | P1 | – | State & audit | Cosmos DB | Runs, results, review decisions, pending approvals | [0016](adr/0016-state-and-audit-cosmos-db.md) |
 | P1 | – | Registry | Foundry fleet management | Agent inventory, versions, endpoints | [0015](adr/0015-registry-foundry-fleet-management.md) |
-| P2 | F3 | Stable knowledge | Foundry IQ (Azure AI Search) | Documentation standard, ADRs, wiki (semantic search) | [0011](adr/0011-knowledge-foundry-iq-and-toolbox.md) |
+| P2 | F3 | Stable knowledge | Foundry IQ (Azure AI Search) | Documentation standard (MVP); ADRs and wiki discovery later | [0011](adr/0011-knowledge-foundry-iq-and-toolbox.md) |
 | P2 | F1 | Live tools | Foundry Toolbox (MCP / REST): GitHub, Azure DevOps | Code/IaC/config at commit (GitHub or Azure Repos), work items, current wiki, wiki write | [0011](adr/0011-knowledge-foundry-iq-and-toolbox.md) |
 | P2 | – | Identity & resource org | Entra Agent ID (fallback: project or user-assigned MI) | Least-privilege access per source | [0012](adr/0012-agent-identity-and-rbac.md) |
 | P2 | F8 | Mock data | `data/` generator + `samples/` | Sample integration, wiki, work items, planted gaps, ground truth | [0005](adr/0005-generic-repo-with-fictional-data.md) |
@@ -90,22 +90,36 @@ See [src/contracts/](../src/contracts/README.md) for the field list. Key propert
 
 | Data | Volatility | Access path | Why |
 |---|---|---|---|
-| Documentation standard | Stable | Foundry IQ | Semantic retrieval of rules and sections |
-| ADRs (of the subject) | Stable | Foundry IQ | Semantic retrieval of rationale |
-| Wiki (for discovery) | Medium | Foundry IQ | Find related pages |
+| Documentation standard | Stable | Foundry IQ (MVP ✅) | Semantic retrieval of rules and sections |
+| ADRs (of the subject) | Stable | Foundry IQ (later) | Semantic retrieval of rationale |
+| Wiki (for discovery) | Medium | Foundry IQ (later) | Find related pages |
 | **Current** wiki page | Volatile | Toolbox (ADO) | Exact version required for evidence and update |
 | Work items / requirements | Volatile | Toolbox (ADO) | Exact revision |
 | Code / IaC / config | Versioned | Toolbox (GitHub MCP; Azure Repos via ADO MCP/REST) | Exact commit SHA |
 
-## 6. Identity & RBAC matrix (target)
+## 6. Identity & RBAC matrix
+
+### Built (MVP, checked against the environment 2026-10-14)
+
+| Principal | Resource | Permission | Granted by | Notes |
+|---|---|---|---|---|
+| Agent identity `doc-agent` | Gateway app (`ado_mcp`) | App role `Mcp.Tools.ReadWrite.All` | [`onboard-agent.ps1`](../infra/scripts/onboard-agent.ps1) | The gateway accepts only this identity ([ADR 0021](adr/0021-agent-user-and-ado-mcp-gateway.md)) |
+| Agent **user** `doc-agent` (linked to the agent identity) | Azure DevOps org and project | Access level **Basic**, project **Contributors**; delegated consent to the Azure DevOps MCP app for this user only | `onboard-agent.ps1` | Reads work items and wiki; **wiki write only through the approval-gated tool** ([R3](risks.md#r3), [ADR 0008](adr/0008-human-in-the-loop-approval.md)) |
+| User-assigned MI `id-doc-agent-mcp` | Agent identity blueprint | Federated identity credential | `onboard-agent.ps1` | Secretless agent-user token exchange in the gateway |
+| User-assigned MI `id-doc-agent-mcp` | Container registry | AcrPull | [setup](setup.md) | Pulls the gateway image |
+| Project managed identity | Azure AI Search | Search Index Data Reader | [`setup-foundry-iq.ps1`](../infra/scripts/setup-foundry-iq.ps1) | The Foundry IQ connection authenticates as the project, so every agent in it can read the standard ([guide](workshop/foundry-iq-guide.md)) |
+| Connection `github-mcp` (fine-grained token) | One GitHub repo | Contents and Pull requests: read-only | [`setup-github-mcp.ps1`](../infra/scripts/setup-github-mcp.ps1) | GitHub doesn't accept Entra tokens. The token expires after 90 days ([guide](workshop/github-mcp-guide.md)) |
+| Agent identity `documentation-agent` (hosted stub) | – | None | – | Gets the same rows as `doc-agent` when it replaces it |
+| Operator (whoever runs the setup scripts) | Azure AI Search | Search Service Contributor, Search Index Data Contributor | `setup-foundry-iq.ps1` | Creates the index and uploads the standard |
+| Workshop participants (team accounts) | Foundry resource | Foundry User | [setup](setup.md#team-accounts-sign-in-to-azure-foundry-and-azure-devops-with-these) | Use the playground and run agents |
+
+Which identity each connection presents is mapped in the [resource organisation guide](workshop/resource-organization-guide.md#identities-who-authenticates-where). The agent user's Basic + Contributors is broader than needed: narrowing it to a custom group with *work item read* and *wiki contribute* is on slides ([#22](https://github.com/wdhm/foundry-agentic-pattern/issues/22)).
+
+### Target (other lanes and production, not built in the MVP)
 
 | Principal | Resource | Permission | Notes |
 |---|---|---|---|
-| Agent identity | GitHub repo | Read contents/PRs | Via GitHub MCP connection |
-| Agent identity | ADO work items | Read | [R3](risks.md#r3) |
-| Agent identity | ADO wiki | Read; **write only via approval-gated tool** | [R3](risks.md#r3), [ADR 0008](adr/0008-human-in-the-loop-approval.md) |
-| Agent identity | Azure AI Search | Search Index Data Reader | |
-| Agent identity | Cosmos DB | Data contributor (agent DB only) | |
+| Agent identity | Cosmos DB | Data contributor (agent DB only) | Audit record ([§7](#7-audit-record)) |
 | Agent identity | AI Gateway / models | Invoke | Via the gateway |
 | CI (OIDC) | Foundry project | Create agent versions, run evals, update `version_selector` | |
 | CI (OIDC) | Role assignments | Assign roles to the new agent identity post-deploy | [R3](risks.md#r3) |

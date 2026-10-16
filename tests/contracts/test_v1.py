@@ -199,6 +199,62 @@ def test_hosted_definition_cannot_be_reconfigured():
         configured_definition({"kind": "hosted"})
 
 
+def test_configuration_preserves_p2_tools_and_later_grounding_instructions():
+    grounding = (
+        "Use knowledge_base_retrieve before assessing documentation. "
+        "Cite DS-xx rule IDs. The standard is a rule set, not evidence: "
+        "don't add it to the evidence array."
+    )
+    definition = {
+        "kind": "prompt",
+        "model": "existing-model",
+        "instructions": "Existing instructions.\n\n" + OUTPUT_INSTRUCTIONS + "\n\n" + grounding,
+        "reasoning": {"effort": "low"},
+        "text": {"format": structured_format()},
+        "tools": [
+            {
+                "type": "mcp",
+                "server_label": "knowledge",
+                "server_url": "https://example.com/knowledge/mcp",
+                "project_connection_id": "kb-doc-agent-mcp",
+                "allowed_tools": ["knowledge_base_retrieve"],
+                "require_approval": "never",
+            },
+            {
+                "type": "mcp",
+                "server_label": "github",
+                "server_url": "https://example.com/github/mcp",
+                "project_connection_id": "github-mcp",
+                "require_approval": "never",
+            },
+            {
+                "type": "mcp",
+                "server_label": "ado",
+                "server_url": "https://example.com/ado/mcp",
+                "project_connection_id": "ado-mcp-proxy",
+                "require_approval": {"always": {"tool_names": ["wiki_upsert_page"]}},
+            },
+        ],
+    }
+    original = deepcopy(definition)
+    assert configured_definition(definition) == original
+    # Attaching a missing schema must also preserve all newer tools and instruction text.
+    del definition["text"]
+    updated = configured_definition(definition)
+    assert updated == original
+    assert "text" not in definition
+
+
+def test_standard_rule_ids_do_not_require_a_new_evidence_source(analysis):
+    analysis["findings"][0]["description"] = "DS-14: Retry limit is missing from the documentation."
+    result = AnalysisOutput.model_validate(analysis)
+    assert result.findings[0].description.startswith("DS-14")
+    assert {item.source for item in result.evidence} == {"git"}
+    analysis["evidence"][0]["source"] = "knowledge"
+    with pytest.raises(ValidationError):
+        AnalysisOutput.model_validate(analysis)
+
+
 def unknown_analysis():
     return {
         "documentation_status": "insufficient_information",

@@ -93,7 +93,7 @@ Features are grouped into three swimlanes, each with one owner: **P1** Agent arc
 | P1 | **F5** | **Human-in-the-loop** | Agent published to Teams, with Approve / Modify / Reject. Wiki write is approval-gated. | [0008](docs/adr/0008-human-in-the-loop-approval.md) |
 | P1 | – | **State & audit** | Cosmos DB stores runs, results, review decisions and pending approvals | [0016](docs/adr/0016-state-and-audit-cosmos-db.md) |
 | P1 | – | **Architecture & registry** | Foundry fleet management, with no custom registry | [0015](docs/adr/0015-registry-foundry-fleet-management.md) |
-| P2 | **F3** | **Foundry IQ** | Azure AI Search knowledge for stable sources: documentation standard, ADRs and wiki | [0011](docs/adr/0011-knowledge-foundry-iq-and-toolbox.md) |
+| P2 | **F3** | **Foundry IQ** | Azure AI Search knowledge base for stable sources, called by the agent as an MCP tool: the documentation standard in the MVP ([guide](docs/workshop/foundry-iq-guide.md)), ADRs and wiki discovery later | [0011](docs/adr/0011-knowledge-foundry-iq-and-toolbox.md) |
 | P2 | **F1** | **Toolbox** | MCP / REST tools for GitHub and Azure DevOps (wiki, work items, Azure Repos), for versioned/volatile data | [0011](docs/adr/0011-knowledge-foundry-iq-and-toolbox.md) |
 | P2 | – | **Identities & resource org** | Entra Agent ID with least privilege per source. The approver is recorded. | [0012](docs/adr/0012-agent-identity-and-rbac.md) |
 | P2 | **F8** | **Mock data** | Fictional sample integration, wiki, work items, ADRs and doc standard, with planted gaps and ground truth | [0005](docs/adr/0005-generic-repo-with-fictional-data.md) |

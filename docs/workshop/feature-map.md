@@ -43,14 +43,15 @@ We build an MVP that **shows the platform**, with one simple happy path per feat
 
 | Feature | F-tag | Built/Slides | Issue(s) |
 |---|---|---|---|
-| Foundry IQ (AI Search · knowledge base) | F3 | Built | [#19](https://github.com/wdhm/foundry-agentic-pattern/issues/19) |
-| Toolbox (MCP · Azure DevOps · GitHub) | F1 | Built (Azure DevOps ✅) | [#20](https://github.com/wdhm/foundry-agentic-pattern/issues/20), [#21](https://github.com/wdhm/foundry-agentic-pattern/issues/21) ✅ |
-| Identities & resource organisation (agent ID · agent user · projects) | – | Built (identity ✅) | [#2](https://github.com/wdhm/foundry-agentic-pattern/issues/2) ✅, [#45](https://github.com/wdhm/foundry-agentic-pattern/issues/45) |
-| Mock data (small hand-made set · planted gaps) | F8 | Built | [#17](https://github.com/wdhm/foundry-agentic-pattern/issues/17), [#18](https://github.com/wdhm/foundry-agentic-pattern/issues/18), [#32](https://github.com/wdhm/foundry-agentic-pattern/issues/32) |
+| Foundry IQ (AI Search · knowledge base) | F3 | Built ✅ ([guide](foundry-iq-guide.md)) | [#19](https://github.com/wdhm/foundry-agentic-pattern/issues/19) |
+| Toolbox (MCP · Azure DevOps · GitHub) | F1 | Built ✅ ([Azure DevOps guide](agent-identity-guide.md) · [GitHub guide](github-mcp-guide.md)) | [#20](https://github.com/wdhm/foundry-agentic-pattern/issues/20) ✅, [#21](https://github.com/wdhm/foundry-agentic-pattern/issues/21) ✅ |
+| Identities & resource organisation (agent ID · agent user · projects) | – | Built ✅ ([identity guide](agent-identity-guide.md), [resource org guide](resource-organization-guide.md)) | [#2](https://github.com/wdhm/foundry-agentic-pattern/issues/2) ✅, [#45](https://github.com/wdhm/foundry-agentic-pattern/issues/45) ✅ |
+| Mock data (small hand-made set · planted gaps) | F8 | Built ✅ ([data](../../data/README.md) · [evals](../../evals/README.md)) | [#17](https://github.com/wdhm/foundry-agentic-pattern/issues/17) ✅, [#18](https://github.com/wdhm/foundry-agentic-pattern/issues/18) ✅, [#32](https://github.com/wdhm/foundry-agentic-pattern/issues/32) ✅ ([guide](information-missing-guide.md)) |
 | Least privilege · Azure Repos source · multi-agent gateway | – | Slides | [#22](https://github.com/wdhm/foundry-agentic-pattern/issues/22), [#44](https://github.com/wdhm/foundry-agentic-pattern/issues/44) ([next steps §9](../next-steps.md#9-production-hardening-out-of-mvp-scope)) |
-| Agent 365 (agent governance) | – | Slides | [#46](https://github.com/wdhm/foundry-agentic-pattern/issues/46) |
-| Work IQ (Microsoft 365 work context) | – | Slides | [#47](https://github.com/wdhm/foundry-agentic-pattern/issues/47) |
-| PDF · SharePoint (document sources) | – | Slides | [#48](https://github.com/wdhm/foundry-agentic-pattern/issues/48) |
+| Agent 365 (agent governance) | – | Slides ✅ ([content](slides/agent-365.md)) | [#46](https://github.com/wdhm/foundry-agentic-pattern/issues/46) ✅ |
+| Work IQ (Microsoft 365 work context) | – | Slides ✅ ([content](slides/work-iq.md)) | [#47](https://github.com/wdhm/foundry-agentic-pattern/issues/47) ✅ |
+| PDF · SharePoint (document sources) | – | Slides ✅ ([content](slides/document-sources.md)) | [#48](https://github.com/wdhm/foundry-agentic-pattern/issues/48) ✅ |
+| Docs: bring your own sources and standard · final RBAC matrix | – | Built ✅ ([how-to](bring-your-own-guide.md), [architecture §6](../architecture.md#6-identity--rbac-matrix)) | [#36](https://github.com/wdhm/foundry-agentic-pattern/issues/36) |
 
 ## P3: AgentOps & platform (area 04) · Louise
 

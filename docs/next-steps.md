@@ -2,7 +2,7 @@
 
 These topics are **intentionally out of scope** for the v1 repo. They are covered in the workshop and in the slides as the natural evolution of the pattern.
 
-In the workshop, each topic is presented **on slides only**, at the end of its owner's lane (see the [feature map](workshop/feature-map.md)):
+In the workshop, each topic is presented **on slides only**, at the end of its owner's lane (see the [feature map](workshop/feature-map.md)). Slide content lives in [workshop/slides](workshop/slides/README.md).
 
 | Topic | Lane | Section | Issue |
 |---|---|---|---|
@@ -36,9 +36,13 @@ In the workshop, each topic is presented **on slides only**, at the end of its o
 
 Bring the agent fleet under **Agent 365** for enterprise-wide agent inventory, governance, lifecycle and access control across Microsoft 365. This complements Foundry fleet management, which covers build and runtime.
 
+Slides: [Agent 365](workshop/slides/agent-365.md).
+
 ## 4. Work IQ
 
 Use **Work IQ** to let agents ground on organisational work context (people, meetings, documents, conversations) where appropriate. For the Documentation Agent, this could mean finding the right reviewer or related discussions. It needs careful scoping of data access and consent.
+
+Slide: [Work IQ](workshop/slides/work-iq.md).
 
 ## 5. Model deployment strategy
 
@@ -67,6 +71,8 @@ v1 reads code, configuration and IaC from Git, and reads wiki pages and work ite
 - Respect **document permissions**. Either index only libraries that the agent identity may read, or use OBO / permission-trimmed retrieval ([section 6](#6-on-behalf-of-obo-identity)).
 - Optionally make SharePoint a **write target** as well as a source, behind the same approval-gated tool pattern as the wiki.
 
+Slide: [PDF and SharePoint document sources](workshop/slides/document-sources.md) (knowledge source types, and indexing vs live tool calls).
+
 ## 9. Production hardening (out of MVP scope)
 
 The workshop builds an MVP that shows the platform ([ADR 0022](adr/0022-mvp-scope-platform-first.md)). These items make it production-grade. They are explained on slides, not built. Items marked *proposal* are pending P1/P3 confirmation.
@@ -77,6 +83,7 @@ The workshop builds an MVP that shows the platform ([ADR 0022](adr/0022-mvp-scop
 | Run id + approver in the wiki commit message, and ETag optimistic concurrency on wiki writes | Stronger audit trail, no lost updates | P2 ([#21](https://github.com/wdhm/foundry-agentic-pattern/issues/21)) |
 | Azure Repos as an additional code source | Same pattern as GitHub, via the Azure DevOps MCP server | P2 ([#44](https://github.com/wdhm/foundry-agentic-pattern/issues/44)) |
 | Multi-agent identity gateway (agent identity → agent user map), private ingress, logs in Log Analytics | Serve many agents from one gateway; no public endpoint | P2 ([ADR 0021](adr/0021-agent-user-and-ado-mcp-gateway.md)) |
+| Foundry IQ at scale: ADRs and wiki discovery in the knowledge base, a Blob or SharePoint knowledge source with scheduled ingestion, query planning (`low`/`medium` effort), private networking and query-time permissions | More sources and harder questions; the MVP indexes only the documentation standard ([guide](workshop/foundry-iq-guide.md#production-notes-slides)) | P2 ([#19](https://github.com/wdhm/foundry-agentic-pattern/issues/19)) |
 | Mock data generator with seed/reset scripts | Repeatable demo state at scale | P2 ([#17](https://github.com/wdhm/foundry-agentic-pattern/issues/17)) |
 | Dedicated audit store in Cosmos DB (runs, decisions, pending approvals) *(proposal)* | Long-term, queryable audit beyond trace retention | P1 ([ADR 0016](adr/0016-state-and-audit-cosmos-db.md)) |
 | Hosted agent with custom code *(proposal: one demo or slide)* | Full control of orchestration | P1 ([ADR 0009](adr/0009-hosted-agent-runtime.md)) |

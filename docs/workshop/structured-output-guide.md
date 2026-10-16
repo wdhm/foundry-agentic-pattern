@@ -10,21 +10,34 @@ Use the existing shared project from [setup](../setup.md) and authenticate with
 your team Azure CLI account. The CLI uses `AzureCliCredential`, not a credential
 fallback chain, so it follows that sign-in.
 
+The current shared prompt agent is **`doc-agent`** (version 1 in the
+2026-10-14 inventory). It was copied from `doc-agent-spike:7`, carrying the
+structured schema and the `knowledge`, `github` and `ado` tools. The spike was
+deleted; its old version 4 demonstration is historical, not an invocation target.
+Inspect the current version in Foundry before using the commands below.
+
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[prompt,dev]"
 ```
 
-## Configure once (creates an agent version)
+## Configure only when needed (creates an agent version)
+
+The shared `doc-agent` already inherited the schema: start with invocation,
+not reconfiguration. Only use `--configure` if a reviewed version needs the
+schema attached or updated. Do not deploy an old definition from the spike.
 
 This preserves the selected prompt agent's tools, approval rules, model and
 reasoning settings. It appends assessment instructions and attaches the generated
 `AnalysisOutput` schema through native `text.format`.
+All existing instruction text is retained, including Foundry IQ grounding
+and documentation-standard rule IDs (`DS-xx`). The standard is a rulebook,
+not integration evidence: the `source` enum remains `git`, `wiki`, `work_item`.
 
 ```powershell
 .\.venv\Scripts\python.exe -m contracts.prompt `
   --project-endpoint <project-endpoint> `
-  --agent-name <existing-prompt-agent> --agent-version <latest-version> --configure
+  --agent-name doc-agent --agent-version <reviewed-latest-version> --configure
 ```
 
 Record the returned version. Do not configure again just to invoke the agent.
@@ -43,7 +56,7 @@ az cognitiveservices account deployment show -g <resource-group> `
 
 .\.venv\Scripts\python.exe -m contracts.prompt `
   --project-endpoint <project-endpoint> `
-  --agent-name <prompt-agent> --agent-version <configured-version> `
+  --agent-name doc-agent --agent-version <reviewed-configured-version> `
   --model-version <model-version> `
   --request .\src\contracts\examples\request-v1.json
 ```
@@ -66,7 +79,10 @@ it does not write to the wiki or change the agent definition.
   from deployment configuration, actual instruction text hashed as the prompt version.
 - **Human review required:** a flag, not an approval or an executed write.
 
-For real findings, #13 must retrieve source content and verify the evidence.
+For real findings, continue #13 using the existing P2 integrations and
+[planted-gap scenarios](../../evals/README.md), rather than rebuilding them.
+This no-tools command intentionally rejects real tool-call output; it is not
+the end-to-end workflow or an approval client.
 The hosted v0 stub stays a separate demo; no Cosmos DB or additional CI pipeline
 is introduced here.
 

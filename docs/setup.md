@@ -6,7 +6,7 @@
 
 ## Shared workshop environment
 
-This is **the** environment for development and the workshop. Don't create parallel resource groups or Foundry resources; add to these.
+This is **the** environment for development and the workshop. Don't create parallel resource groups or Foundry resources; add to these. How the resource, project, connections and identities fit together: [resource organisation guide](workshop/resource-organization-guide.md).
 
 | Item | Value |
 |---|---|
@@ -64,8 +64,9 @@ az account set -s ME-M365CPI54615665-rwidholm-1
 
 | Resource | When / issue | Owner |
 |---|---|---|
-| **Azure AI Search** + Foundry IQ knowledge base | [#19](https://github.com/wdhm/foundry-agentic-pattern/issues/19) | P2 |
-| **Agent identity** role assignments (DevOps, GitHub, Search) | [#2](https://github.com/wdhm/foundry-agentic-pattern/issues/2), [#28](https://github.com/wdhm/foundry-agentic-pattern/issues/28) | P2 (Azure DevOps ✅, see below) |
+| **Azure AI Search** + Foundry IQ knowledge base | [#19](https://github.com/wdhm/foundry-agentic-pattern/issues/19) | P2 ✅ `srch-foundry-agentic-r8n3ld` in **France Central** (Sweden Central had no capacity). Run [`setup-foundry-iq.ps1`](../infra/scripts/setup-foundry-iq.ps1); see the [guide](workshop/foundry-iq-guide.md) |
+| **GitHub MCP** connection `github-mcp` (read-only, fine-grained token) | [#20](https://github.com/wdhm/foundry-agentic-pattern/issues/20) | P2 ✅ Run [`setup-github-mcp.ps1`](../infra/scripts/setup-github-mcp.ps1); see the [guide](workshop/github-mcp-guide.md). The token expires after 90 days; re-run the script with a new one |
+| **Agent identity** role assignments (DevOps, Search) | [#2](https://github.com/wdhm/foundry-agentic-pattern/issues/2), [#28](https://github.com/wdhm/foundry-agentic-pattern/issues/28) | P2 (Azure DevOps ✅, see below). GitHub doesn't accept Entra tokens, so it uses the token above |
 | **AI Gateway (APIM)**: token limits + FinOps tagging | [#3](https://github.com/wdhm/foundry-agentic-pattern/issues/3), [#23](https://github.com/wdhm/foundry-agentic-pattern/issues/23) | P3 |
 | Hosted agent deployment | [#7](https://github.com/wdhm/foundry-agentic-pattern/issues/7) | P1 |
 | Teams / M365 publish | [#4](https://github.com/wdhm/foundry-agentic-pattern/issues/4) | P3 |
@@ -75,7 +76,7 @@ Document each step here when you do it: portal path or CLI command, settings cho
 ### Hosted contract stub (P1, #7)
 
 `documentation-agent` version **2** is active in `proj-agentic`. It runs the
-Agent Framework contract stub, separately from `doc-agent-spike`: no model calls,
+Agent Framework contract stub, separately from the prompt agent `doc-agent`: no model calls,
 tools, wiki writes or Cosmos persistence. Application provenance version `0.1.0`
 is distinct from Foundry deployment version `2`.
 
@@ -138,8 +139,8 @@ The step-by-step guide with Microsoft Learn references is [docs/workshop/agent-i
 | Resource | Name / value | Notes |
 |---|---|---|
 | Chat model deployment | `gpt-6-luna` | In `foundry-agentic-R8N3LD` |
-| Spike agent | `doc-agent-spike` (version 3 uses the gateway) | Agent identity: `foundry-agentic-R8N3LD-proj-agentic-doc-agent-spike-AgentIdentity` |
-| Agent user | `doc-agent-spike@M365CPI54615665.onmicrosoft.com` | Linked to the agent identity. Azure DevOps **Basic** + `[integration-team]\Contributors` |
+| Prompt agent | `doc-agent` (tools `knowledge`, `github`, `ado`) | Agent identity: `foundry-agentic-R8N3LD-proj-agentic-doc-agent-AgentIdentity` |
+| Agent user | `doc-agent@M365CPI54615665.onmicrosoft.com` | Linked to the agent identity. Azure DevOps **Basic** + `[integration-team]\Contributors` |
 | Consent grant | Agent identity → **Azure DevOps MCP** (`2a72489c-…`), consentType `Principal` (agent user) | Scopes `Ado.Mcp.Tools wit.read wiki.read wiki.write`. We created the Azure DevOps MCP service principal in the tenant. |
 | User-assigned MI | `id-doc-agent-mcp` | Federated credential `mcp-server-uami` on the agent's **blueprint**; AcrPull on the ACR |
 | Gateway Entra app | `doc-agent-mcp-api` (`api://<appId>`) | App role `Mcp.Tools.ReadWrite.All`, assigned to the agent identity |
@@ -148,16 +149,22 @@ The step-by-step guide with Microsoft Learn references is [docs/workshop/agent-i
 | Container app (gateway) | `ca-doc-agent-mcp` | `https://ca-doc-agent-mcp.gentlemushroom-65b5f1ef.northeurope.azurecontainerapps.io/mcp` |
 | Foundry connection | `ado-mcp-proxy` | `RemoteTool`, `AgenticIdentityToken`, audience `api://<gateway appId>` |
 
-To onboard another agent, run [`infra/scripts/onboard-agent.ps1`](../infra/scripts/onboard-agent.ps1) ([guide](workshop/agent-identity-guide.md#onboard-another-agent-automated)). The gateway serves one agent at a time and currently points at `doc-agent-spike`.
+To onboard another agent, run [`infra/scripts/onboard-agent.ps1`](../infra/scripts/onboard-agent.ps1) ([guide](workshop/agent-identity-guide.md#onboard-another-agent-automated)). The gateway serves one agent at a time and currently points at `doc-agent`.
 
 ### Structured-output contract demo (P1, #12)
 
+**Current target:** use the prompt agent `doc-agent` (version 1 in the
+2026-10-14 inventory), not `doc-agent-spike`, which was offboarded and deleted.
+The current agent was copied from spike version 7 and includes the structured
+output schema plus P2's `knowledge`, `github` and `ado` tools. Inspect its latest
+version before any configuration change; do not recreate the retired spike.
+The version 4 result below is historical verification, not a current endpoint.
+
 On 2026-10-13, `doc-agent-spike` **version 4** was created from version 3,
 preserving the `gpt-6-luna` model, low reasoning effort and existing MCP tool
-approval configuration. The new version adds native strict `AnalysisOutput`
-JSON Schema and assessment-only instructions. Version 3 remains available for
-the earlier prose/write demonstration. Latest-version consumers will see the
-new output format.
+approval configuration. That version added native strict `AnalysisOutput`
+JSON Schema and assessment-only instructions. Version 3 remained available at
+that time; all spike versions were subsequently retired on 2026-10-14.
 
 A no-tools invocation using contract v1 returned `insufficient_information`
 with missing-source details and no findings, proposed changes or evidence.
@@ -196,3 +203,8 @@ Store these in a local `.env` (git-ignored). Never commit secrets; prefer Entra 
 | 2026-10-08 | Rickard | Azure DevOps org/project/wiki created and connected to the tenant; shared environment documented |
 | 2026-10-08 | Rickard | Agent identity → Azure DevOps end to end: agent user, consent grant, MI + blueprint federated credential, gateway app, ACR, Container App (North Europe), Foundry connection `ado-mcp-proxy`, agent v3 ([ADR 0021](adr/0021-agent-user-and-ado-mcp-gateway.md)) |
 | 2026-10-08 | Rickard | `onboard-agent.ps1` verified with a temporary agent `doc-agent-test` (onboarded, E2E read + approved wiki write, then offboarded); gateway points back at `doc-agent-spike` |
+| 2026-10-14 | Rickard | Inventoried resources, connections and identities into the [resource organisation guide](workshop/resource-organization-guide.md) (#45); deleted the failed, empty Container Apps environment `cae-foundry-agentic` (Sweden Central) |
+| 2026-10-14 | Rickard | `doc-agent-spike:7` via `setup-foundry-iq.ps1`: the documentation standard is cited by rule ID, not as evidence; "Information missing" scenario added ([guide](workshop/information-missing-guide.md), #32) |
+| 2026-10-14 | Rickard | Final RBAC matrix checked against the environment ([architecture §6](architecture.md#6-identity--rbac-matrix)); [bring-your-own guide](workshop/bring-your-own-guide.md) for your own sources and standard (#36) |
+| 2026-10-14 | Rickard | Prompt agent `doc-agent:1` created as a copy of `doc-agent-spike:7` (same model, tools and instructions) and onboarded with `onboard-agent.ps1`; the gateway now points at `doc-agent`. Planted-gaps scenario `PASS`; information-missing scenario `PASS` on 2 of 3 runs (see [evals](../evals/README.md)). P2 is demoed on `doc-agent` in the playground |
+| 2026-10-14 | Rickard | Offboarded `doc-agent-spike`: Azure DevOps entitlement removed, agent user deleted, agent deleted (its identity and blueprint go with it). Agents in `proj-agentic`: `doc-agent`, `documentation-agent` |

@@ -36,20 +36,22 @@ The agenda follows the three **swimlanes** in the [feature map](feature-map.md) 
 |---|---|---|---|---|
 | 09:35–09:40 | App / Foundry architecture + fleet registry | – | Demo | Components and owners; the agent in Foundry fleet management ([#42](https://github.com/wdhm/foundry-agentic-pattern/issues/42)) |
 | 09:40–09:50 | Hosted agent | F2 | Demo | Hosted agent on Agent Framework (Python), the core product that everything plugs into |
-| 09:50–09:58 | Output contract | F4 | Demo | `AgentRequest` → JSON `AgentResult`, evidence at exact versions, "Information missing" |
+| 09:50–09:58 | Output contract | F4 | Demo | `AgentRequest` → JSON `AgentResult`, evidence at exact versions, "Information missing" ([guide](information-missing-guide.md)) |
 | 09:58–10:05 | Human-in-the-loop | F5 | Demo | Publish to Teams, Approve / Modify / Reject, approval-gated wiki write |
 | 10:05–10:10 | State & audit | – | Demo | Cosmos DB run record: versions, decision, approver |
 | 10:10–10:15 | *A2A hand-over* | – | Slides | Analyst + Publisher agent with separate identities ([#43](https://github.com/wdhm/foundry-agentic-pattern/issues/43)) |
 
 ## 10:30–11:10 · P2 · Knowledge & identity · Rickard
 
+Demos run on the prompt agent **`doc-agent`** in the Foundry playground (Foundry portal → Agents → `doc-agent` → Playground). It has the three P2 tools (`knowledge`, `github`, `ado`), its own agent identity and agent user. The hosted `documentation-agent` (P1) takes over the same tools and identity when it has a model and tools.
+
 | Time | Feature | F | Type | Content |
 |---|---|---|---|---|
-| 10:30–10:35 | Mock data | F8 | Demo | Fictional sample integration, wiki, work items, planted gaps + ground truth |
-| 10:35–10:45 | Foundry IQ | F3 | Demo | Stable knowledge: documentation standard, ADRs, wiki |
-| 10:45–10:55 | Toolbox (MCP · DevOps · GitHub) | F1 | Demo | Live calls for code at commit, work items, current wiki page; approval-gated wiki write |
-| 10:55–11:03 | Identities & resource org | – | Demo | The agent's own identity and agent user: the wiki commit is authored by the agent, not a person ([guide](agent-identity-guide.md)); project vs agent scope ([#45](https://github.com/wdhm/foundry-agentic-pattern/issues/45)). Least privilege on slides. |
-| 11:03–11:10 | *Agent 365 · Work IQ · PDF/SharePoint* | – | Slides | Fleet governance across M365 ([#46](https://github.com/wdhm/foundry-agentic-pattern/issues/46)), work context ([#47](https://github.com/wdhm/foundry-agentic-pattern/issues/47)), document sources ([#48](https://github.com/wdhm/foundry-agentic-pattern/issues/48)) |
+| 10:30–10:35 | Mock data | F8 | Demo | Fictional sample integration, wiki, work items, planted gaps + ground truth; "Information missing" when no source has the fact, evidence at exact versions ([guide](information-missing-guide.md)) |
+| 10:35–10:45 | Foundry IQ | F3 | Demo | Stable knowledge: the documentation standard as a knowledge base, called as an MCP tool; findings cite rule IDs ([guide](foundry-iq-guide.md)). ADRs and wiki discovery on slides. |
+| 10:45–10:55 | Toolbox (MCP · DevOps · GitHub) | F1 | Demo | Live calls for code at commit ([GitHub guide](github-mcp-guide.md): PR #62 diff vs the wiki), work items, current wiki page; approval-gated wiki write |
+| 10:55–11:03 | Identities & resource org | – | Demo | The agent's own identity and agent user: the wiki commit is authored by the agent, not a person ([guide](agent-identity-guide.md)); project vs agent scope and which identity each connection presents ([guide](resource-organization-guide.md)). Least privilege on slides. |
+| 11:03–11:10 | *Agent 365 · Work IQ · PDF/SharePoint* | – | [Slides](slides/README.md) | Fleet governance across M365 ([#46](https://github.com/wdhm/foundry-agentic-pattern/issues/46)), work context ([#47](https://github.com/wdhm/foundry-agentic-pattern/issues/47)), document sources ([#48](https://github.com/wdhm/foundry-agentic-pattern/issues/48)) |
 
 ## 11:10–11:50 · P3 · AgentOps & platform · Louise
 
