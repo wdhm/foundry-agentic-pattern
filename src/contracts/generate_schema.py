@@ -3,12 +3,21 @@ import json
 from pathlib import Path
 
 from .models import AgentRequest, AgentResult
+from .v1 import AgentRequest as AgentRequestV1
+from .v1 import AgentResult as AgentResultV1
+from .v1 import AnalysisOutput
 
 
 def generate_schemas(output_dir: Path, *, check: bool = False) -> bool:
     schemas_match = True
-    for model in (AgentRequest, AgentResult):
-        path = output_dir / f"{model.__name__}.schema.json"
+    for model, directory in (
+        (AgentRequest, output_dir),
+        (AgentResult, output_dir),
+        (AgentRequestV1, output_dir / "v1"),
+        (AgentResultV1, output_dir / "v1"),
+        (AnalysisOutput, output_dir / "v1"),
+    ):
+        path = directory / f"{model.__name__}.schema.json"
         schema = model.model_json_schema(mode="validation")
         schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
         content = json.dumps(schema, indent=2, sort_keys=True) + "\n"
@@ -17,7 +26,7 @@ def generate_schemas(output_dir: Path, *, check: bool = False) -> bool:
                 print(f"Schema missing or out of date: {path}")
                 schemas_match = False
         else:
-            output_dir.mkdir(parents=True, exist_ok=True)
+            directory.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8", newline="\n")
             print(f"Generated: {path}")
     return schemas_match

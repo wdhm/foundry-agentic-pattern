@@ -10,6 +10,10 @@ requires-python = ">=3.11"
 dependencies = ["pydantic>=2.12,<3"]
 
 [project.optional-dependencies]
+prompt = [
+  "azure-ai-projects>=2.3,<3",
+  "azure-identity>=1.26,<2",
+]
 agent = [
   "agent-framework-core==1.19.0",
   "agent-framework-foundry-hosting==1.0.0b260918",
@@ -25,6 +29,7 @@ dev = [
 [project.scripts]
 generate-contract-schemas = "contracts.generate_schema:main"
 documentation-agent = "documentation_agent.main:main"
+documentation-prompt = "contracts.prompt:main"
 
 [tool.setuptools]
 packages = ["contracts", "documentation_agent"]
@@ -34,7 +39,7 @@ contracts = "src/contracts"
 documentation_agent = "src/agents/documentation-agent/app"
 
 [tool.setuptools.package-data]
-contracts = ["schema/*.json", "py.typed"]
+contracts = ["schema/*.json", "schema/v1/*.json", "py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

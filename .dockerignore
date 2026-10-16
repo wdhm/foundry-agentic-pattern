@@ -6,6 +6,8 @@
 !src/contracts/py.typed
 !src/contracts/schema/
 !src/contracts/schema/*.json
+!src/contracts/schema/v1/
+!src/contracts/schema/v1/*.json
 !src/agents/
 !src/agents/documentation-agent/
 !src/agents/documentation-agent/Dockerfile

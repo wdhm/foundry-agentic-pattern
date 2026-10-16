@@ -185,9 +185,9 @@ def test_committed_schemas_match_models():
 def test_schema_generation_is_deterministic_and_detects_drift(tmp_path):
     assert not generate_schemas(tmp_path, check=True)
     assert generate_schemas(tmp_path)
-    first = {path.name: path.read_bytes() for path in tmp_path.iterdir()}
+    first = {str(path.relative_to(tmp_path)): path.read_bytes() for path in tmp_path.rglob("*.json")}
     assert generate_schemas(tmp_path)
-    assert first == {path.name: path.read_bytes() for path in tmp_path.iterdir()}
+    assert first == {str(path.relative_to(tmp_path)): path.read_bytes() for path in tmp_path.rglob("*.json")}
     assert generate_schemas(tmp_path, check=True)
     path = tmp_path / "AgentRequest.schema.json"
     path.write_text("{}\n", encoding="utf-8")

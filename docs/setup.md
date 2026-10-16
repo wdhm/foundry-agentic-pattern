@@ -151,6 +151,30 @@ The step-by-step guide with Microsoft Learn references is [docs/workshop/agent-i
 
 To onboard another agent, run [`infra/scripts/onboard-agent.ps1`](../infra/scripts/onboard-agent.ps1) ([guide](workshop/agent-identity-guide.md#onboard-another-agent-automated)). The gateway serves one agent at a time and currently points at `doc-agent`.
 
+### Structured-output contract demo (P1, #12)
+
+**Current target:** use the prompt agent `doc-agent` (version 1 in the
+2026-10-14 inventory), not `doc-agent-spike`, which was offboarded and deleted.
+The current agent was copied from spike version 7 and includes the structured
+output schema plus P2's `knowledge`, `github` and `ado` tools. Inspect its latest
+version before any configuration change; do not recreate the retired spike.
+The version 4 result below is historical verification, not a current endpoint.
+
+On 2026-10-13, `doc-agent-spike` **version 4** was created from version 3,
+preserving the `gpt-6-luna` model, low reasoning effort and existing MCP tool
+approval configuration. That version added native strict `AnalysisOutput`
+JSON Schema and assessment-only instructions. Version 3 remained available at
+that time; all spike versions were subsequently retired on 2026-10-14.
+
+A no-tools invocation using contract v1 returned `insufficient_information`
+with missing-source details and no findings, proposed changes or evidence.
+The caller assembled a validated `AgentResult` with version 4 provenance and
+model version `2026-09-22`. No wiki writes or agent identity onboarding were
+performed. Hosted `documentation-agent` version 2 was not changed.
+
+Reproduction commands and API gotchas:
+[structured-output workshop guide](workshop/structured-output-guide.md).
+
 ## Outputs (environment values)
 
 Store these in a local `.env` (git-ignored). Never commit secrets; prefer Entra ID auth over keys.
@@ -173,6 +197,7 @@ Store these in a local `.env` (git-ignored). Never commit secrets; prefer Entra 
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-10-13 | John | Confirmed P1 MVP scope; configured `doc-agent-spike` v4 with native structured output and demonstrated validated contract v1 without tools (#12) |
 | 2026-10-08 | John | Built and deployed `documentation-agent` hosted stub v2 from the existing ACR; verified valid and invalid contract requests remotely (#7) |
 | 2026-10-07 | Rickard | Resource group, Foundry resource + project created |
 | 2026-10-08 | Rickard | Azure DevOps org/project/wiki created and connected to the tenant; shared environment documented |
