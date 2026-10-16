@@ -196,6 +196,9 @@ docker run --rm -p 127.0.0.1:8088:8088 documentation-agent:0.2.0
 ```
 
 The image uses Python 3.13, runs as a non-root user and listens on port 8088.
+Its build context includes all three packages declared in `pyproject.toml`
+(`contracts`, `documentation_agent` and `tools`); omitting `src/tools` fails
+the wheel build even though the hosted entry point does not use the trigger CLI.
 The explicit `linux/amd64` build target avoids producing an ARM64 image on
 ARM-based development machines. Docker Desktop may use emulation for this build.
 The root `.dockerignore` allowlists only build inputs, excluding credentials,

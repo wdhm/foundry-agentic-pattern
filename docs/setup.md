@@ -538,6 +538,44 @@ hosted implementation. `doc-agent:3` continues working as the prompt reference;
 deployed `documentation-agent:2` is still the stub. Do not count the prompt
 agent's earlier scenario passes as hosted migration acceptance.
 
+### Hosted deployment preparation (P3; 2026-10-16)
+
+Read-only preflight against main `1ddaec87` confirmed hosted version **2** and
+prompt version **3** remain active/latest. Both named endpoints still select
+`@latest` at 100%, with Responses, Entra authorization and `not_published`.
+No version, serving selector, identity, connection, gateway, model or publication
+was changed, and no remote invocation was made.
+
+The successful toolbox `v1` API inventory is empty. The ADO gateway's configured
+identity and blueprint still belong to `doc-agent`, not the hosted agent.
+Meaningful hosted assessment is **blocked** on P2 toolbox/source authorization
+and coordinated serving isolation; deploying the default stub is not a substitute.
+Existing connections alone do not meet those prerequisites.
+
+Local image preparation reproduced and fixed a packaging failure: `pyproject.toml`
+declares `src/tools`, but the Docker build inputs omitted it. The Dockerfile and
+allowlist now include that package. The corrected inputs produce a wheel with
+all packages and assessment prompt/policy data. A full local container build
+remains unverified because container pip encountered a TLS handshake failure;
+do not bypass certificate checks or substitute an Azure build while blocked.
+
+The bounded plan, exact prerequisites, build limitations, approval gates and
+future smoke contract are in the
+[hosted deployment preparation guide](workshop/hosted-deployment-guide.md).
+The canonical execution plan and subscription/tenant identifiers stay in the
+deployment owner's ignored `.azure/deployment-plan.md`. It is not validated or
+approved for execution.
+
+The user subsequently accepted transitioning the existing ADO gateway from the
+prompt agent to the hosted agent's own identity/user, including prompt ADO
+interruption. The proposed least-privilege grants, existing gateway settings,
+single reusable toolbox, operator-authority requirements and rollback are in the
+same guide. The user approved that configuration-only plan and accepted an ADO
+access gap until hosted deployment and authorized immediate cutover timing.
+Execution remains **held on supported authorized admin execution**; Azure remains unchanged. Hosted version 2
+is still a stub, so actual hosted tool access also requires separately approved
+assessment runtime verification.
+
 ### Approval spike status (P1, #1)
 
 The native approval experiment is local-only, started explicitly with
