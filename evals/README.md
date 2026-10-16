@@ -94,9 +94,12 @@ from reference answers. Proposed changes require human review, not write approva
 The unchanged checker is a lightweight diagnostic: status, keyword recall,
 reference resolution, allowed Git versions, required source kinds and the original
 proposal fabrication patterns. Each `match_all` group must match in the same item.
-Its exit code is nonzero on failure. **It does not authenticate URIs/excerpts, enforce
-exact wiki/work-item versions, validate the contract, or evaluate every semantic
-negative expectation.** Passing it is not a built-in evaluator result or release gate.
+Its exit code is nonzero on failure. Main's current checker validates `AnalysisOutput`
+on both saved-result and raw-response paths. Its `--invoke` and `--response` paths
+also verify evidence URIs, versions and excerpts against actual tool reads; a bare
+`--result` cannot establish source-read provenance. These checks do not compare
+live sources against this suite's pinned snapshots or cover every semantic negative
+expectation. Passing is not a built-in evaluator result or release gate.
 The focused dataset tests use synthetic unit-test outputs only, not baseline runs.
 
 ## Handoff to the built-in evaluator/release workflow
@@ -108,8 +111,9 @@ The focused dataset tests use synthetic unit-test outputs only, not baseline run
    `content`; for work items supply the documented `fields` projection and scope.
 2. For `supplied_sources`, disable tools and preserve absent wiki/work-item sources.
    This isolates version contamination, stub fidelity and unavailable evidence.
-   Do not run these prompts with the checker's `--invoke`: it neither supplies the
-   bundles nor pins an agent version nor disables tools.
+   Do not run these prompts with the checker's `--invoke`: it does not supply the
+   bundles or disable tools. Its existing `--agent-version` option should be used
+   for the original live demonstrations.
 3. For `live_sources`, retrieve exact Git versions, wiki blob and work-item revision
    read-only, and compare with the captured versions before scoring. Auth/access may
    differ per execution. If the wiki has moved, use its pinned blob or explicitly
