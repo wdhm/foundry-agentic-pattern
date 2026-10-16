@@ -2,6 +2,7 @@ import argparse
 import json
 from pathlib import Path
 
+from .evaluation import EvaluationRequest, EvaluationResponse
 from .models import AgentRequest, AgentResult
 from .v1 import AgentRequest as AgentRequestV1
 from .v1 import AgentResult as AgentResultV1
@@ -16,6 +17,8 @@ def generate_schemas(output_dir: Path, *, check: bool = False) -> bool:
         (AgentRequestV1, output_dir / "v1"),
         (AgentResultV1, output_dir / "v1"),
         (AnalysisOutput, output_dir / "v1"),
+        (EvaluationRequest, output_dir / "evaluation"),
+        (EvaluationResponse, output_dir / "evaluation"),
     ):
         path = directory / f"{model.__name__}.schema.json"
         schema = model.model_json_schema(mode="validation")

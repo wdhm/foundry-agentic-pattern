@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "foundry-agentic-pattern"
-version = "0.2.0"
+version = "0.3.0"
 description = "Shared contracts for the Foundry agentic reference pattern"
 requires-python = ">=3.11"
 dependencies = ["pydantic>=2.12,<3"]
@@ -42,7 +42,7 @@ documentation_agent = "src/agents/documentation-agent/app"
 tools = "src/tools"
 
 [tool.setuptools.package-data]
-contracts = ["schema/*.json", "schema/v1/*.json", "py.typed"]
+contracts = ["schema/*.json", "schema/v1/*.json", "schema/evaluation/*.json", "py.typed"]
 documentation_agent = ["prompts/*.txt", "policies/*.txt"]
 
 [tool.pytest.ini_options]

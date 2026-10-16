@@ -148,7 +148,7 @@ def test_valid_assessment_returns_v1_with_runtime_provenance(settings, request_v
     assert result.request_id == request_v1.request_id
     assert result.provenance.model == settings.model
     assert result.provenance.agent_name == "documentation-agent"
-    assert result.provenance.agent_version == "0.2.0"
+    assert result.provenance.agent_version == "0.3.0"
     assert result.provenance.prompt_version.startswith("sha256:")
     assert result == response.value
     assert len(runner.guards[0].calls) == 3

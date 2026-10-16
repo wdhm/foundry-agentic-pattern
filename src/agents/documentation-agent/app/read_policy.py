@@ -7,6 +7,7 @@ from agent_framework import Content, FunctionInvocationContext, FunctionMiddlewa
 from mcp.types import CallToolResult
 from pydantic import BaseModel
 
+from contracts.evaluation import ExecutionRecord
 from contracts.v1 import AgentRequest
 
 from .settings import AssessmentSettings
@@ -72,10 +73,13 @@ def parse_read_result(result: CallToolResult) -> str:
 class ReadOnlyPolicy(FunctionMiddleware):
     """Enforce actions before dispatch and retain evidence for this invocation only."""
 
-    def __init__(self, request: AgentRequest, settings: AssessmentSettings) -> None:
+    def __init__(
+        self, request: AgentRequest, settings: AssessmentSettings, record: ExecutionRecord | None = None
+    ) -> None:
         self.request = request
         self.settings = settings
         self.calls: list[dict[str, Any]] = []
+        self.record = record
 
     async def process(self, context: FunctionInvocationContext, call_next: Callable[[], Awaitable[None]]) -> None:
         arguments = (
@@ -103,3 +107,5 @@ class ReadOnlyPolicy(FunctionMiddleware):
                 "output": output,
             }
         )
+        if self.record is not None:
+            self.record.tool_calls.append(dict(self.calls[-1]))

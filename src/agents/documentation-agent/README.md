@@ -4,6 +4,12 @@ The **Documentation Agent**: a Microsoft Foundry **hosted agent** (container) bu
 
 ## Hosted assessment implementation (P1, #13)
 
+The opt-in [P1 evaluation interface](EVALUATION_INTERFACE.md) adds controlled
+source snapshots and request-correlated model/tool evidence for P3 integration.
+It is local code only and disabled by default. Existing stub/assessment payloads
+are unchanged. The interface is not a replacement for P3's release/evaluation
+workflow and is not enabled on the deployed agent.
+
 For the separate #1 approval experiment, see the
 [native approval spike guide](../../../docs/workshop/hosted-approval-spike.md).
 It has its own local-only entry point and a dummy state receipt; it does not
@@ -35,7 +41,7 @@ Each invocation owns its clients, credentials and tool evidence; state is not
 shared between requests. The model receives the versioned prompt/policy packaged
 in `app/prompts/` and `app/policies/`. It produces only `AnalysisOutput`. The
 runtime adds the input request ID, model configuration, application version
-`0.2.0` (not the Foundry deployment version), and instruction/policy hashes.
+`0.3.0` (not the Foundry deployment version), and instruction/policy hashes.
 No unvalidated model tokens are streamed to the caller.
 
 The official `FoundryToolbox` adapter handles authentication and platform call-ID
