@@ -14,6 +14,14 @@ Verified risks and open questions for Agentic Pattern v1. Each risk has a status
 <a id="r1"></a>
 ## R1: Tool approval enforcement and approval UX in Teams
 
+**Local spike update (2026-10-16):** the
+[hosted native-approval experiment](workshop/hosted-approval-spike.md) exercises
+Approve / Reject and explicit Modify through the Responses protocol. It persists
+the exact pending call and a dummy receipt with SDK state storage, and rejects
+tampered, replayed and superseded decisions. This is a local dummy-target result,
+not a Toolbox integration or Teams verification. R1 remains open: no Teams
+go/no-go decision, real approver identity or external-write guarantee is claimed.
+
 **Status:** 🟡 Partly verified. Spike needed for the Teams approval UX.
 
 **Findings**
