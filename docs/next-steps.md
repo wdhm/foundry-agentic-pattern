@@ -79,7 +79,7 @@ Slide: [PDF and SharePoint document sources](workshop/slides/document-sources.md
 
 ## 9. Production hardening (out of MVP scope)
 
-The workshop builds an MVP that shows the platform ([ADR 0022](adr/0022-mvp-scope-platform-first.md)). These items make it production-grade. They are explained on slides, not built. Items marked *proposal* are pending P1/P3 confirmation.
+The workshop builds an MVP that shows the platform ([ADR 0022](adr/0022-mvp-scope-platform-first.md)). These items make it production-grade. They are explained on slides, not built. P1 confirmed its MVP scope on 2026-10-13; P3 confirmed on 2026-10-16.
 
 | Item | Why it matters | Lane |
 |---|---|---|
@@ -91,6 +91,6 @@ The workshop builds an MVP that shows the platform ([ADR 0022](adr/0022-mvp-scop
 | Mock data generator with seed/reset scripts | Repeatable demo state at scale | P2 ([#17](https://github.com/wdhm/foundry-agentic-pattern/issues/17)) |
 | Dedicated audit store in Cosmos DB (runs, decisions, pending approvals) *(proposal)* | Long-term, queryable audit beyond trace retention | P1 ([ADR 0016](adr/0016-state-and-audit-cosmos-db.md)) |
 | Hosted agent with custom code *(proposal: one demo or slide)* | Full control of orchestration | P1 ([ADR 0009](adr/0009-hosted-agent-runtime.md)) |
-| Onboarding new agents from CI *(proposal)* | No manual step per new agent | P3 ([#28](https://github.com/wdhm/foundry-agentic-pattern/issues/28)) |
-| Custom eval metrics, ground-truth gate and a custom monitoring workbook *(proposal)* | Quality bar tailored to the organisation | P3 ([ADR 0013](adr/0013-evaluation-gate-in-ci.md)) |
-| APIM AI Gateway with FinOps cost attribution per agent/version *(proposal)* | Cost control and chargeback | P3 ([R4](risks.md#r4)) |
+| Onboarding new agents from CI | No manual step per new agent | P3 ([#28](https://github.com/wdhm/foundry-agentic-pattern/issues/28)) |
+| Custom eval metrics, ground-truth gate and a custom monitoring workbook | Quality bar tailored to the organisation | P3 ([ADR 0013](adr/0013-evaluation-gate-in-ci.md)) |
+| APIM AI Gateway with FinOps cost attribution per agent/version | Cost control and chargeback | P3 ([R4](risks.md#r4)) |
