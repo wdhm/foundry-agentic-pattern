@@ -11,7 +11,8 @@ your team Azure CLI account. The CLI uses `AzureCliCredential`, not a credential
 fallback chain, so it follows that sign-in.
 
 The current shared prompt agent is **`doc-agent`** (version 1 in the
-2026-10-14 inventory). It was copied from `doc-agent-spike:7`, carrying the
+2026-10-14 inventory; version 3 adds the [#13 assessment instructions](gap-analysis-guide.md)).
+It was copied from `doc-agent-spike:7`, carrying the
 structured schema and the `knowledge`, `github` and `ado` tools. The spike was
 deleted; its old version 4 demonstration is historical, not an invocation target.
 Inspect the current version in Foundry before using the commands below.

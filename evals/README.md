@@ -1,8 +1,8 @@
 # evals/
 
 **MVP: five hand-made cases, existing checker, Foundry built-in evaluators later.**
-P3 approved the platform-first scope on 2026-10-16, even though
-[ADR 0022](../docs/adr/0022-mvp-scope-platform-first.md) still calls her lane proposed.
+P3 approved the platform-first scope on 2026-10-16
+([ADR 0022](../docs/adr/0022-mvp-scope-platform-first.md)).
 This package prepares data for [#24](https://github.com/wdhm/foundry-agentic-pattern/issues/24);
 the evaluator/release workflow in #25/#27 is separate. No custom metric framework,
 live agent configuration, tool writes or workflow is added here.
@@ -86,17 +86,50 @@ python -m contracts.generate_schema --check
 python evals/check_planted_gaps.py --scenario evals/datasets/order-sync-retry.json --result saved-result.json
 ```
 
-Validate saved v1 payloads with `contracts.v1.AnalysisOutput` (model fields) or
-`AgentResult` (caller envelope) **before** the checker. An envelope must echo the
+The checker CLI validates saved `--result` payloads as `contracts.v1.AnalysisOutput`
+(model fields). For an `AgentResult` caller envelope, validate it separately and pass
+only its analysis fields to the checker. An envelope must echo the
 request ID and carry real caller-supplied runtime provenance. Never fill provenance
 from reference answers. Proposed changes require human review, not write approval.
 
-The unchanged checker is a lightweight diagnostic: status, keyword recall,
+## Live and saved-response checks
+
+[`check_planted_gaps.py`](check_planted_gaps.py) uses shared Pydantic contract
+validation, documentation status, recall, evidence integrity and the existing
+proposal fabrication guard. Live/raw-response checks also match evidence to
+actual source reads.
+
+```powershell
+az login
+.\.venv\Scripts\python.exe -m pip install -e ".[prompt,dev]"
+.\.venv\Scripts\python.exe evals\check_planted_gaps.py --invoke --agent-version 3
+.\.venv\Scripts\python.exe evals\check_planted_gaps.py --invoke --agent-version 3 `
+  --scenario evals\datasets\order-sync-information-missing.json
+.\.venv\Scripts\python.exe evals\check_planted_gaps.py --result my-result.json
+```
+
+Use `--save-response evals/results/response.json` with `--invoke` to preserve the
+tool evidence locally; use `--response` to recheck it without another model call.
+Raw responses may contain source data; do not commit them. A bare saved `--result`
+does not provide source-read verification. Explicit `--agent-version` avoids
+silently evaluating a newer deployment.
+
+**Latest observation (2026-10-16):** `doc-agent:3` passed both scenarios with 100%
+recall, schema validation and source-read evidence checks. This version adds
+scoped assessment instructions and explicit precedence for missing facts.
+See the [gap-analysis guide](../docs/workshop/gap-analysis-guide.md) for the
+failed version 2 attempt, limitations and reproduction commands.
+
+The checker remains a lightweight diagnostic: status, keyword recall,
 reference resolution, allowed Git versions, required source kinds and the original
 proposal fabrication patterns. Each `match_all` group must match in the same item.
-Its exit code is nonzero on failure. **It does not authenticate URIs/excerpts, enforce
-exact wiki/work-item versions, validate the contract, or evaluate every semantic
-negative expectation.** Passing it is not a built-in evaluator result or release gate.
+Its exit code is nonzero on failure. The CLI validates the analysis contract;
+`--invoke` and `--response` additionally match evidence source, URI, exact version
+and verbatim excerpt against observed read-tool outputs, require standard retrieval
+and reject detected write calls. A bare `--result` cannot verify source reads.
+These checks do not independently authenticate saved traces or enforce the suite's
+exact wiki/work-item gold versions, and do not evaluate every semantic negative
+expectation. Passing is not a built-in evaluator result or release gate.
 The focused dataset tests use synthetic unit-test outputs only, not baseline runs.
 
 ## Handoff to the built-in evaluator/release workflow
@@ -109,7 +142,7 @@ The focused dataset tests use synthetic unit-test outputs only, not baseline run
 2. For `supplied_sources`, disable tools and preserve absent wiki/work-item sources.
    This isolates version contamination, stub fidelity and unavailable evidence.
    Do not run these prompts with the checker's `--invoke`: it neither supplies the
-   bundles nor pins an agent version nor disables tools.
+   bundles nor disables tools, even when `--agent-version` is specified.
 3. For `live_sources`, retrieve exact Git versions, wiki blob and work-item revision
    read-only, and compare with the captured versions before scoring. Auth/access may
    differ per execution. If the wiki has moved, use its pinned blob or explicitly
@@ -132,8 +165,9 @@ The focused dataset tests use synthetic unit-test outputs only, not baseline run
 All five cases have the documentary inputs needed for offline preparation. Live
 readiness still depends on authorized retrieval, a verified exact current agent
 version, the later runner and compatible evaluator deployment. This package makes
-no current-agent baseline claim. The historical status-precedence failure remains
-visible; a future run must measure whether it persists, not silently change gold.
+no new agent baseline claim. The historical status-precedence failure remains
+visible alongside main's later version-3 observation; future runs must measure
+their selected version, not silently change gold.
 
 ## Baseline, not targets
 
@@ -144,7 +178,11 @@ missing three consecutive times. Against `doc-agent:1`, planted gaps PASS and
 information missing **2 of 3** PASS; the failure found all missing items but selected
 `gaps_found` instead of `insufficient_information`. Raw outputs and full runtime
 provenance were not committed. These are historical checker observations, **not**
-new v1/built-in evaluator scores. The three added cases have **not been run**.
+new built-in evaluator scores. Main subsequently recorded `doc-agent:3` passing
+both original scenarios on 2026-10-16 with schema and source-read verification
+(see [gap-analysis guide](../docs/workshop/gap-analysis-guide.md)). This later
+observation does not overwrite the dataset's historical baseline records or
+constitute a five-case baseline. The three added cases have **not been run**.
 
 [ADR 0013](../docs/adr/0013-evaluation-gate-in-ci.md) describes the longer-term
 blocking gate (schema validity, recall target, zero fabricated references and
