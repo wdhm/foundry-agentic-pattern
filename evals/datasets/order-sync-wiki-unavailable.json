@@ -1,0 +1,20 @@
+{
+  "scenario": "order-sync-wiki-unavailable",
+  "description": "The planted-drift subject is unchanged, but wiki retrieval is unavailable. A request path and the documentation standard cannot stand in for retrieved wiki evidence.",
+  "agent": "doc-agent",
+  "prompt": "Assess documentation drift for PR #62 at commit ad623147fbb1eeb9a6423d437df199c91db15a9e using only the supplied settings.json, order_sync.py and documentation standard. The wiki read for /Order Sync/Overview is unavailable; its content and ETag are not supplied. Do not call tools to replace this intentionally unavailable source. Report the unavailable source and the limits of the assessment, rather than asserting the three planted wiki omissions from memory. Cite only sources actually supplied. Do not invent a wiki ETag or treat the standard's version 1.0 as Git evidence. Return proposals only, with no writes.",
+  "expected_status": "insufficient_information",
+  "planted_gaps": [],
+  "expected_missing": [
+    {
+      "id": "WU1",
+      "title": "Wiki content and exact version are unavailable; drift cannot be established",
+      "rules": ["DS-20", "DS-22", "DS-30"],
+      "match_all": [["wiki"], ["etag", "version"], ["unavailable", "missing", "not supplied", "not provided"]]
+    }
+  ],
+  "expected_evidence": {
+    "git_versions": ["ad623147fbb1eeb9a6423d437df199c91db15a9e"],
+    "required_sources": ["git"]
+  }
+}
