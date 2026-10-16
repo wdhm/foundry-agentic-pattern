@@ -1,0 +1,7 @@
+{
+  "path": "/Order Sync/Overview",
+  "etag": "d897eaf7cd02c4da6bd70df5cae951ba6790df9f",
+  "retrieved_on": "2026-10-16",
+  "retrieval_uri": "https://dev.azure.com/foundry-agentic/integration-team/_apis/wiki/wikis/integration-team.wiki/pages?path=%2FOrder%20Sync%2FOverview&includeContent=true&api-version=7.1",
+  "content": "# Order Sync overview\n\nOrder Sync is an integration that moves confirmed webshop orders to Fabrikam ERP. The work item describes this as a fictional sample and indicates the integration is being maintained (state: Doing).\n\n**Source:** Work item [#1](https://dev.azure.com/foundry-agentic/integration-team/_workitems/edit/1)."
+}
