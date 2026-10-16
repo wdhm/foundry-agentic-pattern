@@ -39,13 +39,13 @@ done
 
 Re-read immediately before any approved release; never hard-code today's latest versions as future rollback targets. Do not print access tokens or commit full agent definitions.
 
-### Approved v3 pin probe: preflight only
+### Approved v3 pin probe: paused after preflight
 
 The user subsequently approved pinning **only `doc-agent` to existing version `3`**, followed by one no-tools assessment through its named serving endpoint without a version override. No new versions, other-version switch/rollback, hosted-agent change, channel publication or model upgrade-policy change is approved.
 
 Preflight at **2026-10-16 08:31:20 UTC** still found latest `3`, version `3` active, and `@latest`/100% serving with Responses/Entra and `not_published`. Local, non-repository snapshots preserve the agent object, version `3` and version inventory. The version definition's canonical JSON SHA-256 is `d8afbfc82958bece5bbecf9851a918397a1193d62937a50c60867d40f4545236`. A separate model read found `gpt-6-luna` / `2026-09-22`, deployment `Succeeded`, upgrade policy **`OnceNewDefaultVersionAvailable`**; pinning an agent version is not a model `NoAutoUpgrade` change.
 
-**Not executed:** the selector PATCH and serving-endpoint invocation are held pending the coordinator's confirmation that all version/endpoint writers, including portal users, are paused. Other coordinated agents are not changing routing, and the monitoring owner reports its native connection is ready. A trace from that owner's separate version-explicit test is **not** evidence for this named-endpoint probe. Recheck all preconditions immediately before any approved write; this historical snapshot is not a concurrency lock.
+**Active blocker: writer coordination is unconfirmed.** At **08:34 UTC**, the coordinator directed this package to stop with routing unchanged. The selector PATCH and serving-endpoint invocation were **not executed**. The earlier v3 pin approval does not override this pause. Other coordinated agents are not changing routing, and the monitoring owner reports its native connection is ready. A trace from that owner's separate version-explicit test is **not** evidence for this named-endpoint probe. Resume only after an explicit coordinated writer hold and renewed live preflight; this historical snapshot is not a concurrency lock. No pin, serving-path success, rollback or Teams success is claimed.
 
 ## Exact API contract and boundaries
 
