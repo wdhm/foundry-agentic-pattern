@@ -62,7 +62,7 @@ Historical hosted-agent deployment instructions below are unchanged.
 - [x] Resource group `rg-foundry-agentic-pattern` in Sweden Central
 - [x] **Foundry resource** `foundry-agentic-R8N3LD` + **Foundry project** `proj-agentic`
 - [ ] **Model deployments**: one **chat** model (agent) and one **eval** model (evaluators). Chat exists but is not pinned; separate eval deployment is absent. See the dated inventory and approval gates below.
-- [ ] **Log Analytics** + **Application Insights**, connected to the Foundry project (tracing)
+- [x] **Log Analytics** + **Application Insights**, connected to the Foundry project; native prompt-agent trace ingestion verified 2026-10-16 (evidence below)
 - Deferred: **Cosmos DB** and containers ([ADR 0016](adr/0016-state-and-audit-cosmos-db.md)); target architecture, not the approved MVP
 - [x] Team access: tenant accounts for John, Rickard and Louise are Owner on the subscription (see the team accounts table)
 - [x] All three tenant accounts are users (Basic) in the Azure DevOps org `foundry-agentic`
@@ -70,12 +70,13 @@ Historical hosted-agent deployment instructions below are unchanged.
 - [x] **Azure DevOps** org `foundry-agentic`, project `integration-team`, project wiki (connected to the tenant)
 - [x] A few fictional work items + wiki pages ([ADR 0005](adr/0005-generic-repo-with-fictional-data.md)); replaced by mock data in [#17](https://github.com/wdhm/foundry-agentic-pattern/issues/17). Needed by the P2 spike [#2](https://github.com/wdhm/foundry-agentic-pattern/issues/2).
 
-### P3 read-only inventory (2026-10-16)
+### P3 read-only inventory (2026-10-16, 07:57 UTC; before monitoring approval)
 
 Read from the shared environment using the **WSL Ubuntu Azure CLI**; no cloud
 resources, model settings, connections, agent definitions, identities or traffic
-were changed. These are point-in-time observations, not proof of model invocation
-or trace ingestion.
+were changed during this inventory. These are historical point-in-time
+observations. The subsequently approved monitoring setup and ingestion evidence
+are recorded in the native tracing section below.
 
 | Item | Observed value |
 |---|---|
@@ -86,7 +87,7 @@ or trace ingestion.
 | Native tracing connection | No Application Insights connection in the project connection list |
 | Monitoring resources in shared RG | No Application Insights components or Log Analytics workspaces |
 | Other subscription monitoring resources | Exist outside the shared RG; ownership/suitability not established, so not reused |
-| Model invocation / trace ingestion / three-owner access | Not verified in this package |
+| Model invocation / trace ingestion / three-owner access | Not verified at inventory time; subsequent single-owner native tracing proof below, three-owner checks still open |
 
 | Deployment | Model version | Type / capacity units | Upgrade policy | Reported rate limits | State |
 |---|---|---|---|---|---|
@@ -210,17 +211,16 @@ connecting Application Insights enables platform traces without custom
 OpenTelemetry code. No custom workbook, Cosmos join or application-defined
 `run_id`/version dimensions are promised by this MVP.
 
-**Proposed change, not executed:** in `rg-foundry-agentic-pattern`, Sweden
-Central, create workspace `log-foundry-agentic` with an initial 30-day retention
-and workspace-based Application Insights `appi-foundry-agentic`, then connect
-it to `proj-agentic`. Prefer **Project managed identity** authentication if
-available; the portal assigns **Monitoring Metrics Publisher** to that identity
-on Application Insights. This is a shared configuration/RBAC change and incurs
-telemetry costs. Obtain explicit user approval for resource names, region,
-workspace association, retention, ingestion budget and connection/RBAC changes
-before saving anything. Check existing names again to avoid duplicates.
+**Approved and executed 2026-10-16:** the user approved creating workspace
+`log-foundry-agentic` and workspace-based Application Insights
+`appi-foundry-agentic` in the existing resource group, Sweden Central, with
+30-day retention and the project connection/required monitoring role assignment,
+acknowledging ingestion charges. No approval was given for chat pinning, eval
+deployment or agent/routing changes. The setup used **Project managed identity**
+and **Monitoring Metrics Publisher** scoped to the Application Insights
+component, not the resource group or subscription.
 
-After approval:
+Repeatable manual procedure (requires the same explicit approval):
 
 1. Azure portal > the existing resource group > **Create > Log Analytics
    workspace**: use the approved name/region. Set the approved retention.
@@ -273,9 +273,97 @@ success: check time range, correct app/workspace, ingestion delay, connection
 auth/RBAC and whether the invocation generated platform traces. Stop and record
 the error if the connection or ingestion cannot be verified.
 
-**Still open:** the native tracing demo has not run, the monitoring connection
-has not been created, and full #9's custom dimensions/Cosmos correlation are
-explicitly deferred rather than completed.
+#### Executed setup and trace evidence (2026-10-16)
+
+| Setting | Verified observation |
+|---|---|
+| Log Analytics | `log-foundry-agentic`, Sweden Central, `PerGB2018`, provisioning `Succeeded`, workspace retention `30` days |
+| Application Insights | `appi-foundry-agentic`, Sweden Central, workspace association to `log-foundry-agentic`, provisioning `Succeeded` |
+| Ingestion auth | `DisableLocalAuth=true`; no key-based ingestion |
+| Project connection | `appi-foundry-agentic`, category `AppInsights`, auth `ProjectManagedIdentity`, target the component ARM resource ID, shared within the project |
+| Connection metadata | `ApiType=Azure`, `ResourceId` points to the component, required `ApplicationInsightsConnectionString` routing metadata passed internally; its value is not printed or committed |
+| Ingestion RBAC | `proj-agentic` **system-assigned project managed identity**, principal type `ServicePrincipal`, **Monitoring Metrics Publisher** on the component only |
+| Table retention | All 12 Application Insights tables, including `AppDependencies`, `AppRequests`, `AppTraces` and `AppGenAIContent`: analytics and total retention explicitly `30` days |
+| Existing connections | `ado-mcp-proxy`, `kb-doc-agent-mcp`, `github-mcp` preserved; no model, agent definition, identity or gateway edits |
+
+The [setup script](../infra/scripts/setup-native-tracing.ps1) targets only these
+approved shared resources. It previews by default, requires `-Apply` to mutate,
+reuses matching resources, and stops on conflicting configuration rather than
+overwriting it. It waits for resource provisioning and verifies the scoped role
+and connection. It does not invoke the agent or grant log-reading/content roles.
+
+```powershell
+# Preview; no cloud writes:
+powershell -NoProfile -ExecutionPolicy Bypass -File .\infra\scripts\setup-native-tracing.ps1 -UseWsl
+# Only with explicit approval for the documented monitoring changes:
+powershell -NoProfile -ExecutionPolicy Bypass -File .\infra\scripts\setup-native-tracing.ps1 -UseWsl -Apply
+# Offline guard/idempotency tests:
+powershell -NoProfile -ExecutionPolicy Bypass -File .\infra\scripts\tests\setup-native-tracing.Tests.ps1
+```
+
+API versions used: Log Analytics workspace `2023-09-01`, Application Insights
+`2020-02-02`, tables `2022-10-01`, Foundry project connection
+`2025-10-01-preview`. Microsoft Learn's generated connection schema lags the
+runtime `ProjectManagedIdentity` auth value; the live API accepted and returned
+it. The first connection PUT failed explicitly because the API also requires
+`metadata.ApplicationInsightsConnectionString`. This is routing metadata, not a
+credential granting ingestion with local auth disabled; it is passed through a
+temporary request file deleted in `finally`, never emitted in the result.
+No keys or connection credentials were retrieved.
+
+**Retention gotcha:** a 30-day workspace setting did not change the platform's
+90-day defaults on Application Insights tables. The script sets both analytics
+and total retention to 30 on those tables and verifies them. These are configured
+retention periods, not a guarantee of deletion at exactly 30 days; Azure's
+[retention semantics](https://learn.microsoft.com/azure/azure-monitor/logs/data-retention-configure)
+still apply. No immediate-purge policy or custom ingestion cap was added.
+
+**Ingestion is verified, not just configured.** One approved read-only assessment
+used the current prompt agent `doc-agent:3`, existing deployment `gpt-6-luna`
+version `2026-09-22`, the fictional contract request and `tool_choice="none"`.
+It used the project Responses API with an explicit agent reference, **not**
+the named serving endpoint and not the hosted stub. There were three MCP tool
+discovery items, reasoning and a completed message, but no tool calls, approvals
+or external writes. Model usage was 6,071 input / 367 output tokens.
+
+| Correlation field | Observed value |
+|---|---|
+| Invocation UTC | Started `2026-10-16T08:26:36Z`, completed `08:26:44Z` |
+| Response ID | `resp_0549388dc8b13e63006ad1dfbbb3b481908917858a50e93a62` |
+| Conversation ID | `conv_0549388dc8b13e6300q1zF0viuUKWFvTlxHxKSg1pOAyRoQ6f5` |
+| Trace ID / `operation_Id` | `7e43610cdbc2a300abe6a5cd94501285` |
+| Agent span | `invoke_agent doc-agent:3`, span `3f220bc487b413d6`, duration `4294.7717` ms, success `True` |
+| Child model span | `chat gpt-6-luna-2026-09-22`, span `6f90e394deb3be50`, parent `3f220bc487b413d6`, duration `1871.4673` ms, success `True` |
+| Native attributes on both spans | `gen_ai.agent.name=doc-agent`, `gen_ai.agent.id=doc-agent:3`, request/response model `gpt-6-luna-2026-09-22`, exact response/conversation IDs above |
+
+The first lookup returned no rows during ingestion delay; a later query
+returned the two successful `dependencies` spans with the same Trace ID.
+Telemetry read access was demonstrated for the executing team account, not all
+three owners. No raw prompt, response text, tool content or connection-string
+value is stored here.
+
+To reproduce the evidence lookup in **Application Insights > Logs**, use:
+
+```kusto
+dependencies
+| where timestamp > ago(24h)
+| where customDimensions["gen_ai.response.id"] ==
+    "resp_0549388dc8b13e63006ad1dfbbb3b481908917858a50e93a62"
+| project timestamp, name, duration, success, operation_Id, id, operation_ParentId,
+    agent=tostring(customDimensions["gen_ai.agent.id"]),
+    model=tostring(customDimensions["gen_ai.response.model"])
+| order by timestamp asc
+```
+
+For later reproductions, select the recorded UTC interval instead of `ago(24h)`;
+the telemetry will eventually expire under the configured retention.
+In Foundry, open `proj-agentic > Agents > Traces` and search the response or Trace
+ID above. Ingestion and correlation were checked via the Application Insights
+query API; the Foundry portal UI itself was not visually verified.
+
+**Still open:** full #9's custom dimensions/Cosmos correlation are explicitly
+deferred, not completed. This single no-tools assessment does not prove
+tool-operation tracing, all-owner access, hosted-stub tracing, or release routing.
 
 ### Handoff to eval/release work
 
@@ -288,8 +376,8 @@ Do not mark the cloud setup complete until these outputs are supplied:
 | `CHAT_MODEL_DEPLOYMENT` / model version | `gpt-6-luna` / `2026-09-22`; currently auto-upgrades, so record the observed version per eval run |
 | `EVAL_MODEL_DEPLOYMENT` / model version | **Unset** until model compatibility, quota, cost and deployment approval are resolved |
 | Capacity evidence | Fresh regional quota + deployment rate limits; resolve chat `current=500`, `limit=250` discrepancy |
-| Tracing destination | Approved App Insights/workspace names and verified project connection/auth; currently absent in the shared RG/project |
-| Native trace proof | UTC time, agent version, deployment/version, Response ID, Conversation ID, Trace ID, redacted Foundry trace link/screenshot and query result |
+| Tracing destination | `appi-foundry-agentic` / workspace `log-foundry-agentic`; project `AppInsights` / `ProjectManagedIdentity` connection and project-MI ingestion role verified |
+| Native trace proof | Successful correlated agent/model spans above; exact UTC, agent/model versions, Response ID, Conversation ID, Trace ID and query result recorded. Portal UI not visually verified |
 | Access proof | Each owner's chat invocation and telemetry read result; not verified here |
 
 Eval/release automation must fail explicitly if its evaluator deployment is
@@ -435,6 +523,7 @@ Store these in a local `.env` (git-ignored). Never commit secrets; prefer Entra 
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-10-16 | Louise / Copilot | Applied explicitly approved native monitoring setup: workspace + workspace-based Entra-only App Insights in Sweden Central, 30-day workspace/table retention, project-MI scoped ingestion role and connection. Verified one no-tools `doc-agent:3` assessment through correlated native agent/model spans; no model or agent/routing edits |
 | 2026-10-16 | Louise / Copilot | Read-only WSL CLI inventory: recorded model versions, auto-upgrade policies, rate limits, quota discrepancy and missing monitoring connection; added repeatable inventory and approval-gated model/native-tracing procedures (#5, #49, native subset of #9). No cloud writes or invocation/ingestion verification |
 | 2026-10-13 | John | Confirmed P1 MVP scope; configured `doc-agent-spike` v4 with native structured output and demonstrated validated contract v1 without tools (#12) |
 | 2026-10-08 | John | Built and deployed `documentation-agent` hosted stub v2 from the existing ACR; verified valid and invalid contract requests remotely (#7) |
