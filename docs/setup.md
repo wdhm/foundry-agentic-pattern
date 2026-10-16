@@ -49,16 +49,254 @@ az account set -s ME-M365CPI54615665-rwidholm-1
 
 ## Phase 1: Base (needed by all tracks, M0/M1)
 
+**P3 platform-first MVP approved 2026-10-16:** this package covers the existing
+Foundry project, model versions/quota and native server-side tracing
+([#5](https://github.com/wdhm/foundry-agentic-pattern/issues/5),
+[#49](https://github.com/wdhm/foundry-agentic-pattern/issues/49), native subset of
+[#9](https://github.com/wdhm/foundry-agentic-pattern/issues/9)).
+The P3 approval supersedes the older "proposed" wording in ADR 0022.
+Cosmos DB and its RBAC, custom OpenTelemetry exporters/dimensions, custom
+workbooks, APIM and new azd/Bicep provisioning are **not MVP prerequisites**.
+Historical hosted-agent deployment instructions below are unchanged.
+
 - [x] Resource group `rg-foundry-agentic-pattern` in Sweden Central
 - [x] **Foundry resource** `foundry-agentic-R8N3LD` + **Foundry project** `proj-agentic`
-- [ ] **Model deployments**: one **chat** model (agent) and one **eval** model (evaluators). Record the model and version below. *Chat: `gpt-6-luna` done; eval: open.*
+- [ ] **Model deployments**: one **chat** model (agent) and one **eval** model (evaluators). Chat exists but is not pinned; separate eval deployment is absent. See the dated inventory and approval gates below.
 - [ ] **Log Analytics** + **Application Insights**, connected to the Foundry project (tracing)
-- [ ] **Cosmos DB** (NoSQL, serverless) with database `fap` and containers `runs`, `results`, `approvals` ([ADR 0016](adr/0016-state-and-audit-cosmos-db.md))
+- Deferred: **Cosmos DB** and containers ([ADR 0016](adr/0016-state-and-audit-cosmos-db.md)); target architecture, not the approved MVP
 - [x] Team access: tenant accounts for John, Rickard and Louise are Owner on the subscription (see the team accounts table)
 - [x] All three tenant accounts are users (Basic) in the Azure DevOps org `foundry-agentic`
-- [ ] RBAC: project managed identity → Cosmos DB data contributor
+- Deferred: project managed identity to Cosmos DB data contributor
 - [x] **Azure DevOps** org `foundry-agentic`, project `integration-team`, project wiki (connected to the tenant)
 - [x] A few fictional work items + wiki pages ([ADR 0005](adr/0005-generic-repo-with-fictional-data.md)); replaced by mock data in [#17](https://github.com/wdhm/foundry-agentic-pattern/issues/17). Needed by the P2 spike [#2](https://github.com/wdhm/foundry-agentic-pattern/issues/2).
+
+### P3 read-only inventory (2026-10-16)
+
+Read from the shared environment using the **WSL Ubuntu Azure CLI**; no cloud
+resources, model settings, connections, agent definitions, identities or traffic
+were changed. These are point-in-time observations, not proof of model invocation
+or trace ingestion.
+
+| Item | Observed value |
+|---|---|
+| Foundry resource | `foundry-agentic-R8N3LD`, `AIServices`, Sweden Central, provisioning `Succeeded` |
+| Prompt agent | `doc-agent:3`, model deployment `gpt-6-luna` (data-plane GET, API `2025-11-15-preview`) |
+| Hosted stub | Separate P1 `documentation-agent`; not invoked or changed by this package |
+| Project connections | `ado-mcp-proxy` (`RemoteTool`, `AgenticIdentityToken`), `kb-doc-agent-mcp` (`RemoteTool`, `ProjectManagedIdentity`), `github-mcp` (`RemoteTool`, `CustomKeys`) |
+| Native tracing connection | No Application Insights connection in the project connection list |
+| Monitoring resources in shared RG | No Application Insights components or Log Analytics workspaces |
+| Other subscription monitoring resources | Exist outside the shared RG; ownership/suitability not established, so not reused |
+| Model invocation / trace ingestion / three-owner access | Not verified in this package |
+
+| Deployment | Model version | Type / capacity units | Upgrade policy | Reported rate limits | State |
+|---|---|---|---|---|---|
+| `gpt-6-luna` | `2026-09-22` | `GlobalStandard` / `500` | `OnceNewDefaultVersionAvailable` | `500000` tokens / `60s`; `500` requests / `60s` | `Succeeded` |
+| `text-embedding-3-large` | `1` | `Standard` / `120` | `OnceNewDefaultVersionAvailable` | `120000` tokens / `60s`; `120` requests / `10s` | `Succeeded` |
+| Separate eval deployment | **Absent** | Not allocated | Not configured | Not measured | Pending approval |
+
+The embedding deployment serves Foundry IQ; it is **not** an evaluator chat
+model. Preserve it. A version value alone does not mean a deployment is pinned.
+
+Regional subscription quota returned by `az cognitiveservices usage list`:
+
+| Quota name (Sweden Central) | Current | Limit | API unit |
+|---|---|---|---|
+| `OpenAI.GlobalStandard.gpt-6-luna` | `500` | `250` | `Count` |
+| `OpenAI.Standard.text-embedding-3-large` | `120` | `350` | `Count` |
+
+**Quota anomaly:** chat allocation exceeds the reported limit. Do not treat this
+as negative usable capacity, infer available eval capacity, or resize the
+working chat deployment to "fix" it. Confirm **Management center > Quota** and
+the selected model/type/region with the subscription owner before proposing an
+eval allocation. Quota is shared at subscription/region/model/deployment-type
+level, not per project. Capacity units are model-specific; the rate-limit
+values above came from deployment metadata, not a universal TPM conversion.
+Limits do not guarantee throughput under load.
+
+#### Repeat the inventory without cloud changes
+
+Run from the repo root in PowerShell (5.1 or newer):
+
+```powershell
+# Use whichever CLI already has a valid tenant login; no login is triggered.
+.\infra\scripts\get-foundry-platform-state.ps1
+# Windows and WSL have separate CLI token caches:
+.\infra\scripts\get-foundry-platform-state.ps1 -UseWsl
+```
+
+For a Windows checkout reached via a WSL UNC path, the unsigned-script policy
+can block execution. Where local policy permits, the process-only invocation
+used for this inventory is:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\infra\scripts\get-foundry-platform-state.ps1 -UseWsl
+```
+
+This does not change the machine's execution policy. Follow managed signing
+policy instead if required.
+
+The [script](../infra/scripts/get-foundry-platform-state.ps1) explicitly scopes
+each read to the selected subscription. It emits timestamped JSON containing
+deployment versions, upgrade policies, rate limits, matching regional quotas,
+monitoring resource names and connection categories/auth types. It never lists
+keys, connection credentials or connection strings, never invokes an agent,
+and stops on the first failed read rather than returning a success-shaped empty
+inventory. `traceIngestionVerified=false` is deliberate: configuration inventory
+cannot prove ingestion.
+
+On 2026-10-16, Windows `az account show` returned cached subscription metadata
+but subsequent ARM reads failed with "User ... does not exist in MSAL token
+cache." The existing WSL CLI login worked. **`account show` alone is not an
+authentication check.** If both CLIs fail, a human must sign in using the tenant
+account and commands at the top of this runbook; do not copy token caches,
+credentials or access tokens between environments.
+
+Offline script checks (no Azure login, network calls or extra test packages):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\infra\scripts\tests\get-foundry-platform-state.Tests.ps1
+```
+
+### Model deployment choices and version changes (#49)
+
+Keep the working chat deployment and shared agent untouched. `GlobalStandard`
+is the observed chat deployment type; it is **not** evidence that inference
+stays in Sweden Central. If data residency matters, review the
+[deployment types](https://learn.microsoft.com/azure/ai-foundry/openai/how-to/deployment-types)
+before approving an eval model/type. This MVP does not add an AI Gateway or
+repoint any existing gateway.
+
+For reproducibility the proposed policy is an explicit model version with
+`NoAutoUpgrade`, followed by a deliberate, evaluated version change. This policy
+is **not yet applied** to the chat deployment. Pinning does not prevent model
+retirement; review lifecycle notices and arrange upgrades before retirement.
+See [model versions and upgrades](https://learn.microsoft.com/azure/ai-foundry/openai/concepts/model-versions)
+and [quota management](https://learn.microsoft.com/azure/ai-foundry/openai/how-to/quota).
+
+Repeatable manual procedure, **only after approval of the exact changes**:
+
+1. Refresh the inventory. In Foundry **Models + endpoints**, inspect
+   `gpt-6-luna`: version `2026-09-22`, type `GlobalStandard`, capacity `500`.
+   Capture current settings before editing.
+2. Propose changing **only** its version upgrade policy to `NoAutoUpgrade`,
+   preserving version, capacity, model name and deployment name. Request
+   approval before saving. If the portal cannot preserve those fields, stop.
+3. For the evaluator, select a built-in-evaluator-supported chat model from the
+   current catalog. Record the **exact model/version, proposed deployment name,
+   deployment type, region, capacity, upgrade policy and estimated cost**.
+   Resolve the quota anomaly first. Request approval before creating it on
+   `foundry-agentic-R8N3LD`; do not create another Foundry resource.
+4. After approval, create that deployment in the existing resource, explicitly
+   selecting its version and `NoAutoUpgrade`. Record the result and repeat the
+   inventory. Do not silently reuse chat capacity or fall back to the embedding
+   model. If a separate eval deployment is declined, leave
+   `EVAL_MODEL_DEPLOYMENT` unset and record the user decision.
+5. With separately approved model-call cost, have each owner invoke the chat
+   model with a small fictional prompt; record UTC time, deployment/version,
+   success or error (never credentials). Verify the eval deployment with its
+   intended evaluator. Provisioning `Succeeded` is not invocation evidence.
+6. For a later upgrade, review model retirement, propose the exact new version,
+   get approval, run the eval/release gate and record its outcome. Agent version
+   rollback alone does **not** restore a changed model deployment version.
+
+No eval model/version/capacity is preselected here: current catalog support,
+quota and deployment cost have not been established. #49's two pinned
+deployments acceptance criterion remains open.
+
+### Native tracing setup and demonstration (#5, native subset of #9)
+
+Use [Foundry server-side tracing](https://learn.microsoft.com/azure/foundry/observability/how-to/trace-agent-setup):
+connecting Application Insights enables platform traces without custom
+OpenTelemetry code. No custom workbook, Cosmos join or application-defined
+`run_id`/version dimensions are promised by this MVP.
+
+**Proposed change, not executed:** in `rg-foundry-agentic-pattern`, Sweden
+Central, create workspace `log-foundry-agentic` with an initial 30-day retention
+and workspace-based Application Insights `appi-foundry-agentic`, then connect
+it to `proj-agentic`. Prefer **Project managed identity** authentication if
+available; the portal assigns **Monitoring Metrics Publisher** to that identity
+on Application Insights. This is a shared configuration/RBAC change and incurs
+telemetry costs. Obtain explicit user approval for resource names, region,
+workspace association, retention, ingestion budget and connection/RBAC changes
+before saving anything. Check existing names again to avoid duplicates.
+
+After approval:
+
+1. Azure portal > the existing resource group > **Create > Log Analytics
+   workspace**: use the approved name/region. Set the approved retention.
+   Create **Application Insights**, selecting that workspace. Record actual
+   resource names, regions, retention and the workspace association; if Sweden
+   Central is unavailable, stop for a region decision instead of choosing one
+   silently. Existing AI Search (France Central) and Container Apps (North
+   Europe) exceptions are unrelated and remain unchanged.
+2. Foundry (new) > `proj-agentic` > **Agents > Traces > Connect** > choose the
+   existing `appi-foundry-agentic` > **Connect**. Alternative:
+   **Manage > Project details > Connected resources > Add connection >
+   Application Insights**. Select **Project managed identity** where supported;
+   follow [Entra trace ingestion](https://learn.microsoft.com/azure/foundry/observability/how-to/trace-ingestion-entra-authentication).
+   If unavailable, stop and review the supported authentication method rather
+   than enabling key auth without approval.
+3. Inspect the resulting connection and identity role assignment. Ensure
+   viewers have **Log Analytics Reader** access to the connected telemetry;
+   protected tables can additionally require **Privileged Monitoring Data
+   Reader**. Do not assume subscription resource access proves log-query access.
+4. Refresh the inventory. A connection/resource appearing proves configuration
+   only, not ingestion.
+5. With approval for model-call and telemetry costs, invoke the current
+   **prompt agent `doc-agent`** once with a fictional, no-write scenario.
+   Keep native tool approval; decline any proposed write. Do not invoke the
+   hosted `documentation-agent` stub as proof of model-backed prompt-agent
+   tracing, change instructions, repoint gateways or recreate retired agents.
+6. Record UTC timestamp, exact agent version, model deployment/version,
+   Response ID, Conversation ID and Trace ID. Wait a few minutes for ingestion.
+   In **Agents > Traces**, find the response/trace, open its spans and verify
+   duration/status and model/tool operations. Save a redacted screenshot or
+   trace link. Never commit raw prompt/tool content, tokens or connection strings.
+
+For a minimal correlation check, open **Application Insights > Logs**
+(application scope) and substitute the Trace ID shown by Foundry for
+`<trace-id>`; `operation_Id` is Application Insights' trace correlation field:
+
+```kusto
+let traceId = "<trace-id>";
+union withsource=Table requests, dependencies, traces, exceptions
+| where timestamp > ago(24h)
+| where operation_Id == traceId
+| project timestamp, Table, operation_Id, operation_ParentId
+| order by timestamp asc
+```
+
+This intentionally omits message bodies/custom dimensions. At workspace scope,
+use `AppRequests`, `AppDependencies`, `AppTraces`, `AppExceptions` with
+`TimeGenerated`, `OperationId`, `ParentId` instead. An empty result is **not**
+success: check time range, correct app/workspace, ingestion delay, connection
+auth/RBAC and whether the invocation generated platform traces. Stop and record
+the error if the connection or ingestion cannot be verified.
+
+**Still open:** the native tracing demo has not run, the monitoring connection
+has not been created, and full #9's custom dimensions/Cosmos correlation are
+explicitly deferred rather than completed.
+
+### Handoff to eval/release work
+
+Do not mark the cloud setup complete until these outputs are supplied:
+
+| Output | Current value / required evidence |
+|---|---|
+| `FOUNDRY_PROJECT_ENDPOINT` | Existing endpoint in Outputs below |
+| Agent selector | `doc-agent`; observed latest version `3` on 2026-10-16. Re-read latest; choose an explicit tested version, not the hosted stub or retired spike |
+| `CHAT_MODEL_DEPLOYMENT` / model version | `gpt-6-luna` / `2026-09-22`; currently auto-upgrades, so record the observed version per eval run |
+| `EVAL_MODEL_DEPLOYMENT` / model version | **Unset** until model compatibility, quota, cost and deployment approval are resolved |
+| Capacity evidence | Fresh regional quota + deployment rate limits; resolve chat `current=500`, `limit=250` discrepancy |
+| Tracing destination | Approved App Insights/workspace names and verified project connection/auth; currently absent in the shared RG/project |
+| Native trace proof | UTC time, agent version, deployment/version, Response ID, Conversation ID, Trace ID, redacted Foundry trace link/screenshot and query result |
+| Access proof | Each owner's chat invocation and telemetry read result; not verified here |
+
+Eval/release automation must fail explicitly if its evaluator deployment is
+unset; it must not provision resources, mutate the shared agent or substitute a
+model as a hidden fallback. No tracing connection string is needed by the caller
+for server-side tracing. CI identity/workflow, evaluation cases and release
+mechanics belong to the subsequent work package.
 
 ## Phase 2: Added by the tracks (M1–M3)
 
@@ -67,7 +305,7 @@ az account set -s ME-M365CPI54615665-rwidholm-1
 | **Azure AI Search** + Foundry IQ knowledge base | [#19](https://github.com/wdhm/foundry-agentic-pattern/issues/19) | P2 ✅ `srch-foundry-agentic-r8n3ld` in **France Central** (Sweden Central had no capacity). Run [`setup-foundry-iq.ps1`](../infra/scripts/setup-foundry-iq.ps1); see the [guide](workshop/foundry-iq-guide.md) |
 | **GitHub MCP** connection `github-mcp` (read-only, fine-grained token) | [#20](https://github.com/wdhm/foundry-agentic-pattern/issues/20) | P2 ✅ Run [`setup-github-mcp.ps1`](../infra/scripts/setup-github-mcp.ps1); see the [guide](workshop/github-mcp-guide.md). The token expires after 90 days; re-run the script with a new one |
 | **Agent identity** role assignments (DevOps, Search) | [#2](https://github.com/wdhm/foundry-agentic-pattern/issues/2), [#28](https://github.com/wdhm/foundry-agentic-pattern/issues/28) | P2 (Azure DevOps ✅, see below). GitHub doesn't accept Entra tokens, so it uses the token above |
-| **AI Gateway (APIM)**: token limits + FinOps tagging | [#3](https://github.com/wdhm/foundry-agentic-pattern/issues/3), [#23](https://github.com/wdhm/foundry-agentic-pattern/issues/23) | P3 |
+| **AI Gateway (APIM)**: token limits + FinOps tagging | [#3](https://github.com/wdhm/foundry-agentic-pattern/issues/3), [#23](https://github.com/wdhm/foundry-agentic-pattern/issues/23) | P3; deferred from the approved platform-first MVP |
 | Hosted agent deployment | [#7](https://github.com/wdhm/foundry-agentic-pattern/issues/7) | P1 |
 | Teams / M365 publish | [#4](https://github.com/wdhm/foundry-agentic-pattern/issues/4) | P3 |
 
@@ -187,9 +425,9 @@ Store these in a local `.env` (git-ignored). Never commit secrets; prefer Entra 
 | `AZURE_LOCATION` | `swedencentral` |
 | `FOUNDRY_PROJECT_ENDPOINT` | `https://foundry-agentic-r8n3ld.services.ai.azure.com/api/projects/proj-agentic` |
 | `CHAT_MODEL_DEPLOYMENT` | `gpt-6-luna` |
-| `EVAL_MODEL_DEPLOYMENT` | |
-| `APPLICATIONINSIGHTS_CONNECTION_STRING` | App Insights → Overview |
-| `COSMOS_ENDPOINT` | Cosmos DB → Overview |
+| `EVAL_MODEL_DEPLOYMENT` | **Unset**: no separate eval deployment observed 2026-10-16; approval/quota decision pending |
+| `APPLICATIONINSIGHTS_CONNECTION_STRING` | **Not required for MVP native server-side tracing**; do not retrieve or commit it |
+| `COSMOS_ENDPOINT` | **Not required for MVP**; Cosmos DB deferred |
 | `AZURE_DEVOPS_ORG_URL` | `https://dev.azure.com/foundry-agentic` |
 | `AZURE_DEVOPS_PROJECT` | `integration-team` |
 
@@ -197,6 +435,7 @@ Store these in a local `.env` (git-ignored). Never commit secrets; prefer Entra 
 
 | Date | Who | Change |
 |---|---|---|
+| 2026-10-16 | Louise / Copilot | Read-only WSL CLI inventory: recorded model versions, auto-upgrade policies, rate limits, quota discrepancy and missing monitoring connection; added repeatable inventory and approval-gated model/native-tracing procedures (#5, #49, native subset of #9). No cloud writes or invocation/ingestion verification |
 | 2026-10-13 | John | Confirmed P1 MVP scope; configured `doc-agent-spike` v4 with native structured output and demonstrated validated contract v1 without tools (#12) |
 | 2026-10-08 | John | Built and deployed `documentation-agent` hosted stub v2 from the existing ACR; verified valid and invalid contract requests remotely (#7) |
 | 2026-10-07 | Rickard | Resource group, Foundry resource + project created |
