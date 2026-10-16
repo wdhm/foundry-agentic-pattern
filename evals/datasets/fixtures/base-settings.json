@@ -1,0 +1,16 @@
+{
+  "source": {
+    "serviceBusQueue": "orders-confirmed"
+  },
+  "erp": {
+    "baseUrl": "https://erp.fabrikam.example",
+    "salesOrderPath": "/api/v2/salesorders"
+  },
+  "retry": {
+    "maxAttempts": 3,
+    "delaySeconds": 5
+  },
+  "mapping": {
+    "defaultCurrency": "SEK"
+  }
+}
