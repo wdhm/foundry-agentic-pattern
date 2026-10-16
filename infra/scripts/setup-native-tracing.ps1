@@ -6,7 +6,8 @@
     Requires the monitoring setup approval recorded in docs/setup.md.
     Existing resources must match the approved configuration; conflicting
     resources or AppInsights connections cause an explicit stop, not an update.
-    No keys, agents, models or existing connections are read or changed. The API
+    No keys or connection credentials are requested. Agents and models are not
+    changed; existing connection metadata is read but never rewritten. The API
     requires Application Insights routing metadata, passed internally without
     printing it; key-based ingestion stays disabled. Reruns verify configuration
     without recreating resources.
