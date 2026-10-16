@@ -54,11 +54,97 @@ connections can be reused without changing the prompt agent. The current gateway
 serves a single agent identity; running onboarding re-points it. Do not run
 onboarding as an incidental deployment step.
 
-If isolated hosted ADO access cannot reuse existing configuration safely, P2 must
-propose a separately scoped gateway or explicitly coordinated identity transition.
-That proposal needs its own resource/SKU/cost, consent, entitlement and permission
-review. **Neither new infrastructure nor gateway repointing is approved here.**
-The deployment owner must wait rather than downgrade to a stub.
+If hosted ADO access cannot reuse the current configuration safely, P2 must
+propose a reviewed extension of the existing gateway, a separately scoped gateway,
+or an explicitly coordinated identity transition. That proposal needs its own
+code/configuration, cost, consent, entitlement and permission review.
+**Neither shared gateway changes, new infrastructure nor gateway repointing is
+approved here.** The deployment owner must wait rather than downgrade to a stub.
+
+## Reuse the prompt agent's tools
+
+**Read-only follow-up, 2026-10-16:** reusing the existing backends and project
+connections is the preferred preparation path. An empty toolbox does not mean
+the tools must be rebuilt or that a second gateway is necessarily required.
+
+| Existing backend / connection | Smallest hosted integration |
+|-------------------------------|-----------------------------|
+| Foundry IQ / `kb-doc-agent-mcp` | Reference the existing connection in a toolbox as `knowledge`, allowing only `knowledge_base_retrieve`. Preserve project-managed-identity auth and existing Search Index Data Reader grant. No hosted Search grant is established as necessary. |
+| GitHub MCP / `github-mcp` | Reference the existing CustomKeys connection as `github`, allowing only `get_file_contents`. Keep the readonly endpoint and credentials on the connection; do not retrieve or copy the PAT into the container. |
+| ADO / `ado-mcp-proxy` | Reuse the same Microsoft remote MCP backend/data. The current gateway cannot accept the hosted identity unchanged, even if an app role is granted; it requires a reviewed gateway extension or separately approved alternative. |
+
+Foundry officially supports [toolbox entries referencing existing project
+connections](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/toolbox#create-a-toolbox-version).
+[Authentication remains on those connections](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/tool-authentication),
+separate from the hosted identity's access to the toolbox itself. P1 already
+uses the [supported `FoundryToolbox` integration](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/use-toolbox-hosted-agent),
+including request call-ID propagation. Do not copy the prompt agent's identity or
+forward the assessment to the prompt agent as a workaround.
+
+### Exact ADO constraint
+
+The live gateway still uses image `ado-mcp:0.2.1`, the prompt identity/blueprint,
+and one configured identity chain. Source inspection shows two independent
+constraints:
+
+- [`TokenValidator.validate`](../../src/tools/ado_mcp/ado_mcp/inbound_auth.py)
+  rejects any validated token whose `azp`/`appid` differs from the single configured
+  caller. `server.py` binds that caller to `AGENT_IDENTITY_CLIENT_ID`.
+- [`AgentUserTokenProvider`](../../src/tools/ado_mcp/ado_mcp/agent_user_token.py)
+  always exchanges the configured blueprint/identity/agent-user chain and caches
+  one downstream token. Simply accepting another caller would still use the
+  prompt agent's user, breaking attribution and isolation.
+
+Narrow Graph reads found no user linked to the hosted identity, no hosted
+delegated grants, no hosted gateway app-role assignment, and no federation of
+the existing gateway managed identity on the hosted blueprint. The gateway app
+currently exposes only `Mcp.Tools.ReadWrite.All`. These are authorization/configuration
+gaps, not evidence that another compute resource is mandatory.
+
+The [agent-user protocol](https://learn.microsoft.com/entra/agent-id/agent-user-oauth-flow)
+binds an agent user to one agent identity. Sharing the prompt agent's user or
+swapping its client ID is not a supported shortcut. Direct MCP wiring also does
+not remove the gateway's checks or Azure DevOps' need for the agent-user flow.
+
+### Smallest next P1/P2 decision
+
+The user prefers coordination with P1/P2 over duplicate infrastructure or custom
+compatibility work. **No gateway implementation is included in this preparation.**
+
+P2 should decide whether to transition the existing gateway from the prompt agent
+to the hosted agent. This reuses the existing service and ADO connection, but
+requires the hosted agent's own linked agent user, read-only ADO membership and
+delegated consent, gateway app-role authorization and blueprint federation.
+The gateway's three `AGENT_*` settings then identify that hosted chain.
+**That change would stop the old prompt agent's ADO access**; it is not a
+transparent permission addition and requires explicit P1/P2 coordination.
+
+P2 must review appropriate ADO access level/cost, scopes
+`Ado.Mcp.Tools wit.read wiki.read`, read-only upstream filtering and a suitable
+gateway role. The only current gateway role is read/write; do not silently grant
+it or run the unmodified onboarding script, which grants Contributors/write scope
+and re-points the gateway unless skipped.
+
+If both agents must retain ADO access simultaneously, the current gateway cannot
+provide it by configuration alone. P2 must separately own and review a multi-identity
+gateway change or alternative, including caller/token-cache/MCP-session isolation.
+A new gateway is not automatically required, and none is proposed for execution.
+
+Once P2 resolves that decision, one versioned toolbox can reference the existing
+three connections with labels `knowledge`, `github`, `ado`, exposing only the four
+P1 read tools. P1 supplies the assessment configuration and retains its action,
+repository/SHA/project/wiki guards. No new Foundry agent, backend data, Search
+service or copied credentials are needed for this reuse plan.
+
+Remaining verification: actual toolbox `tools/list` must return P1's four
+`server_label___tool_name` names with compatible arguments/results. P1 expects Git
+`documents[].content`, wiki `page` plus `eTag`, and work-item `fields` plus `rev`;
+connection reuse alone does not prove those shapes. Hosted model/toolbox access
+must be verified before deciding whether an additional project role is needed.
+Before a live rollout, require offline tests for unknown callers, token-cache and
+MCP-session isolation, hosted write rejection and unchanged prompt behavior.
+Later, separately approved read-only integration must verify correct downstream
+identity and source evidence. No paid invocation was performed for this analysis.
 
 ## Container preparation
 
