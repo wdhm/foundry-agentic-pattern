@@ -4,6 +4,11 @@ The **Documentation Agent**: a Microsoft Foundry **hosted agent** (container) bu
 
 ## Hosted assessment implementation (P1, #13)
 
+For the separate #1 approval experiment, see the
+[native approval spike guide](../../../docs/workshop/hosted-approval-spike.md).
+It has its own local-only entry point and a dummy state receipt; it does not
+enable writes in assessment mode or change the deployed agent.
+
 The main runtime is now the hosted Python app ([ADR 0024](../../../docs/adr/0024-hosted-documentation-runtime.md)).
 Its assessment path is implemented locally, but **not deployed or verified
 against live tools**. P2 must supply the toolbox endpoint and source access;

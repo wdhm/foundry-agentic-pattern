@@ -212,6 +212,15 @@ hosted implementation. `doc-agent:3` continues working as the prompt reference;
 deployed `documentation-agent:2` is still the stub. Do not count the prompt
 agent's earlier scenario passes as hosted migration acceptance.
 
+### Approval spike status (P1, #1)
+
+The native approval experiment is local-only, started explicitly with
+`python -m documentation_agent.approval_spike --state-dir .azure\approval-spike-local`.
+It writes only dummy approval records through the SDK's local state backend.
+See the [walkthrough](workshop/hosted-approval-spike.md). No Azure resource,
+toolbox, connection, gateway, deployed agent or Teams application was changed.
+Live Toolbox integration and Teams publishing/channel verification remain pending.
+
 ## Outputs (environment values)
 
 Store these in a local `.env` (git-ignored). Never commit secrets; prefer Entra ID auth over keys.
