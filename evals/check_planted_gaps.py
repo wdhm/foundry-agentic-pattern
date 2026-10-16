@@ -1,6 +1,6 @@
 """Check an agent result against a scenario (planted gaps or information missing).
 
-Standard library only. Reports recall of the expected findings or missing
+Uses the shared Pydantic contract. Reports recall of the expected findings or missing
 information, evidence integrity and a no-fabrication guard on proposals, which
 are the MVP versions of the eval-gate metrics in evals/README.md.
 
@@ -22,11 +22,40 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+from contracts.evidence import trace_evidence_problems
+
 DEFAULT_SCENARIO = Path(__file__).parent / "datasets" / "order-sync-retry.json"
 DEFAULT_ENDPOINT = "https://foundry-agentic-r8n3ld.services.ai.azure.com/api/projects/proj-agentic"
 
 
-def invoke_agent(endpoint: str, agent: str, prompt: str) -> dict:
+def response_analysis(raw: dict) -> dict:
+    if raw.get("status") != "completed":
+        raise ValueError(f"Agent did not complete: {raw.get('status')!r}; error={raw.get('error')!r}")
+    messages = []
+    for item in raw.get("output", []):
+        kind = item.get("type")
+        if kind == "reasoning":
+            continue
+        if kind in {"mcp_call", "mcp_list_tools"}:
+            if item.get("error") or (kind == "mcp_call" and item.get("status") != "completed"):
+                raise ValueError(f"MCP failure: {item.get('server_label')}.{item.get('name')}: {item.get('error')}")
+            continue
+        if kind != "message" or item.get("role") != "assistant":
+            raise ValueError(f"Unexpected response item {kind!r}; approvals are never submitted by this checker.")
+        for part in item.get("content", []):
+            if part.get("type") != "output_text":
+                raise ValueError("Agent refused or returned non-text output.")
+            messages.append(part["text"])
+    if len(messages) != 1:
+        raise ValueError("Expected one structured analysis message.")
+    from contracts.v1 import AnalysisOutput
+
+    return AnalysisOutput.model_validate_json(messages[0]).model_dump(mode="json")
+
+
+def invoke_agent(
+    endpoint: str, agent: str, prompt: str, agent_version: str | None = None, response_path: Path | None = None
+) -> dict:
     az = shutil.which("az") or "az"
     token = subprocess.run(
         [
@@ -44,7 +73,10 @@ def invoke_agent(endpoint: str, agent: str, prompt: str) -> dict:
         capture_output=True,
         text=True,
     ).stdout.strip()
-    body = json.dumps({"input": prompt, "agent_reference": {"name": agent, "type": "agent_reference"}}).encode()
+    reference = {"name": agent, "type": "agent_reference"}
+    if agent_version:
+        reference["version"] = agent_version
+    body = json.dumps({"input": prompt, "agent_reference": reference}).encode()
     request = urllib.request.Request(
         f"{endpoint}/openai/v1/responses",
         data=body,
@@ -56,19 +88,19 @@ def invoke_agent(endpoint: str, agent: str, prompt: str) -> dict:
     )
     with urllib.request.urlopen(request, timeout=300) as response:
         raw = json.load(response)
+    if response_path:
+        response_path.write_text(json.dumps(raw, indent=2), encoding="utf-8")
     tool_calls = [
         f"{item.get('server_label')}.{item.get('name')}"
         for item in raw.get("output", [])
         if item.get("type") == "mcp_call"
     ]
     print("Tool calls:", ", ".join(tool_calls) or "none")
-    text = "".join(
-        part.get("text", "")
-        for item in raw.get("output", [])
-        if item.get("type") == "message"
-        for part in item.get("content", [])
-    )
-    return json.loads(text)
+    result = response_analysis(raw)
+    problems = trace_evidence_problems(raw, result)
+    if problems:
+        raise ValueError("Evidence verification failed: " + "; ".join(problems))
+    return result
 
 
 def text_of(value: object) -> str:
@@ -141,17 +173,38 @@ def main() -> int:
     parser.add_argument("--scenario", type=Path, default=DEFAULT_SCENARIO)
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--result", type=Path, help="Saved agent result (JSON)")
+    source.add_argument("--response", type=Path, help="Check saved raw response, schema and source-read evidence")
     source.add_argument("--invoke", action="store_true", help="Invoke the agent with the scenario prompt")
     parser.add_argument("--endpoint", default=os.environ.get("FOUNDRY_PROJECT_ENDPOINT", DEFAULT_ENDPOINT))
     parser.add_argument("--save", type=Path, help="Write the agent result to this file")
+    parser.add_argument(
+        "--save-response", type=Path, help="Save raw response/tool evidence locally (may contain source data)"
+    )
+    parser.add_argument("--agent-version", help="Pin invocation to a reviewed Foundry version")
     parser.add_argument("--min-recall", type=float, default=1.0)
     args = parser.parse_args()
+    if not 0 <= args.min_recall <= 1:
+        parser.error("--min-recall must be between 0 and 1.")
+    if not args.invoke and (args.agent_version or args.save_response):
+        parser.error("--agent-version and --save-response apply only to --invoke.")
 
     scenario = json.loads(args.scenario.read_text(encoding="utf-8"))
     if args.invoke:
-        result = invoke_agent(args.endpoint, scenario["agent"], scenario["prompt"])
+        result = invoke_agent(
+            args.endpoint, scenario["agent"], scenario["prompt"], args.agent_version, args.save_response
+        )
+    elif args.response:
+        raw = json.loads(args.response.read_text(encoding="utf-8"))
+        result = response_analysis(raw)
+        problems = trace_evidence_problems(raw, result)
+        if problems:
+            raise ValueError("Evidence verification failed: " + "; ".join(problems))
     else:
+        print("Checking a saved analysis only; source-read evidence cannot be verified without --response.")
         result = json.loads(args.result.read_text(encoding="utf-8"))
+        from contracts.v1 import AnalysisOutput
+
+        result = AnalysisOutput.model_validate(result).model_dump(mode="json")
     if args.save:
         args.save.write_text(json.dumps(result, indent=2), encoding="utf-8")
 

@@ -2,6 +2,111 @@
 
 The **Documentation Agent**: a Microsoft Foundry **hosted agent** (container) built with the **Microsoft Agent Framework** ([ADR 0009](../../../docs/adr/0009-hosted-agent-runtime.md)).
 
+## Hosted assessment implementation (P1, #13)
+
+The main runtime is now the hosted Python app ([ADR 0024](../../../docs/adr/0024-hosted-documentation-runtime.md)).
+Its assessment path is implemented locally, but **not deployed or verified
+against live tools**. P2 must supply the toolbox endpoint and source access;
+the shared gateway has not been switched away from the working prompt agent.
+
+| Mode | Input | Behaviour |
+|---|---|---|
+| `DOCUMENTATION_MODE=stub` (default) | Contract v0 | Existing deterministic #7 demo; no model or tool calls |
+| `DOCUMENTATION_MODE=assessment` | Contract v1 | Direct Foundry model call through Agent Framework, read-only toolbox tools, validated result |
+
+The default remains stub for compatibility. Assessment mode fails startup if
+required configuration is absent; it never silently falls back to a stub result.
+It does **not** invoke `doc-agent` or forward to another prompt agent.
+
+### Assessment flow
+
+```text
+AgentRequest v1 -> validate -> per-request model/tool loop
+    -> read-only action guard -> P2 toolbox -> source reads
+    -> validate AnalysisOutput and observed evidence -> AgentResult v1
+```
+
+Each invocation owns its clients, credentials and tool evidence; state is not
+shared between requests. The model receives the versioned prompt/policy packaged
+in `app/prompts/` and `app/policies/`. It produces only `AnalysisOutput`. The
+runtime adds the input request ID, model configuration, application version
+`0.2.0` (not the Foundry deployment version), and instruction/policy hashes.
+No unvalidated model tokens are streamed to the caller.
+
+The official `FoundryToolbox` adapter handles authentication and platform call-ID
+forwarding. Credentials use managed identity by default; explicit `azure_cli`
+mode is for local development. Tool/client failures, missing tools, refusals,
+invalid output, unmatched evidence and a 180-second invocation timeout fail
+explicitly, not as successful assessments.
+
+### P2 integration inputs (not provisioned by this change)
+
+P2 provides a toolbox in the existing project with these exact exposed names:
+
+| Tool | P1 runtime restriction |
+|---|---|
+| `knowledge___knowledge_base_retrieve` | Read the documentation standard; required before accepting any assessment |
+| `github___get_file_contents` | Requested repository and exact commit SHA; explicit relative path |
+| `ado___wiki` | `action=get_page`, configured project/wiki, requested page path |
+| `ado___wit_work_item` | `action=get`, configured project, requested integer work-item ID |
+
+The triple underscore is Foundry's MCP tool namespace separator. No write tools,
+tool-search dispatchers, code execution, unknown tools or automatic approvals
+are exposed. Function middleware checks actions **before** dispatch, so a
+multi-action `wiki` tool cannot be used for updates. `never_require` applies only
+to the four filtered read tools; the runtime rejects write actions independently
+of toolbox approval metadata. Enabling writes requires #15, not a configuration
+toggle on this assessment runner.
+
+P2 must also verify the hosted identity's model/tool permissions, existing
+connection authentication, and the ADO gateway transition. The gateway serves
+one agent identity; do not run onboarding to switch it without coordination.
+This implementation creates no toolbox, connection or role assignment.
+
+Evidence verification reuses `contracts.evidence`, also used by the scenario
+checker. It supports P2's documented Git `documents[].content`, wiki
+`page`/`eTag`, and work-item `fields`/`rev` outputs. Different output shapes must
+be verified during integration; unsupported evidence is rejected. This matches
+actual source excerpts, not the truth of every generated inference.
+
+### Run assessment mode after P2 supplies access
+
+Install `.[agent,prompt,dev]` from the repo root. Set the environment explicitly;
+the `.env.sample` is a reference and is **not loaded automatically**:
+
+```powershell
+$env:DOCUMENTATION_MODE = "assessment"
+$env:DOCUMENTATION_AUTH_MODE = "azure_cli"
+$env:DOCUMENTATION_PROJECT_ENDPOINT = "<existing-project-endpoint>"
+$env:TOOLBOX_ENDPOINT = "<P2-toolbox-MCP-endpoint>"
+$env:AZURE_AI_MODEL_DEPLOYMENT_NAME = "<existing-chat-deployment>"
+$env:DOCUMENTATION_MODEL_VERSION = "<actual-deployed-model-version>"
+$env:DOCUMENTATION_ADO_PROJECT = "<ADO-project>"
+$env:DOCUMENTATION_ADO_WIKI = "<ADO-wiki>"
+.\.venv\Scripts\python.exe -m documentation_agent.main
+```
+
+Invoke `/responses` as shown below, using `examples/assessment-request.json`
+instead of the v0 example. That file targets the same pinned fictional sample
+as the planted-gap scenario. The container needs these same values, but use
+`DOCUMENTATION_AUTH_MODE=managed_identity` in Foundry. Replace placeholders
+before deployment; do not commit credentials or add CLI credentials to an image.
+
+`agent.yaml` intentionally remains a stub definition until the P2 configuration
+and coordinated deployment are ready. No cloud assessment result is claimed.
+
+### Local verification
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests\agents\test_hosted_assessment.py
+```
+
+These checks exercise the HTTP wrapper and real Agent Framework tool middleware
+with in-memory model/tool doubles: valid/invalid requests, writes blocked before
+execution, pinned source access, output/evidence validation, timeout, streaming,
+per-request isolation and resource cleanup. They are not a substitute for the
+live hosted scenarios after P2 integration.
+
 ## M1 local stub (#7)
 
 The same image is deployed as `documentation-agent` version **2** in the shared
@@ -20,7 +125,7 @@ model and prompt versions are `not-applicable`. The application version is
 From the repository root (PowerShell, Python 3.11+):
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -e ".[agent,dev]"
+.\.venv\Scripts\python.exe -m pip install -e ".[agent,prompt,dev]"
 .\.venv\Scripts\python.exe -m documentation_agent.main
 ```
 
@@ -77,12 +182,12 @@ if ($pipLine) {
   $pipIndex = ($pipLine -split '=', 2)[1].Trim(" '")
   docker build --platform linux/amd64 --build-arg "PIP_INDEX_URL=$pipIndex" `
     -f .\src\agents\documentation-agent\Dockerfile `
-    -t documentation-agent:0.1.0 .
+    -t documentation-agent:0.2.0 .
 } else {
   docker build --platform linux/amd64 -f .\src\agents\documentation-agent\Dockerfile `
-    -t documentation-agent:0.1.0 .
+    -t documentation-agent:0.2.0 .
 }
-docker run --rm -p 127.0.0.1:8088:8088 documentation-agent:0.1.0
+docker run --rm -p 127.0.0.1:8088:8088 documentation-agent:0.2.0
 ```
 
 The image uses Python 3.13, runs as a non-root user and listens on port 8088.
@@ -136,6 +241,9 @@ documentation-agent/
     └── request.json      # Fictional contract example
 ```
 
-Versioned prompts and policies arrive with the analysis workflow (#13).
+`app/assessment.py`, `app/read_policy.py` and `app/settings.py` implement
+assessment mode; `app/prompts/` and `app/policies/` hold its versioned instructions.
+Cosmos persistence and approval-gated writes above describe the original target,
+not functionality implemented or reintroduced by #13.
 
 **Owner:** P1 (Agent architecture): John ([@johnsward](https://github.com/johnsward))
