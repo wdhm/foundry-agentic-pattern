@@ -1,0 +1,304 @@
+{
+  "$defs": {
+    "AgentRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "context": {
+          "$ref": "#/$defs/RequestContext"
+        },
+        "contract_version": {
+          "const": "1.0.0",
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "correlation_id": {
+          "format": "uuid",
+          "title": "Correlation Id",
+          "type": "string"
+        },
+        "documentation_standard_ref": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Documentation Standard Ref",
+          "type": "string"
+        },
+        "request_id": {
+          "format": "uuid",
+          "title": "Request Id",
+          "type": "string"
+        },
+        "requested_by": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Requested By",
+          "type": "string"
+        },
+        "subject": {
+          "$ref": "#/$defs/Subject"
+        },
+        "trigger": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Trigger",
+          "type": "string"
+        }
+      },
+      "required": [
+        "contract_version",
+        "request_id",
+        "correlation_id",
+        "trigger",
+        "requested_by",
+        "subject",
+        "documentation_standard_ref"
+      ],
+      "title": "AgentRequest",
+      "type": "object"
+    },
+    "RequestContext": {
+      "additionalProperties": false,
+      "properties": {
+        "adr_refs": {
+          "items": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "title": "Adr Refs",
+          "type": "array"
+        },
+        "wiki_page_paths": {
+          "items": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "title": "Wiki Page Paths",
+          "type": "array"
+        },
+        "work_item_ids": {
+          "items": {
+            "exclusiveMinimum": 0,
+            "type": "integer"
+          },
+          "title": "Work Item Ids",
+          "type": "array"
+        }
+      },
+      "title": "RequestContext",
+      "type": "object"
+    },
+    "SourceSnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "availability": {
+          "enum": [
+            "available",
+            "unavailable"
+          ],
+          "title": "Availability",
+          "type": "string"
+        },
+        "content": {
+          "anyOf": [
+            {
+              "maxLength": 200000,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Content"
+        },
+        "id": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Id",
+          "type": "string"
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sha256"
+        },
+        "source": {
+          "enum": [
+            "git",
+            "wiki",
+            "work_item"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "uri": {
+          "pattern": "^https://[^\\s]+$",
+          "title": "Uri",
+          "type": "string"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Version"
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "uri",
+        "availability",
+        "version",
+        "content",
+        "sha256"
+      ],
+      "title": "SourceSnapshot",
+      "type": "object"
+    },
+    "Subject": {
+      "additionalProperties": false,
+      "properties": {
+        "changed_paths": {
+          "items": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "title": "Changed Paths",
+          "type": "array"
+        },
+        "commit_sha": {
+          "description": "Full Git commit SHA; branches and short SHAs are not accepted.",
+          "pattern": "^[0-9a-fA-F]{40}$",
+          "title": "Commit Sha",
+          "type": "string"
+        },
+        "pr_reference": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pr Reference"
+        },
+        "repo": {
+          "description": "Repository URL or owner/repository identifier.",
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Repo",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo",
+        "commit_sha"
+      ],
+      "title": "Subject",
+      "type": "object"
+    },
+    "SuppliedStandard": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "maxLength": 200000,
+          "minLength": 1,
+          "title": "Content",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "content",
+        "sha256"
+      ],
+      "title": "SuppliedStandard",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "interface_version": {
+      "const": "1.0.0",
+      "title": "Interface Version",
+      "type": "string"
+    },
+    "request": {
+      "$ref": "#/$defs/AgentRequest"
+    },
+    "source_mode": {
+      "enum": [
+        "live_sources",
+        "supplied_sources"
+      ],
+      "title": "Source Mode",
+      "type": "string"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/SourceSnapshot"
+      },
+      "maxItems": 20,
+      "title": "Sources",
+      "type": "array"
+    },
+    "standard": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SuppliedStandard"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "task": {
+      "anyOf": [
+        {
+          "maxLength": 8000,
+          "minLength": 1,
+          "pattern": "\\S",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Task"
+    }
+  },
+  "required": [
+    "interface_version",
+    "source_mode",
+    "request"
+  ],
+  "title": "EvaluationRequest",
+  "type": "object"
+}

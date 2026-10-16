@@ -146,6 +146,13 @@ See the [five-minute prompt-agent demo](../../docs/workshop/structured-output-gu
 and [ADR 0023](../../docs/adr/0023-versioned-structured-output-contract.md).
 
 ## Rules
+
+The optional hosted test transport is defined separately in `contracts.evaluation`
+(`EvaluationRequest` / `EvaluationResponse`, interface `1.0.0`). It does not
+change AgentRequest or AgentResult v1. See the
+[runtime interface specification](../agents/documentation-agent/EVALUATION_INTERFACE.md).
+Its generated schemas live under `schema/evaluation/`.
+
 - Breaking changes bump `contract_version` and require an ADR.
 - JSON Schema is generated from Pydantic, never edited manually.
 

@@ -3,19 +3,22 @@ import hashlib
 import json
 from pathlib import Path
 from typing import Protocol
+from uuid import uuid4
 
 from agent_framework import AgentRunInputs
 from agent_framework.exceptions import AgentInvalidRequestException
 from pydantic import ValidationError
 
+from contracts.evaluation import EvaluationResponse, ExecutionRecord
 from contracts.evidence import trace_evidence_problems
 from contracts.v1 import CONTRACT_VERSION, AgentRequest, AgentResult, AnalysisOutput, Provenance, assemble_result
 
 from .agent import DocumentationAgent, request_text
+from .execution import CaptureModel
 from .read_policy import READ_TOOLS, ReadOnlyPolicy, parse_read_result
 from .settings import AssessmentSettings
 
-APP_VERSION = "0.2.0"
+APP_VERSION = "0.3.0"
 APP_DIR = Path(__file__).parent
 
 
@@ -51,9 +54,15 @@ class FoundryAnalysisRunner:
             missing = set(READ_TOOLS) - available
             if missing:
                 raise RuntimeError(f"P2 toolbox is missing required read tools: {', '.join(sorted(missing))}")
+            if guard.record is not None:
+                guard.record.tool_schemas = [
+                    {"name": function.name, "description": function.description, "parameters": function.parameters()}
+                    for function in toolbox.functions
+                ]
             client = FoundryChatClient(
                 project_client=project,
                 model=self.settings.model,
+                middleware=[CaptureModel(guard.record)] if guard.record is not None else None,
                 function_invocation_configuration={
                     "max_iterations": 20,
                     "max_function_calls": 30,
@@ -130,7 +139,31 @@ class AssessmentAgent(DocumentationAgent):
             raise AgentInvalidRequestException(
                 f"Invalid AgentRequest v1: {exc.errors(include_input=False, include_url=False)}"
             ) from None
-        guard = ReadOnlyPolicy(request, self.settings)
+        return await self.assess(request)
+
+    async def evaluate_report(self, request: AgentRequest) -> EvaluationResponse:
+        from azure.ai.agentserver.core import get_request_context
+
+        context = get_request_context()
+        record = ExecutionRecord(
+            execution_id=uuid4(),
+            request_id=request.request_id,
+            correlation_id=request.correlation_id,
+            source_mode="live_sources",
+            instructions=self.instructions,
+            platform_call_id=context.call_id,
+            platform_session_id=context.session_id,
+        )
+        result = await self.assess(request, record)
+        if not record.model_calls or not record.tool_schemas:
+            raise ValueError("Live evaluation did not capture model calls and discovered tool schemas.")
+        if any(call.get("status") != "completed" for call in record.model_calls):
+            raise ValueError("Live evaluation includes an incomplete model call.")
+        record.status = "completed"
+        return EvaluationResponse(result=result, execution=record)
+
+    async def assess(self, request: AgentRequest, record: ExecutionRecord | None = None) -> AgentResult:
+        guard = ReadOnlyPolicy(request, self.settings, record)
         async with asyncio.timeout(self.settings.timeout_seconds):
             text = await self.runner.analyze(request, self.instructions, guard)
         try:
