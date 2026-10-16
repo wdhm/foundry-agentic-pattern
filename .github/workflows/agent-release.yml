@@ -1,0 +1,88 @@
+name: Prompt-agent release evaluation
+
+on:
+  workflow_dispatch:
+    inputs:
+      execute_approved_cloud:
+        description: "Separately approved billable candidate creation and evaluation (never promotion)"
+        type: boolean
+        default: false
+      plan_path:
+        description: "Reviewed release-plan JSON committed on main; no secrets"
+        type: string
+        default: release-plan.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prompt-agent-release
+  cancel-in-progress: false
+
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -e '.[prompt,dev]'
+      - run: python -m pytest tests/release tests/evals tests/tools tests/contracts -q
+      - run: python -m ruff check src/tools/release.py src/tools/release_sources.py tests/release
+      - run: python -m mypy src/tools/release.py src/tools/release_sources.py
+      - run: python -m contracts.generate_schema --check
+
+  candidate-evaluation:
+    needs: offline
+    if: >-
+      inputs.execute_approved_cloud &&
+      github.ref == 'refs/heads/main' &&
+      vars.P3_RELEASE_ENABLED == 'true'
+    environment: p3-agent-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PLAN_PATH: ${{ inputs.plan_path }}
+      EVAL_MODEL_DEPLOYMENT: ${{ vars.EVAL_MODEL_DEPLOYMENT }}
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -e '.[prompt,dev]'
+      - name: Fail before login on missing local prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$EVAL_MODEL_DEPLOYMENT"
+          test -n "$AZURE_CLIENT_ID"
+          test -n "$AZURE_TENANT_ID"
+          test -n "$AZURE_SUBSCRIPTION_ID"
+          python -c 'import os; from pathlib import Path; from tools.release import ReleasePlan; from tools.release_sources import load_cases; p=Path(os.environ["PLAN_PATH"]).resolve(); assert p.is_relative_to(Path.cwd()), "Plan must be in trusted checkout"; ReleasePlan.model_validate_json(p.read_text()); load_cases(Path("evals/datasets/suite.json"), Path.cwd())'
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Create isolated candidate and evaluate; never promote
+        run: python -m tools.release --plan "$PLAN_PATH" --output evals/results/release --execute-approved-cloud
+      - name: Retain restricted diagnostic artifacts, including blocked decisions
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prompt-agent-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: evals/results/release/
+          retention-days: 3
+          if-no-files-found: warn
