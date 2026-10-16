@@ -501,6 +501,52 @@ performed. Hosted `documentation-agent` version 2 was not changed.
 Reproduction commands and API gotchas:
 [structured-output workshop guide](workshop/structured-output-guide.md).
 
+### Gap analysis on the existing prompt agent (P1, #13)
+
+On 2026-10-16, `doc-agent` version **3** was created using the versioned
+[assessment prompt and policy](../src/agents/documentation-prompt/README.md).
+Version 2 was an intermediate attempt that found the planted gaps but chose an
+overly broad scope and the wrong overall status. Version 3 restricts change
+reviews to the requested change, prioritizes unavailable facts when the task
+requires them, and requests verbatim evidence excerpts.
+
+The existing model, tools, approval rules, output schema and identity are retained.
+Both MVP scenarios passed against version 3, including matching evidence URI,
+version and excerpt to actual source-read results. No writes or approval
+submissions were performed; no infrastructure or hosted-agent changes were made.
+Version 1 remains the prior configuration; consumers pinned to it are unchanged.
+
+Reproduction commands, expected results and limitations:
+[gap-analysis guide](workshop/gap-analysis-guide.md). Source-bearing response
+artifacts are saved only in ignored `evals/results/`.
+
+### Hosted migration status (P1, #13; 2026-10-16)
+
+P1 is implementing the assessment inside the existing hosted Python app, per
+[ADR 0024](adr/0024-hosted-documentation-runtime.md). The application has an
+opt-in v1 assessment mode and retains the v0 stub default. Its new code has
+only been checked locally with model/tool doubles, not deployed.
+
+A read-only toolbox inventory returned no toolbox resources in `proj-agentic`.
+The existing source connections alone do not supply a toolbox MCP endpoint.
+P2 must provide that endpoint and verify the hosted identity's source/model
+access. The [hosted README](../src/agents/documentation-agent/README.md)
+specifies the four read tools and runtime configuration.
+
+No toolbox, connection, permission or gateway change was made during local
+hosted implementation. `doc-agent:3` continues working as the prompt reference;
+deployed `documentation-agent:2` is still the stub. Do not count the prompt
+agent's earlier scenario passes as hosted migration acceptance.
+
+### Approval spike status (P1, #1)
+
+The native approval experiment is local-only, started explicitly with
+`python -m documentation_agent.approval_spike --state-dir .azure\approval-spike-local`.
+It writes only dummy approval records through the SDK's local state backend.
+See the [walkthrough](workshop/hosted-approval-spike.md). No Azure resource,
+toolbox, connection, gateway, deployed agent or Teams application was changed.
+Live Toolbox integration and Teams publishing/channel verification remain pending.
+
 ## Outputs (environment values)
 
 Store these in a local `.env` (git-ignored). Never commit secrets; prefer Entra ID auth over keys.
@@ -525,6 +571,7 @@ Store these in a local `.env` (git-ignored). Never commit secrets; prefer Entra 
 |---|---|---|
 | 2026-10-16 | Louise / Copilot | Applied explicitly approved native monitoring setup: workspace + workspace-based Entra-only App Insights in Sweden Central, 30-day workspace/table retention, project-MI scoped ingestion role and connection. Verified one no-tools `doc-agent:3` assessment through correlated native agent/model spans; no model or agent/routing edits |
 | 2026-10-16 | Louise / Copilot | Read-only WSL CLI inventory: recorded model versions, auto-upgrade policies, rate limits, quota discrepancy and missing monitoring connection; added repeatable inventory and approval-gated model/native-tracing procedures (#5, #49, native subset of #9). No cloud writes or invocation/ingestion verification |
+| 2026-10-16 | John | Configured `doc-agent:3` with versioned assessment instructions; both MVP scenarios passed contract, expected findings/status and source-read evidence checks (#13) |
 | 2026-10-13 | John | Confirmed P1 MVP scope; configured `doc-agent-spike` v4 with native structured output and demonstrated validated contract v1 without tools (#12) |
 | 2026-10-08 | John | Built and deployed `documentation-agent` hosted stub v2 from the existing ACR; verified valid and invalid contract requests remotely (#7) |
 | 2026-10-07 | Rickard | Resource group, Foundry resource + project created |

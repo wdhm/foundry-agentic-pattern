@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "foundry-agentic-pattern"
-version = "0.1.0"
+version = "0.2.0"
 description = "Shared contracts for the Foundry agentic reference pattern"
 requires-python = ">=3.11"
 dependencies = ["pydantic>=2.12,<3"]
@@ -16,6 +16,7 @@ prompt = [
 ]
 agent = [
   "agent-framework-core==1.19.0",
+  "agent-framework-foundry==1.13.1",
   "agent-framework-foundry-hosting==1.0.0b260918",
 ]
 dev = [
@@ -40,6 +41,7 @@ documentation_agent = "src/agents/documentation-agent/app"
 
 [tool.setuptools.package-data]
 contracts = ["schema/*.json", "schema/v1/*.json", "py.typed"]
+documentation_agent = ["prompts/*.txt", "policies/*.txt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -55,7 +57,7 @@ select = ["E", "F", "I", "UP", "B"]
 python_version = "3.11"
 strict = true
 plugins = ["pydantic.mypy"]
-files = ["src/contracts", "src/agents/documentation-agent/app"]
+files = ["src/contracts", "src/agents/documentation-agent/app", "src/agents/documentation-prompt/configure.py"]
 
 [[tool.mypy.overrides]]
 module = ["agent_framework_foundry_hosting"]

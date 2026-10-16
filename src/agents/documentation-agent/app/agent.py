@@ -16,6 +16,9 @@ from agent_framework.exceptions import AgentInvalidRequestException
 from pydantic import ValidationError
 
 from contracts import CONTRACT_VERSION, AgentRequest, AgentResult, Provenance
+from contracts.v1 import AgentResult as AssessmentResult
+
+ContractResult = AgentResult | AssessmentResult
 
 
 def request_text(messages: AgentRunInputs | None) -> str:
@@ -44,6 +47,8 @@ def request_text(messages: AgentRunInputs | None) -> str:
 
 
 class DocumentationAgent(BaseAgent):
+    result_model: type[AgentResult] | type[AssessmentResult] = AgentResult
+
     def __init__(self) -> None:
         super().__init__(
             name="documentation-agent",
@@ -70,6 +75,9 @@ class DocumentationAgent(BaseAgent):
             ),
         )
 
+    async def evaluate(self, messages: AgentRunInputs | None) -> ContractResult:
+        return self.result(messages)
+
     @overload
     def run(
         self,
@@ -79,7 +87,7 @@ class DocumentationAgent(BaseAgent):
         session: AgentSession | None = None,
         function_invocation_kwargs: Mapping[str, Any] | None = None,
         client_kwargs: Mapping[str, Any] | None = None,
-    ) -> Awaitable[AgentResponse[AgentResult]]: ...
+    ) -> Awaitable[AgentResponse[ContractResult]]: ...
 
     @overload
     def run(
@@ -90,7 +98,7 @@ class DocumentationAgent(BaseAgent):
         session: AgentSession | None = None,
         function_invocation_kwargs: Mapping[str, Any] | None = None,
         client_kwargs: Mapping[str, Any] | None = None,
-    ) -> ResponseStream[AgentResponseUpdate, AgentResponse[AgentResult]]: ...
+    ) -> ResponseStream[AgentResponseUpdate, AgentResponse[ContractResult]]: ...
 
     def run(
         self,
@@ -100,11 +108,11 @@ class DocumentationAgent(BaseAgent):
         session: AgentSession | None = None,
         function_invocation_kwargs: Mapping[str, Any] | None = None,
         client_kwargs: Mapping[str, Any] | None = None,
-    ) -> Awaitable[AgentResponse[AgentResult]] | ResponseStream[AgentResponseUpdate, AgentResponse[AgentResult]]:
+    ) -> Awaitable[AgentResponse[ContractResult]] | ResponseStream[AgentResponseUpdate, AgentResponse[ContractResult]]:
         response_id = str(uuid4())
 
-        async def complete() -> AgentResponse[AgentResult]:
-            result = self.result(messages)
+        async def complete() -> AgentResponse[ContractResult]:
+            result = await self.evaluate(messages)
             return AgentResponse(
                 messages=[Message("assistant", [result.model_dump_json()])],
                 response_id=response_id,
@@ -120,12 +128,12 @@ class DocumentationAgent(BaseAgent):
                 message_id=response_id,
             )
 
-        async def finalize(updates: Sequence[AgentResponseUpdate]) -> AgentResponse[AgentResult]:
+        async def finalize(updates: Sequence[AgentResponseUpdate]) -> AgentResponse[ContractResult]:
             text = "".join(update.text for update in updates)
             return AgentResponse(
                 messages=[Message("assistant", [text])],
                 response_id=response_id,
-                value=AgentResult.model_validate_json(text),
+                value=self.result_model.model_validate_json(text),
             )
 
         if stream:

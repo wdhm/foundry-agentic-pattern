@@ -10,14 +10,28 @@ Evaluation sets, metrics and the **CI eval gate** ([ADR 0013](../docs/adr/0013-e
 |---|---|
 | [`datasets/order-sync-retry.json`](datasets/order-sync-retry.json) | Ground truth for demo [PR #62](https://github.com/wdhm/foundry-agentic-pattern/pull/62): the prompt, the subject at the PR head SHA, three planted gaps (retry/backoff, `erp.timeoutSeconds`, dead-letter queue) with their `DS-xx` rules, and the allowed evidence versions |
 | [`datasets/order-sync-information-missing.json`](datasets/order-sync-information-missing.json) | "Information missing" ([guide](../docs/workshop/information-missing-guide.md)): no source has the business owner, data classification or logs/runbook. Expects `insufficient_information`, the three `missing_information` items, git, wiki and work item evidence at a pinned commit, and **no asserted values** in proposals |
-| [`check_planted_gaps.py`](check_planted_gaps.py) | Standard-library checker: documentation status, **recall** of planted gaps (findings) and expected missing information, **evidence integrity** (every reference resolves, git evidence at the expected SHA, required sources present) and a **fabrication guard** (`must_not_propose`: regex patterns for asserted values, allowed URL hosts) |
+| [`check_planted_gaps.py`](check_planted_gaps.py) | Shared Pydantic contract validation, documentation status, **recall**, **evidence integrity** and a **fabrication guard** (`must_not_propose`: regex patterns for asserted values, allowed URL hosts). Live/raw-response checks also match evidence to actual source reads |
 
 ```powershell
 az login
-python evals/check_planted_gaps.py --invoke                 # planted gaps: run doc-agent, then check
-python evals/check_planted_gaps.py --invoke --scenario evals/datasets/order-sync-information-missing.json
-python evals/check_planted_gaps.py --result my-result.json  # check a saved result
+.\.venv\Scripts\python.exe -m pip install -e ".[prompt,dev]"
+.\.venv\Scripts\python.exe evals\check_planted_gaps.py --invoke --agent-version 3
+.\.venv\Scripts\python.exe evals\check_planted_gaps.py --invoke --agent-version 3 `
+  --scenario evals\datasets\order-sync-information-missing.json
+.\.venv\Scripts\python.exe evals\check_planted_gaps.py --result my-result.json
 ```
+
+Use `--save-response evals/results/response.json` with `--invoke` to preserve the
+tool evidence locally; use `--response` to recheck it without another model call.
+Raw responses may contain source data; do not commit them. A bare saved `--result`
+does not provide source-read verification. Explicit `--agent-version` avoids
+silently evaluating a newer deployment.
+
+**Latest observation (2026-10-16):** `doc-agent:3` passed both scenarios with 100%
+recall, schema validation and source-read evidence checks. This version adds
+scoped assessment instructions and explicit precedence for missing facts.
+See the [gap-analysis guide](../docs/workshop/gap-analysis-guide.md) for the
+failed version 2 attempt, limitations and reproduction commands.
 
 An expected item counts as found when one finding or proposed change (planted gaps), or one `missing_information` entry (expected missing), contains a term from every `match_all` group. The script exits 1 on failure, so it can be used as a CI step later. Verified 2026-10-14 against `doc-agent-spike:7`: both scenarios `PASS`, the information-missing scenario three times in a row. Re-run against `doc-agent:1` (same definition, own identity) on 2026-10-14: planted gaps `PASS`; information missing `PASS` on 2 of 3 runs. The failing run found all three missing items but set `documentation_status=gaps_found`, because the instructions don't say which status wins when there are both gaps and missing information.
 
