@@ -43,7 +43,7 @@ tools = "src/tools"
 
 [tool.setuptools.package-data]
 contracts = ["schema/*.json", "schema/v1/*.json", "py.typed"]
-documentation_agent = ["prompts/*.txt", "policies/*.txt"]
+documentation_agent = ["py.typed", "prompts/*.txt", "policies/*.txt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

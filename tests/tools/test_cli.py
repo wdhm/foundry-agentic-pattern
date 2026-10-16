@@ -24,6 +24,7 @@ from tools.cli import (
 def arguments():
     return [
         "invoke",
+        "--agent-kind", "prompt",
         "--project-endpoint", "https://example.services.ai.azure.com/api/projects/demo",
         "--agent-version", "3",
         "--model-version", "2026-09-22",

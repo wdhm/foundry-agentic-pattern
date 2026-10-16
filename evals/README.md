@@ -1,5 +1,15 @@
 # evals/
 
+**Primary runtime update (2026-10-16):** hosted `documentation-agent`, per
+ADR 0024 and P3's confirmed target. The unchanged five-case dataset below is
+not proof of hosted runtime compatibility. P1 accepts only bare `AgentRequest`,
+does not support the three tools-disabled supplied-source cases, and does not
+export nested tool-call/schema evidence in outer Responses.
+The [release preflight](../docs/workshop/evaluation-release-guide.md) blocks these
+dependencies before creation/evaluation; it never sends gold answers to the model
+or drops required cases. The checker's existing `--invoke` path below remains
+**prompt compatibility/diagnostics**, not hosted release certification.
+
 **MVP: five hand-made cases, existing checker, Foundry built-in evaluators later.**
 P3 approved the platform-first scope on 2026-10-16
 ([ADR 0022](../docs/adr/0022-mvp-scope-platform-first.md)).

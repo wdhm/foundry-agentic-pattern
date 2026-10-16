@@ -1,10 +1,11 @@
-"""Invoke an exact existing Foundry prompt-agent version with contract v1."""
+"""Invoke an exact hosted assessment version; prompt is an explicit compatibility path."""
 
 import argparse
 import hashlib
 import json
 import re
 import sys
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
@@ -20,7 +21,9 @@ def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(description=__doc__)
     invoke = root.add_subparsers(dest="command", required=True).add_parser("invoke")
     invoke.add_argument("--project-endpoint", required=True)
-    invoke.add_argument("--agent-name", default="doc-agent")
+    invoke.add_argument("--agent-kind", choices=("hosted", "prompt"), default="hosted")
+    invoke.add_argument("--agent-name")
+    invoke.add_argument("--artifact", type=Path, help="Reviewed hosted image/build/runtime provenance JSON.")
     invoke.add_argument("--agent-version", required=True, help="Exact positive integer version; never latest.")
     invoke.add_argument("--model-version", required=True, help="Exact version verified in deployment configuration.")
     invoke.add_argument("--repo", required=True, help="Repository URL or owner/repository.")
@@ -67,7 +70,7 @@ def selected_provenance(
     model_version: str,
 ) -> Provenance:
     if definition.get("kind") != "prompt":
-        raise ValueError("Select the prompt agent, not the separate hosted v0 documentation-agent.")
+        raise ValueError("The prompt compatibility path requires a prompt definition.")
     if definition.get("text", {}).get("format") != structured_format():
         raise ValueError("The selected version must already have the current AnalysisOutput v1 schema.")
     instructions = definition.get("instructions") or ""
@@ -128,7 +131,7 @@ def check_tool_errors(response: dict[str, Any]) -> None:
             raise ValueError(f"MCP tool execution/discovery failed ({kind}); inspect the Foundry run.")
 
 
-def analysis_from_response(response: dict[str, Any]) -> AnalysisOutput:
+def structured_text(response: dict[str, Any]) -> str:
     if response.get("status") != "completed" or response.get("error"):
         raise ValueError(f"Agent response did not complete successfully: {response.get('status')!r}.")
     check_tool_errors(response)
@@ -149,8 +152,12 @@ def analysis_from_response(response: dict[str, Any]) -> AnalysisOutput:
         else:
             raise ValueError(f"Unsupported or pending response output: {kind!r}.")
     if len(texts) != 1:
-        raise ValueError("Expected exactly one structured AnalysisOutput.")
-    return AnalysisOutput.model_validate_json(texts[0])
+        raise ValueError("Expected exactly one structured output.")
+    return texts[0]
+
+
+def analysis_from_response(response: dict[str, Any]) -> AnalysisOutput:
+    return AnalysisOutput.model_validate_json(structured_text(response))
 
 
 def invoke(client: "OpenAI", request: AgentRequest, provenance: Provenance) -> dict[str, Any]:
@@ -218,10 +225,16 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError("--agent-version must be an exact positive integer, not latest or a selector.")
         if args.model_version.strip().lower() in {"", "latest", "unknown", "current"}:
             raise ValueError("--model-version must be the exact version from deployment configuration.")
+        if args.agent_kind == "hosted" and args.artifact is None:
+            raise ValueError("Hosted assessment requires --artifact with reviewed immutable image/build provenance.")
+        args.agent_name = args.agent_name or ("documentation-agent" if args.agent_kind == "hosted" else "doc-agent")
         from azure.ai.projects import AIProjectClient
         from azure.identity import AzureCliCredential
     except (ValueError, ImportError) as exc:
-        print(f"documentation-trigger: {exc}. Install .[prompt] if SDK dependencies are missing.", file=sys.stderr)
+        print(
+            f"documentation-trigger: {exc}. Install .[agent,prompt] for hosted or .[prompt] for compatibility.",
+            file=sys.stderr,
+        )
         return 1
 
     from azure.core.exceptions import AzureError
@@ -235,14 +248,24 @@ def main(argv: list[str] | None = None) -> int:
             agent = project.agents.get_version(args.agent_name, args.agent_version)
             if agent.name != args.agent_name or agent.version != args.agent_version:
                 raise ValueError("Foundry returned a different agent name/version than requested.")
-            provenance = selected_provenance(
-                agent.name, agent.version, agent.definition.as_dict(), agent.metadata or {}, args.model_version
-            )
-            with project.get_openai_client() as client:
-                report = invoke(client, request, provenance)
+            if args.agent_kind == "hosted":
+                from tools.hosted import HostedArtifact, invoke_hosted, validate_hosted_version
+
+                artifact = HostedArtifact.model_validate_json(args.artifact.read_text(encoding="utf-8"))
+                validate_hosted_version(agent.as_dict(), artifact, args.project_endpoint, args.model_version)
+                actual_model = project.deployments.get(artifact.runtime_provenance.model).as_dict().get("model_version")
+                if actual_model != args.model_version:
+                    raise ValueError("Hosted model deployment differs from the reviewed model version.")
+                report = invoke_hosted(project, request, agent.name, agent.version, artifact)
+            else:
+                provenance = selected_provenance(
+                    agent.name, agent.version, agent.definition.as_dict(), agent.metadata or {}, args.model_version
+                )
+                with project.get_openai_client() as client:
+                    report = invoke(client, request, provenance)
         print(json.dumps(report, indent=2))
         return 0
-    except (ValueError, AzureError, OpenAIError, OSError) as exc:
+    except (ValueError, AzureError, OpenAIError, OSError, ImportError) as exc:
         print(f"documentation-trigger: {exc}", file=sys.stderr)
         return 1
 
