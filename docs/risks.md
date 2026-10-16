@@ -5,7 +5,7 @@ Verified risks and open questions for Agentic Pattern v1. Each risk has a status
 | ID | Topic | Status | Owner | ADRs | Spike |
 |---|---|---|---|---|---|
 | [R1](#r1) | Tool approval enforcement and approval UX in Teams | 🟡 Partly verified, spike needed | P1 · John | [0008](adr/0008-human-in-the-loop-approval.md), [0009](adr/0009-hosted-agent-runtime.md), [0016](adr/0016-state-and-audit-cosmos-db.md) | [#1](https://github.com/wdhm/foundry-agentic-pattern/issues/1) |
-| [R2](#r2) | Publish hosted agent to Teams, and rollback via `version_selector` | 🟢 OK (verify in spike) | P3 · Louise | [0008](adr/0008-human-in-the-loop-approval.md), [0009](adr/0009-hosted-agent-runtime.md), [0013](adr/0013-evaluation-gate-in-ci.md), [0018](adr/0018-region-sweden-central.md) | [#4](https://github.com/wdhm/foundry-agentic-pattern/issues/4) |
+| [R2](#r2) | Publish to Teams and roll back a pinned agent version | 🟡 Read-only check done; live routing/channel proof open | P3 · Louise | [0008](adr/0008-human-in-the-loop-approval.md), [0009](adr/0009-hosted-agent-runtime.md), [0013](adr/0013-evaluation-gate-in-ci.md), [0018](adr/0018-region-sweden-central.md) | [#4](https://github.com/wdhm/foundry-agentic-pattern/issues/4) |
 | [R3](#r3) | Agent identity lifecycle and Azure DevOps access | 🟢 Go: agent user + gateway ([ADR 0021](adr/0021-agent-user-and-ado-mcp-gateway.md)); onboarding scripted, CI open | P2 · Rickard | [0012](adr/0012-agent-identity-and-rbac.md), [0014](adr/0014-infrastructure-scope.md), [0021](adr/0021-agent-user-and-ado-mcp-gateway.md) | [#2](https://github.com/wdhm/foundry-agentic-pattern/issues/2) |
 | [R4](#r4) | AI Gateway token limits and per-agent cost attribution | 🟡 Design adjusted | P3 · Louise | [0014](adr/0014-infrastructure-scope.md) | [#3](https://github.com/wdhm/foundry-agentic-pattern/issues/3) |
 
@@ -41,19 +41,19 @@ go/no-go decision, real approver identity or external-write guarantee is claimed
 ---
 
 <a id="r2"></a>
-## R2: Publish hosted agent to Teams, and rollback via `version_selector`
+## R2: Publish to Teams and roll back a pinned agent version
 
-**Status:** 🟢 OK based on documentation. Verify end to end in a spike.
+**Status:** 🟡 Read-only capability check completed 2026-10-16; selector writes, Teams delivery and timed rollback remain unverified. See the [release/rollback runbook](workshop/release-rollback-guide.md) for exact API contracts, evidence and approval boundaries.
 
 **Findings**
-- An agent can be published to Teams via the portal or REST. This requires **Azure Bot Service Contributor** + **Foundry User**. The **"Just you"** scope needs no admin approval, which suits the demo.
-- Hosted agents are available in **Sweden Central**.
-- The agent endpoint's `version_selector` with `traffic_percentage` provides native **rollback/canary without republishing**.
-  Source: [Publish agents to Microsoft 365 Copilot and Teams](https://learn.microsoft.com/azure/foundry/agents/how-to/publish-copilot)
+- Current documentation supports publishing the stable agent endpoint via portal or `POST /agents/{name}/microsoft365/publish?api-version=v1`. **Foundry User** plus Bot resource/channel write permissions are required; **Azure Bot Service Contributor Role**, Contributor or Owner covers the Bot side. **"Just you"** maps to REST `Shared` / `BotServiceRbac`, without publication admin approval; tenant policies and caller RBAC still apply.
+  Sources: [Portal publishing](https://learn.microsoft.com/azure/foundry/agents/how-to/publish-copilot), [REST publishing](https://learn.microsoft.com/azure/foundry/agents/how-to/publish-copilot-virtual-network).
+- Hosted availability includes **Sweden Central**. Read-only checks found prompt `doc-agent` v3 and separate hosted stub `documentation-agent` v2 active. Both follow `@latest` at 100%, expose Responses/Entra only and report `not_published`; no Bot resources were listed in the workshop resource group.
+- `PATCH /agents/{name}?api-version=v1` selects a concrete version using `agent_endpoint.version_selector.version_selection_rules`, one `FixedRatio` rule and `traffic_percentage: 100`. This is documented rollback without channel republishing, not live proof. The [hosted management guide](https://learn.microsoft.com/azure/foundry/agents/how-to/manage-hosted-agent#configure-agent-endpoint-routing) explicitly disallows traffic splitting, conflicting with the [azd canary example](https://learn.microsoft.com/azure/foundry/agents/how-to/deploy-hosted-agent-production#roll-out-a-production-version-gradually); do not assume 50/50 support.
 
-**Mitigation / design use:** the CI eval gate promotes a new version by shifting `traffic_percentage`. A failed gate means no shift, and a rollback shifts traffic back ([ADR 0013](adr/0013-evaluation-gate-in-ci.md)).
+**Mitigation / design use:** pin and verify the concrete good serving version **before** creating a candidate; default latest routing can otherwise expose a failed-eval version. Evaluate the exact candidate, then promote it at 100% only on pass and approval. A failed gate prevents promotion; rollback restores the retained good selector and verifies a fresh session. Existing hosted sessions do not migrate on selector changes. This refines the routing assumption in [ADR 0013](adr/0013-evaluation-gate-in-ci.md) without claiming its live acceptance criteria are met.
 
-**Spike (M0, [#4](https://github.com/wdhm/foundry-agentic-pattern/issues/4)):** publish a hosted agent to Teams in Sweden Central, run two versions, and shift traffic back and forth without republishing.
+**Remaining spike ([#4](https://github.com/wdhm/foundry-agentic-pattern/issues/4)):** separately approve and prove single-version pin/promotion/rollback, then Bot/channel publication, Teams delivery and identity credential survival. Canary needs Microsoft clarification. [#34](https://github.com/wdhm/foundry-agentic-pattern/issues/34)'s full live rollback in under two minutes is still unverified.
 
 ---
 
