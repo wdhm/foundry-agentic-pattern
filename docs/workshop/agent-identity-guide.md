@@ -212,11 +212,11 @@ Prerequisites:
 |---|---|---|
 | 1 | Reads `instance_identity` and `blueprint` of the agent | Foundry `GET agents/{name}` |
 | 2 | Creates the agent user `<agent>@<default domain>` | [Create agentUser](https://learn.microsoft.com/graph/api/agentuser-post?view=graph-rest-1.0) |
-| 3 | Gives Azure DevOps access: Basic + project Contributors (retries while the new user replicates) | [User entitlements REST](https://learn.microsoft.com/rest/api/azure/devops/memberentitlementmanagement/user-entitlements/add?view=azure-devops-rest-7.1) |
+| 3 | Gives Azure DevOps access: Basic + project Contributors, or Stakeholder + Readers with `-ReadOnly` (retries while the new user replicates) | [User entitlements REST](https://learn.microsoft.com/rest/api/azure/devops/memberentitlementmanagement/user-entitlements/add?view=azure-devops-rest-7.1) |
 | 4 | Grants delegated consent for the agent user only | [Create oauth2PermissionGrant](https://learn.microsoft.com/graph/api/oauth2permissiongrant-post?view=graph-rest-1.0) |
 | 5 | Adds the gateway's managed identity as a credential on the agent's blueprint | [Create federatedIdentityCredential](https://learn.microsoft.com/graph/api/application-post-federatedidentitycredentials?view=graph-rest-beta) |
-| 6 | Assigns the gateway app role to the agent identity | [Grant an app role](https://learn.microsoft.com/graph/api/serviceprincipal-post-approleassignedto?view=graph-rest-1.0) |
-| 7 | Re-points the gateway's environment variables, then waits for the new revision and `/healthz` | [`az containerapp update`](https://learn.microsoft.com/cli/azure/containerapp#az-containerapp-update) |
+| 6 | Assigns the gateway app role to the agent identity (`-ReadOnly` creates `Mcp.Tools.Read.All` if it's missing) | [Grant an app role](https://learn.microsoft.com/graph/api/serviceprincipal-post-approleassignedto?view=graph-rest-1.0) |
+| 7 | Re-points the gateway's environment variables (agent, required role, read-only flag), then waits for the new revision and `/healthz` | [`az containerapp update`](https://learn.microsoft.com/cli/azure/containerapp#az-containerapp-update) |
 
 **Single-agent gateway:** the gateway serves **one** agent at a time. Step 7 switches it to the onboarded agent, and calls from any other agent get `403`. To serve several agents at once, deploy one gateway per agent (use `-SkipGateway` and your own deployment). Another option is to extend the gateway with an identity → agent user map.
 
@@ -224,6 +224,26 @@ How we verified it (2026-10-08):
 1. We created a second agent, `doc-agent-test`, as a copy of `doc-agent-spike` v3. Before onboarding, its tool call failed with `AADSTS501051`.
 2. After the script: it read work item 1 and created a wiki page after approval. The commit author was `doc-agent-test (agent user)`, and the gateway logged the new agent identity as the caller.
 3. We ran the script again for `doc-agent-spike`. Every step reported "exists", and the gateway switched back.
+
+### Read-only onboarding (hosted agent)
+
+`-ReadOnly` onboards an agent that only reads Azure DevOps. We used it on 2026-10-16 to switch the gateway to the hosted `documentation-agent` ([ADR 0024](../adr/0024-hosted-documentation-runtime.md)):
+
+```powershell
+./infra/scripts/onboard-agent.ps1 -AgentName documentation-agent -ReadOnly `
+    -ProjectEndpoint <endpoint> -ResourceGroup <rg> -GatewayAppId <gateway-app-id> -AdoOrg <org> -AdoProject <project>
+```
+
+| Layer | Read-write (default) | `-ReadOnly` |
+|---|---|---|
+| Azure DevOps access | Basic + project Contributors | **Stakeholder** + project **Readers**. In private projects, Stakeholders can read work items and provisioned wiki pages ([Stakeholder access](https://learn.microsoft.com/azure/devops/organizations/security/get-started-stakeholder?view=azure-devops)) |
+| Delegated scopes | `Ado.Mcp.Tools wit.read wiki.read wiki.write` | `Ado.Mcp.Tools wit.read wiki.read` |
+| Gateway app role | `Mcp.Tools.ReadWrite.All` | `Mcp.Tools.Read.All` |
+| Gateway env | `MCP_REQUIRED_ROLE=Mcp.Tools.ReadWrite.All`, `ADO_MCP_READONLY=false` | `MCP_REQUIRED_ROLE=Mcp.Tools.Read.All`, `ADO_MCP_READONLY=true` (sends `X-MCP-Readonly: true` upstream) |
+
+Each layer denies writes on its own. Don't fix a read failure by upgrading the license or adding Contributors: that defeats the read-only design.
+
+**Roll back** to the prompt agent: run `onboard-agent.ps1 -AgentName doc-agent` (without `-ReadOnly`). Every step reports "exists" and step 7 restores the prompt agent's identity, the ReadWrite role and `ADO_MCP_READONLY=false`. The hosted agent's grants stay in place, so you can switch back the same way.
 
 ## Agent identity lifecycle
 
@@ -252,13 +272,13 @@ How we verified it (2026-10-08):
 | Container Apps environment create fails in Sweden Central | `AKSCapacityHeavyUsage` (regional capacity) | Use another region (we used North Europe). Foundry calls the gateway over HTTPS. |
 | The Azure CLI can't get a token for the gateway app | The Azure CLI is not a consented client of the custom API | Expected. Only the agent identity has the app role. |
 | A new agent's tool call fails with `AADSTS501051` (*not assigned to a role for the application*) | Foundry can't get a token for the gateway because the new agent identity lacks the app role | Run `onboard-agent.ps1` (step 6) |
-| A tool call fails with `403 Forbidden` from the gateway | The gateway points at a different agent (single-agent gateway) | Run `onboard-agent.ps1` for this agent |
+| A tool call fails with `403 Forbidden` from the gateway | The gateway points at a different agent (single-agent gateway), or the agent has `Mcp.Tools.ReadWrite.All` but the gateway requires `Mcp.Tools.Read.All` | Run `onboard-agent.ps1` for this agent (with `-ReadOnly` if it should only read) |
 | Azure DevOps error `5101` (*user from outside your directory*) right after the agent user is created | Entra → Azure DevOps replication delay | Retry after ~10–30 s; the script retries automatically |
 | `az rest` fails on `applications(appId='…')` URLs on Windows | cmd mangles the parentheses and quotes | Use `Invoke-RestMethod` (as the script does) |
 
 ## Security notes (hardening comes later, per ADR 0020)
 
-- The agent user has Basic + Contributors. Narrow this to a custom group with only wiki contribute and work item read.
+- The prompt agent's user `doc-agent` has Basic + Contributors. Narrow this to a custom group with only wiki contribute and work item read. The hosted agent's user already has Stakeholder + Readers (`-ReadOnly`).
 - `tools/list` from Microsoft's server shows write tools even though only `wit.read` is granted. The gateway's `X-MCP-Toolsets` and the agent's `allowed_tools` limit what the agent can call. The server's per-scope enforcement is not verified yet.
 - The gateway's ingress is public, but token validation is enforced. Consider private networking.
 - Container logs go to the console only (`--logs-destination none`). Wire them to Log Analytics together with tracing.

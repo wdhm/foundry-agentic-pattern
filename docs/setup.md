@@ -466,16 +466,19 @@ The step-by-step guide with Microsoft Learn references is [docs/workshop/agent-i
 |---|---|---|
 | Chat model deployment | `gpt-6-luna` | In `foundry-agentic-R8N3LD` |
 | Prompt agent | `doc-agent` (tools `knowledge`, `github`, `ado`) | Agent identity: `foundry-agentic-R8N3LD-proj-agentic-doc-agent-AgentIdentity` |
-| Agent user | `doc-agent@M365CPI54615665.onmicrosoft.com` | Linked to the agent identity. Azure DevOps **Basic** + `[integration-team]\Contributors` |
+| Hosted agent | `documentation-agent` | Agent identity: `foundry-agentic-R8N3LD-proj-agentic-documentation-agent-AgentIdentity`. **The gateway points at this agent** (read-only) |
+| Agent user (hosted) | `documentation-agent@M365CPI54615665.onmicrosoft.com` | Linked to the hosted agent identity. Azure DevOps **Stakeholder** + `[integration-team]\Readers` |
+| Consent grant (hosted) | Hosted agent identity → **Azure DevOps MCP**, consentType `Principal` | Scopes `Ado.Mcp.Tools wit.read wiki.read` (no `wiki.write`) |
+| Agent user | `doc-agent@M365CPI54615665.onmicrosoft.com` | Linked to the agent identity. Azure DevOps **Basic** + `[integration-team]\Contributors`. Kept for rollback |
 | Consent grant | Agent identity → **Azure DevOps MCP** (`2a72489c-…`), consentType `Principal` (agent user) | Scopes `Ado.Mcp.Tools wit.read wiki.read wiki.write`. We created the Azure DevOps MCP service principal in the tenant. |
-| User-assigned MI | `id-doc-agent-mcp` | Federated credential `mcp-server-uami` on the agent's **blueprint**; AcrPull on the ACR |
-| Gateway Entra app | `doc-agent-mcp-api` (`api://<appId>`) | App role `Mcp.Tools.ReadWrite.All`, assigned to the agent identity |
+| User-assigned MI | `id-doc-agent-mcp` | Federated credential on both agents' **blueprints** (`mcp-server-uami` on `doc-agent`, `ado-mcp-gateway` on `documentation-agent`); AcrPull on the ACR |
+| Gateway Entra app | `doc-agent-mcp-api` (`api://<appId>`) | App roles `Mcp.Tools.ReadWrite.All` (assigned to `doc-agent`) and `Mcp.Tools.Read.All` (assigned to `documentation-agent`) |
 | Container registry | `acrfoundryagenticr8n3ld` (Basic, Sweden Central) | Image `ado-mcp:0.2.1` |
 | Container Apps env | `cae-doc-agent-mcp` (**North Europe**) | Sweden Central had no capacity (`AKSCapacityHeavyUsage`); logs: console only |
 | Container app (gateway) | `ca-doc-agent-mcp` | `https://ca-doc-agent-mcp.gentlemushroom-65b5f1ef.northeurope.azurecontainerapps.io/mcp` |
 | Foundry connection | `ado-mcp-proxy` | `RemoteTool`, `AgenticIdentityToken`, audience `api://<gateway appId>` |
 
-To onboard another agent, run [`infra/scripts/onboard-agent.ps1`](../infra/scripts/onboard-agent.ps1) ([guide](workshop/agent-identity-guide.md#onboard-another-agent-automated)). The gateway serves one agent at a time and currently points at `doc-agent`.
+To onboard another agent, run [`infra/scripts/onboard-agent.ps1`](../infra/scripts/onboard-agent.ps1) ([guide](workshop/agent-identity-guide.md#onboard-another-agent-automated)). The gateway serves one agent at a time. It currently points at the hosted `documentation-agent` with read-only access (`MCP_REQUIRED_ROLE=Mcp.Tools.Read.All`, `ADO_MCP_READONLY=true`), so `doc-agent`'s `ado` tool returns `403`. Roll back with `onboard-agent.ps1 -AgentName doc-agent`.
 
 ### Structured-output contract demo (P1, #12)
 
@@ -583,3 +586,4 @@ Store these in a local `.env` (git-ignored). Never commit secrets; prefer Entra 
 | 2026-10-14 | Rickard | Final RBAC matrix checked against the environment ([architecture §6](architecture.md#6-identity--rbac-matrix)); [bring-your-own guide](workshop/bring-your-own-guide.md) for your own sources and standard (#36) |
 | 2026-10-14 | Rickard | Prompt agent `doc-agent:1` created as a copy of `doc-agent-spike:7` (same model, tools and instructions) and onboarded with `onboard-agent.ps1`; the gateway now points at `doc-agent`. Planted-gaps scenario `PASS`; information-missing scenario `PASS` on 2 of 3 runs (see [evals](../evals/README.md)). P2 is demoed on `doc-agent` in the playground |
 | 2026-10-14 | Rickard | Offboarded `doc-agent-spike`: Azure DevOps entitlement removed, agent user deleted, agent deleted (its identity and blueprint go with it). Agents in `proj-agentic`: `doc-agent`, `documentation-agent` |
+| 2026-10-16 | Rickard | Read-only gateway cutover to the hosted `documentation-agent` (P3 request, ADR 0024) with `onboard-agent.ps1 -ReadOnly`: agent user `documentation-agent@…` (Stakeholder + Readers), grant `Ado.Mcp.Tools wit.read wiki.read`, new app role `Mcp.Tools.Read.All`, gateway revision `--0000005` with `ADO_MCP_READONLY=true`. `doc-agent`'s grants are kept for rollback; its `ado` tool now gets `403`. Hosted runtime proof pending |
