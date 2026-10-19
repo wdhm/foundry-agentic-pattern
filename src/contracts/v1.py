@@ -10,6 +10,13 @@ CONTRACT_VERSION: Final[Literal["1.0.0"]] = "1.0.0"
 EvidenceRefs = Annotated[list[NonBlank], Field(min_length=1)]
 
 
+class AssessmentTask(ContractModel):
+    scope: Literal["change_review", "information_review"]
+    question: Annotated[NonBlank, Field(max_length=8000)] = Field(
+        description="The assessment question, not source evidence, authorization or an expected answer."
+    )
+
+
 class AgentRequest(ContractModel):
     contract_version: Literal["1.0.0"]
     request_id: UUID
@@ -19,6 +26,17 @@ class AgentRequest(ContractModel):
     subject: Subject
     context: RequestContext = Field(default_factory=RequestContext)
     documentation_standard_ref: NonBlank
+    task: AssessmentTask | None = Field(
+        default=None,
+        exclude_if=lambda task: task is None,
+        description="Explicit assessment intent; omit for legacy source-based review. Requires a task-aware runtime.",
+    )
+
+    @model_validator(mode="after")
+    def task_has_subject(self) -> Self:
+        if self.task is not None and self.task.scope == "change_review" and not self.subject.changed_paths:
+            raise ValueError("A change_review task requires explicit changed_paths.")
+        return self
 
 
 class Provenance(ContractModel):
@@ -107,6 +125,12 @@ class AgentResult(AnalysisOutput):
 
 
 def assemble_result(request: AgentRequest, output: AnalysisOutput, provenance: Provenance) -> AgentResult:
+    if (
+        request.task is not None
+        and output.missing_information
+        and output.documentation_status != "insufficient_information"
+    ):
+        raise ValueError("Unresolved information in an explicit task requires insufficient_information status.")
     return AgentResult(
         **output.model_dump(),
         contract_version=CONTRACT_VERSION,

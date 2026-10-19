@@ -115,7 +115,27 @@ result = assemble_result(request, analysis, provenance)
 
 `provenance` is a validated `Provenance` constructed from the actual runtime and
 deployment configuration, not an arbitrary dictionary of model-generated values.
-The v1 request uses the same fields as v0 but requires `contract_version=1.0.0`.
+The v1 request uses the same base fields as v0 but requires `contract_version=1.0.0`.
+Task-aware hosted application `0.4.0` adds this optional field:
+
+```json
+"task": {
+  "scope": "information_review",
+  "question": "Identify the business owner, data classification, logs and runbook from the allowed sources."
+}
+```
+
+Use `change_review` to assess documentation for explicit `subject.changed_paths`,
+or `information_review` to answer specific questions using the referenced sources.
+Both `scope` and a nonblank `question` (maximum 8,000 characters) are required when
+`task` is provided. A change review without changed paths is rejected.
+
+Missing/null `task` retains the legacy source-based review and is omitted from
+serialized JSON, so existing callers do not acquire an unexpected null field.
+Older deployed runtimes (including hosted version 6) reject a nonempty task;
+deploy/select a task-aware artifact before sending the new field. This is
+backward compatibility for old requests, not forward compatibility for old servers.
+The output schema is unchanged. See [ADR 0026](../../docs/adr/0026-explicit-assessment-task.md).
 
 | Analysis field | Meaning |
 |---|---|
@@ -136,6 +156,10 @@ whether the source exists or the excerpt is true**.
 `up_to_date` requires evidence and no findings, changes or missing information.
 `gaps_found` requires findings. `insufficient_information` requires a missing-information
 entry. Proposed changes always require human review.
+When a request has an explicit task, `assemble_result` rejects any nonempty
+`missing_information` paired with a status other than `insufficient_information`.
+The model must keep that list within task scope. This check does not determine
+whether missing facts are relevant or silently repair a model response.
 
 `AgentResult` adds `contract_version`, `request_id` and `provenance` to these
 fields. Pydantic generates all three v1 schemas in `schema/v1/`; the generator

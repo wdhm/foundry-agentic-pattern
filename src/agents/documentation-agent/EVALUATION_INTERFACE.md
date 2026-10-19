@@ -14,7 +14,7 @@ The hosted Python application runs the model directly. It never invokes the
 | `DOCUMENTATION_MODE=evaluation` **and** `DOCUMENTATION_ENABLE_EVALUATION=true` | EvaluationRequest / EvaluationResponse | Explicit live or supplied-source path |
 
 The versioned evaluation interface is `1.0.0`; the application version is
-`0.3.0`. AgentRequest/AgentResult remain contract `1.0.0`. The existing production
+`0.4.0`. AgentRequest/AgentResult remain contract `1.0.0`. The existing production
 assessment endpoint rejects evaluation envelopes and cannot be switched into
 snapshot mode by request content. Unknown fields are rejected.
 
@@ -60,6 +60,9 @@ also buffers until the final validated report; no partial unvalidated result is 
 ```
 
 No task override, standard override or snapshots are accepted in this mode.
+The production request itself can contain the optional `request.task` object
+on task-aware runtimes (application 0.4.0). That intent is forwarded unchanged to
+the normal assessment path. Do not use the outer `task` in live mode.
 It calls the same `AssessmentAgent.assess` path and read policy as ordinary
 assessment. The model/tool behaviour is unchanged; capture is request-scoped.
 Tool discovery and invocation failures remain failures.
@@ -117,6 +120,10 @@ outer response/session identifiers separately.
 ```
 
 The supplied array is the entire source allowlist. Omitted sources are not read.
+For supplied mode, prefer `request.task` for explicit question/scope. The
+legacy outer `task` is still supported when `request.task` is absent. If both
+are supplied, their questions must be exactly identical; conflicting tasks are
+rejected before model execution. Neither can enable tools.
 An unavailable source has no content/version/digest and cannot be cited.
 Available Git evidence must match the request SHA. Hashes are checked before
 execution; they demonstrate bundle consistency, **not source authenticity**.

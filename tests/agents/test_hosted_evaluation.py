@@ -110,6 +110,36 @@ def output_for(payload):
     }
 
 
+@pytest.mark.parametrize("retain_outer", [True, False])
+def test_supplied_task_is_forwarded_and_conflicting_intent_never_runs(settings, payload, retain_outer):
+    question = payload["task"]
+    payload["request"]["task"] = {"scope": "information_review", "question": question}
+    if not retain_outer:
+        del payload["task"]
+
+    class TaskDouble:
+        calls = 0
+
+        async def analyze(self, envelope, record):
+            self.calls += 1
+            assert envelope.request.task.question == question
+            assert envelope.request.task.scope == "information_review"
+            assert "When request.task is present" in record.instructions
+            assert "No tools are available" in record.instructions
+            assert question not in record.instructions
+            record.model_calls.append({"status": "completed"})
+            return json.dumps(output_for(payload))
+
+    runner = TaskDouble()
+    report = asyncio.run(EvaluationAgent(settings, supplied=runner).evaluate(json.dumps(payload)))
+    assert report.result.documentation_status == "insufficient_information"
+    assert not report.execution.tool_calls
+    payload["task"] = "A different question"
+    with pytest.raises(ValueError, match="conflicts"):
+        asyncio.run(EvaluationAgent(settings, supplied=runner).evaluate(json.dumps(payload)))
+    assert runner.calls == 1
+
+
 class SuppliedDouble:
     def __init__(self, output):
         self.output = output

@@ -4,6 +4,10 @@
   "correlation_id": "70e295ec-dd1f-4946-859e-64836e458d94",
   "trigger": "cli",
   "requested_by": "demo-reviewer",
+  "task": {
+    "scope": "change_review",
+    "question": "Pull request 62 in wdhm/foundry-agentic-pattern changes the Order Sync integration. Read the PR diff on GitHub, compare it with the Azure DevOps wiki page /Order Sync/Overview and the documentation standard, and list what the documentation is missing. Cite evidence (source, path, version)."
+  },
   "subject": {
     "repo": "wdhm/foundry-agentic-pattern",
     "commit_sha": "ad623147fbb1eeb9a6423d437df199c91db15a9e",

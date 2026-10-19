@@ -4,6 +4,37 @@ The **Documentation Agent**: a Microsoft Foundry **hosted agent** (container) bu
 
 ## Hosted assessment implementation (P1, #13)
 
+### Task-aware assessment fix (local code, not deployed)
+
+Application `0.4.0` accepts `request.task` with a `scope` and `question`. This
+fixes the missing task channel found in hosted v6 acceptance. The existing
+source references define what may be read; the task defines what question those
+sources should answer. It cannot change tool permissions or authorize writes.
+
+| Scope | Behaviour |
+|---|---|
+| `change_review` | Review documentation for explicit changed paths; do not invent a release/change-log task or let an unrequested date block the review |
+| `information_review` | Check the specific requested facts; report unsupported facts in `missing_information` even if unrelated documentation gaps also exist |
+| Omitted/null task | Previous source-based assessment; not a substitute for a caller's missing question |
+
+The model receives the full validated request JSON. Question text is not injected
+into system instructions. Versioned `app/prompts/gap-analysis-v1.1.txt` describes
+scope and status precedence; the existing policy and read guards remain unchanged.
+Contradictory task output fails explicitly; the app never forces a passing status.
+
+Use `examples/assessment-request.json` for the original PR-change question and
+`examples/information-review-request.json` for the original missing-information
+question. They preserve the scenario questions and pinned sources, without
+altering P3's datasets or scoring. Generate fresh request/correlation IDs for
+live runs. The model still has only the allowed file-read tools; a question's
+reference to a PR diff does not grant a new tool or permission.
+
+**Deployment handoff:** hosted v6 does not accept the task field. P3 must deploy
+the reviewed task-aware artifact and map scenario/CLI intent into `request.task`;
+do not silently discard it. Re-run both original acceptance expectations on that
+exact version before closing #13. Local fake-model tests are not quality acceptance.
+No source connections, remote versions or serving settings changed in this fix.
+
 The opt-in [P1 evaluation interface](EVALUATION_INTERFACE.md) adds controlled
 source snapshots and request-correlated model/tool evidence for P3 integration.
 It is local code only and disabled by default. Existing stub/assessment payloads
@@ -41,7 +72,7 @@ Each invocation owns its clients, credentials and tool evidence; state is not
 shared between requests. The model receives the versioned prompt/policy packaged
 in `app/prompts/` and `app/policies/`. It produces only `AnalysisOutput`. The
 runtime adds the input request ID, model configuration, application version
-`0.3.0` (not the Foundry deployment version), and instruction/policy hashes.
+`0.4.0` (not the Foundry deployment version), and instruction/policy hashes.
 No unvalidated model tokens are streamed to the caller.
 
 The official `FoundryToolbox` adapter handles authentication and platform call-ID
