@@ -1,5 +1,43 @@
 # Hosted assessment deployment: preparation and gates
 
+## Single approved assessment: 2026-10-19
+
+One read-only assessment was submitted to a fresh session bound to concrete
+`documentation-agent:6`, using the original fictional bare v1 request and
+reviewed image digest
+`sha256:1a00ba37c7923b171fc13b36f16dde2592aead1e02cd5fc4fdd9ef7f75c5f863`.
+The response completed and returned a schema-valid `AgentResult` with the
+original request ID. Its result was `insufficient_information`: four findings,
+two proposed changes, three missing-information entries and five evidence
+records, requiring human review. Git evidence was pinned to the requested
+commit; wiki and work-item versions matched the read-only source preflight.
+No proposed changes were applied.
+
+**Contract and reviewed-source provenance checks passed.** Returned application
+version `0.3.0`, configured model, prompt/instruction hash and policy hash match
+reviewed source `2b77527` under the runtime's canonical text-reading behavior:
+
+| Hash | Independently reconstructed and returned SHA-256 |
+|---|---|
+| Prompt/instructions | `ca2f5da549bec44ec2e8ae1d86b43e8c28495b95396053fcd5f8086b242fa229` |
+| Policy | `23b4627c6598934fac64cd9d69fbba45f23df326d9b416b70ba012d9ed773687` |
+
+The first comparison falsely reported a mismatch because the local Windows
+Git archive contained CRLF and the harness decoded those bytes directly.
+The runtime uses `Path.read_text`, which normalizes line endings before
+assembling instructions and hashing. Reproducing that exact behavior offline
+independently produced both returned hashes; no expected hash was copied from
+the response. The original failed comparison and corrected evidence are retained.
+No second assessment, runtime fix, deployment, routing or source change occurred.
+
+This is a completed transport/contract/provenance smoke, **not** a full
+evaluation. Actual model revision, usage and nested tool/schema traces
+were not exposed by the outer response. Sanitized request, concrete-version
+session, response, result and verification records remain in the deployment
+owner's ignored `.azure/approved-hosted-assessment/`; no credentials are stored.
+
+## Historical configuration observations
+
 **Latest read-only follow-up, 2026-10-16:** after P1 reported fixing access,
 the approved configuration-only tool setup was independently observed already
 present. Hosted `documentation-agent:4` is active with assessment configuration,

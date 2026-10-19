@@ -593,6 +593,19 @@ prove successful hosted assessment, real tool schema/result compatibility,
 effective source access or trace/provenance evidence. P1's exact completion and
 runtime handoff remains required; do not redeploy or repeat setup.
 
+On 2026-10-19, the separately approved single read-only assessment ran against
+unchanged concrete `documentation-agent:6` in a fresh version-bound session.
+It completed with a valid v1 result and matching request/source versions,
+returning four findings and two proposals with human review required.
+**Contract and reviewed-source provenance checks passed**, including app version
+`0.3.0`, configured model and prompt/policy hashes reconstructed from source
+`2b77527`. An initial local harness false negative was resolved entirely offline:
+the Windows source archive contained CRLF, while runtime `Path.read_text`
+normalizes line endings before hashing. No retry, source write, runtime fix or
+deployment followed. See the
+[dated outcome and exact hashes](workshop/hosted-deployment-guide.md#single-approved-assessment-2026-10-19).
+This result is not a full evaluation or independently captured nested-tool trace.
+
 ### Approval spike status (P1, #1)
 
 The native approval experiment is local-only, started explicitly with
