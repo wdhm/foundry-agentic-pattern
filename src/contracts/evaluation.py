@@ -57,6 +57,8 @@ class EvaluationRequest(ContractModel):
 
     @model_validator(mode="after")
     def isolated_sources(self) -> Self:
+        if self.request.task is not None and self.task is not None and self.task != self.request.task.question:
+            raise ValueError("Evaluation task conflicts with request.task.question; supply one consistent task.")
         if self.source_mode == "live_sources":
             if self.sources or self.standard is not None or self.task is not None:
                 raise ValueError("Live mode accepts only the production AgentRequest; no source/instruction override.")

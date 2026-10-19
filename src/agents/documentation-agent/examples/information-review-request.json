@@ -1,0 +1,22 @@
+{
+  "contract_version": "1.0.0",
+  "request_id": "ad694c8a-e65b-4fe6-b8cb-e1dac7eed002",
+  "correlation_id": "50ee7b0e-3027-4d08-822d-1cd6e0afd002",
+  "trigger": "cli",
+  "requested_by": "demo-reviewer",
+  "task": {
+    "scope": "information_review",
+    "question": "Complete the Security and Operations sections and the business owner for the Order Sync integration page /Order Sync/Overview in the Azure DevOps wiki. Use the integration code and configuration in GitHub repository wdhm/foundry-agentic-pattern at commit 8a9c9f2acff643ed15a41e6b43f2f8eb18502b4f (path samples/sample-integration), work item 1, the current wiki page and the documentation standard. Cite evidence (source, path, version)."
+  },
+  "subject": {
+    "repo": "wdhm/foundry-agentic-pattern",
+    "commit_sha": "8a9c9f2acff643ed15a41e6b43f2f8eb18502b4f",
+    "changed_paths": ["samples/sample-integration"]
+  },
+  "context": {
+    "wiki_page_paths": ["/Order Sync/Overview"],
+    "work_item_ids": [1],
+    "adr_refs": []
+  },
+  "documentation_standard_ref": "https://github.com/wdhm/foundry-agentic-pattern/blob/2dd57c18bb0589e85c556ddbc032bce688d059f5/data/knowledge/documentation-standard.md"
+}

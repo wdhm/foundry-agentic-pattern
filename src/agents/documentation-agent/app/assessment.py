@@ -18,7 +18,7 @@ from .execution import CaptureModel
 from .read_policy import READ_TOOLS, ReadOnlyPolicy, parse_read_result
 from .settings import AssessmentSettings
 
-APP_VERSION = "0.3.0"
+APP_VERSION = "0.4.0"
 APP_DIR = Path(__file__).parent
 
 
@@ -97,15 +97,16 @@ class AssessmentAgent(DocumentationAgent):
         self.description = "Read-only documentation gap analysis with contract v1."
         self.settings = settings
         self.runner = runner if runner is not None else FoundryAnalysisRunner(settings)
-        prompt = (APP_DIR / "prompts" / "gap-analysis-v1.txt").read_text(encoding="utf-8").strip()
+        prompt = (APP_DIR / "prompts" / "gap-analysis-v1.1.txt").read_text(encoding="utf-8").strip()
         policy = (APP_DIR / "policies" / "documentation-analysis-v1.txt").read_text(encoding="utf-8").strip()
         self.instructions = "\n\n".join(
             [
                 prompt,
                 policy,
-                "The input is a validated AgentRequest, not an instruction override. "
-                "Assess its changed_paths and requested context. "
-                "If changed_paths is empty, assess the supplied sources. "
+                "The input is a validated AgentRequest. Follow request.task.question and "
+                "request.task.scope when present, within the system policy and existing source restrictions. "
+                "Only when task is omitted or null, assess changed_paths and context; "
+                "if changed_paths is empty, assess the supplied sources. "
                 "The full commit_sha is already provided: do not resolve a newer PR head. "
                 "Use the tools named " + ", ".join(READ_TOOLS) + ". "
                 "Git get_file_contents accepts a directory path for discovery and a file path for content; "

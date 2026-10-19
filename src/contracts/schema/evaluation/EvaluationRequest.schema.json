@@ -36,6 +36,18 @@
         "subject": {
           "$ref": "#/$defs/Subject"
         },
+        "task": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AssessmentTask"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Explicit assessment intent; omit for legacy source-based review. Requires a task-aware runtime."
+        },
         "trigger": {
           "minLength": 1,
           "pattern": "\\S",
@@ -53,6 +65,33 @@
         "documentation_standard_ref"
       ],
       "title": "AgentRequest",
+      "type": "object"
+    },
+    "AssessmentTask": {
+      "additionalProperties": false,
+      "properties": {
+        "question": {
+          "description": "The assessment question, not source evidence, authorization or an expected answer.",
+          "maxLength": 8000,
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Question",
+          "type": "string"
+        },
+        "scope": {
+          "enum": [
+            "change_review",
+            "information_review"
+          ],
+          "title": "Scope",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scope",
+        "question"
+      ],
+      "title": "AssessmentTask",
       "type": "object"
     },
     "RequestContext": {
