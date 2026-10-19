@@ -8,6 +8,10 @@
 !src/contracts/schema/*.json
 !src/contracts/schema/v1/
 !src/contracts/schema/v1/*.json
+!src/contracts/schema/evaluation/
+!src/contracts/schema/evaluation/*.json
+!src/tools/
+!src/tools/*.py
 !src/agents/
 !src/agents/documentation-agent/
 !src/agents/documentation-agent/Dockerfile
