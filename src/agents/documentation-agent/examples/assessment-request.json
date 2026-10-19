@@ -22,5 +22,5 @@
     "work_item_ids": [1],
     "adr_refs": []
   },
-  "documentation_standard_ref": "Integration Documentation Standard 1.0 (DS-xx), via Foundry IQ"
+  "documentation_standard_ref": "https://github.com/wdhm/foundry-agentic-pattern/blob/2dd57c18bb0589e85c556ddbc032bce688d059f5/data/knowledge/documentation-standard.md"
 }
