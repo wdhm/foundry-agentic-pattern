@@ -1,39 +1,28 @@
 """Isolated native-approval experiment. The only write is an atomic dummy receipt."""
 
 import argparse
-import hashlib
 import json
 import logging
 import os
-from collections.abc import AsyncIterator, Awaitable, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Any, Literal, overload
+from typing import Annotated, Any, Literal
 from uuid import UUID, uuid4
 
 from agent_framework import (
-    AgentResponse,
-    AgentResponseUpdate,
     AgentRunInputs,
     AgentSession,
-    BaseAgent,
     Content,
-    Message,
-    ResponseStream,
 )
 from agent_framework_foundry_hosting import ResponsesHostServer
-from azure.ai.agentserver.core import get_request_context
-from azure.ai.agentserver.core.storage import (
-    FoundryStateStore,
-    FoundryStorageConflictError,
-    FoundryStoragePreconditionError,
-)
+from azure.ai.agentserver.core.storage import FoundryStateStore
 from pydantic import Field, TypeAdapter, ValidationError
 
 from contracts.models import ContractModel, NonBlank
 from contracts.v1 import Evidence
 
 from .agent import request_text
+from .approval_common import ApprovalAgentBase, approval_decision, canonical_hash
 
 TOOL_NAME = "dummy.write"
 STORE_NAME = "documentation-approval-spike-v1"
@@ -69,7 +58,7 @@ COMMAND: TypeAdapter[Propose | Modify | Inspect] = TypeAdapter(Command)
 
 def arguments_hash(arguments: DummyArguments) -> str:
     value = {"tool": TOOL_NAME, "arguments": arguments.model_dump(mode="json")}
-    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    return canonical_hash(value)
 
 
 def preview(record: dict[str, Any]) -> str:
@@ -100,36 +89,16 @@ def approval_content(record: dict[str, Any]) -> Content:
     )
 
 
-class ApprovalSpikeAgent(BaseAgent):
+class ApprovalSpikeAgent(ApprovalAgentBase):
     def __init__(self, *, allow_local: bool = False) -> None:
         super().__init__(name="documentation-approval-spike", description="Native approval with a dummy state receipt.")
         self.allow_local = allow_local
-
-    def actor(self) -> str:
-        context = get_request_context()
-        hosted = bool(os.environ.get("FOUNDRY_HOSTING_ENVIRONMENT"))
-        if hosted and context.user_id:
-            return context.user_id
-        if self.allow_local and not hosted:
-            return "local-unverified"
-        raise ValueError(
-            "Verified platform user context is required; no reviewer identity is accepted in request text."
-        )
 
     async def execute(self, messages: AgentRunInputs | None, session: AgentSession | None) -> list[Content]:
         if session is None:
             raise ValueError("Approval spike requires a hosting session.")
         actor = self.actor()
-        items = [messages] if isinstance(messages, Message) else messages
-        decision = None
-        if isinstance(items, Sequence) and not isinstance(items, str) and len(items) == 1:
-            item = items[0]
-            if isinstance(item, Message) and len(item.contents) == 1:
-                candidate = item.contents[0]
-                if candidate.type == "function_approval_response":
-                    if item.role != "user":
-                        raise ValueError("Approval responses must be user input.")
-                    decision = candidate
+        decision = approval_decision(messages)
 
         store = await FoundryStateStore.get_or_create(STORE_NAME, user_isolation=True)
         async with store:
@@ -185,23 +154,6 @@ class ApprovalSpikeAgent(BaseAgent):
             "created_at": datetime.now(UTC).isoformat(),
         }
 
-    @staticmethod
-    def check_owner(record: dict[str, Any], actor: str, session_id: str) -> None:
-        if record["owner"] != actor or record["session_id"] != session_id:
-            raise ValueError("Approval belongs to a different reviewer or session.")
-
-    @staticmethod
-    def check_pending(record: dict[str, Any]) -> None:
-        if record["status"] != "pending":
-            raise ValueError("Proposal is no longer pending; duplicate or stale decision rejected.")
-
-    @staticmethod
-    async def replace(store: FoundryStateStore, key: str, record: dict[str, Any], etag: str) -> None:
-        try:
-            await store.set_item(key, record, if_match=etag)
-        except (FoundryStorageConflictError, FoundryStoragePreconditionError):
-            raise ValueError("Another decision already changed this proposal; replay rejected.") from None
-
     async def decide(self, store: FoundryStateStore, decision: Content, actor: str, session_id: str) -> list[Content]:
         if not isinstance(decision.id, str) or type(decision.approved) is not bool:
             raise ValueError("Malformed native approval response.")
@@ -236,60 +188,6 @@ class ApprovalSpikeAgent(BaseAgent):
             }
         await self.replace(store, record["pending_id"], changed, item.etag)
         return [Content.from_text(json.dumps(changed, sort_keys=True))]
-
-    @overload
-    def run(
-        self,
-        messages: AgentRunInputs | None = None,
-        *,
-        stream: Literal[False] = False,
-        session: AgentSession | None = None,
-        function_invocation_kwargs: Mapping[str, Any] | None = None,
-        client_kwargs: Mapping[str, Any] | None = None,
-    ) -> Awaitable[AgentResponse[Any]]: ...
-
-    @overload
-    def run(
-        self,
-        messages: AgentRunInputs | None = None,
-        *,
-        stream: Literal[True],
-        session: AgentSession | None = None,
-        function_invocation_kwargs: Mapping[str, Any] | None = None,
-        client_kwargs: Mapping[str, Any] | None = None,
-    ) -> ResponseStream[AgentResponseUpdate, AgentResponse[Any]]: ...
-
-    def run(
-        self,
-        messages: AgentRunInputs | None = None,
-        *,
-        stream: bool = False,
-        session: AgentSession | None = None,
-        function_invocation_kwargs: Mapping[str, Any] | None = None,
-        client_kwargs: Mapping[str, Any] | None = None,
-    ) -> Awaitable[AgentResponse[Any]] | ResponseStream[AgentResponseUpdate, AgentResponse[Any]]:
-        response_id = str(uuid4())
-
-        async def complete() -> AgentResponse[Any]:
-            contents = await self.execute(messages, session)
-            return AgentResponse(messages=[Message("assistant", contents)], response_id=response_id)
-
-        async def updates() -> AsyncIterator[AgentResponseUpdate]:
-            response = await complete()
-            yield AgentResponseUpdate(
-                contents=response.messages[0].contents,
-                role="assistant",
-                response_id=response_id,
-                message_id=response_id,
-            )
-
-        def finalize(updates: Sequence[AgentResponseUpdate]) -> AgentResponse[Any]:
-            return AgentResponse(
-                messages=[Message("assistant", [content for update in updates for content in update.contents])],
-                response_id=response_id,
-            )
-
-        return ResponseStream(updates(), finalizer=finalize) if stream else complete()
 
 
 def main() -> None:

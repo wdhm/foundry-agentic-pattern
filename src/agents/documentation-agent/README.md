@@ -46,6 +46,14 @@ For the separate #1 approval experiment, see the
 It has its own local-only entry point and a dummy state receipt; it does not
 enable writes in assessment mode or change the deployed agent.
 
+For #15, the opt-in [exact-call Toolbox approval runtime](TOOL_APPROVAL.md)
+reuses the spike's native transport/state preconditions but dispatches an actual
+configured tool after approval. It is not deployed. Its policy pins one tool and
+target. The `propose_result` adapter connects a selected v1 proposed change and
+its evidence to approval when the configured tool supports section-scoped writes;
+whole-page composition is deliberately not guessed. Teams publication and shared
+permission changes are not included.
+
 The main runtime is now the hosted Python app ([ADR 0024](../../../docs/adr/0024-hosted-documentation-runtime.md)).
 Assessment mode is deployed as `documentation-agent:6` and verified end to end
 against live tools through P2's read-only toolbox `documentation-agent-readonly`
@@ -55,6 +63,7 @@ against live tools through P2's read-only toolbox `documentation-agent-readonly`
 |---|---|---|
 | `DOCUMENTATION_MODE=stub` (default) | Contract v0 | Existing deterministic #7 demo; no model or tool calls |
 | `DOCUMENTATION_MODE=assessment` | Contract v1 | Direct Foundry model call through Agent Framework, read-only toolbox tools, validated result |
+| `DOCUMENTATION_MODE=approval` plus explicit enable flag | Proposed content / native approval / modify / inspect | Separate exact-call approval runtime; requires a reviewed target policy and verified hosted actor |
 
 The default remains stub for compatibility. Assessment mode fails startup if
 required configuration is absent; it never silently falls back to a stub result.
@@ -152,6 +161,53 @@ with in-memory model/tool doubles: valid/invalid requests, writes blocked before
 execution, pinned source access, output/evidence validation, timeout, streaming,
 per-request isolation and resource cleanup. They are not a substitute for the
 live hosted scenarios after P2 integration.
+
+### Prepare #13 acceptance without touching P3's caller or gold
+
+`documentation_agent.acceptance` is an offline helper for the two original live
+cases, not an invocation client or a replacement evaluation gate. After P3 gives
+you the concrete deployment version containing PR #84, prepare a **new** directory:
+
+```powershell
+# Replace 42 with the actual candidate version supplied by P3; it is not discovered here.
+.\.venv\Scripts\python.exe -m documentation_agent.acceptance prepare `
+  --agent-version 42 --output-dir .azure\acceptance-candidate
+```
+
+It verifies the P1 examples still match the canonical sources/questions, adds
+the explicit scope, generates fresh request/correlation IDs and saves single-line
+JSON requests plus a `prepared_not_run` manifest with scenario hashes. It does not
+change datasets, thresholds, resources or sessions. A version entered here is
+not deployment proof.
+
+Invoke each request through the coordinated exact-version hosted path and save
+raw output locally. Confirm the session version binding separately; application
+version in `AgentResult` is not the Foundry deployment version. Then extract:
+
+```powershell
+.\.venv\Scripts\python.exe -m documentation_agent.acceptance extract `
+  --request .azure\acceptance-candidate\order-sync-retry-request.json `
+  --response .azure\acceptance-candidate\order-sync-retry-response.txt `
+  --expected-app-version 0.4.0 `
+  --output .azure\acceptance-candidate\order-sync-retry-result.json `
+  --analysis-output .azure\acceptance-candidate\order-sync-retry-analysis.json
+
+.\.venv\Scripts\python.exe evals\check_planted_gaps.py `
+  --scenario evals\datasets\order-sync-retry.json `
+  --result .azure\acceptance-candidate\order-sync-retry-analysis.json
+```
+
+Repeat with `order-sync-information-missing`. Extraction accepts Responses JSON
+or azd SSE output, rejects failed/incomplete/approval output and wrong request or
+application provenance, and produces both the full v1 result and the exact
+analysis-only shape required by the existing checker. It never alters scores,
+statuses or source evidence and refuses to overwrite old outputs.
+
+The unchanged checker's saved-result path does not independently prove source
+reads. Preserve raw outputs and session binding, keep the scenario hashes stable,
+and complete the P3 gate for #13 closure. The known Markdown-backtick URL-host
+false positive is not suppressed by this helper. Clean up only your own live
+test sessions after the separately authorized invocation.
 
 ## M1 local stub (#7)
 
