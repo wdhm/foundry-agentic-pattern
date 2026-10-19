@@ -103,13 +103,17 @@ See [src/contracts/](../src/contracts/README.md) for the field list. Key propert
 
 | Principal | Resource | Permission | Granted by | Notes |
 |---|---|---|---|---|
-| Agent identity `doc-agent` | Gateway app (`ado_mcp`) | App role `Mcp.Tools.ReadWrite.All` | [`onboard-agent.ps1`](../infra/scripts/onboard-agent.ps1) | The gateway accepts only this identity ([ADR 0021](adr/0021-agent-user-and-ado-mcp-gateway.md)) |
-| Agent **user** `doc-agent` (linked to the agent identity) | Azure DevOps org and project | Access level **Basic**, project **Contributors**; delegated consent to the Azure DevOps MCP app for this user only | `onboard-agent.ps1` | Reads work items and wiki; **wiki write only through the approval-gated tool** ([R3](risks.md#r3), [ADR 0008](adr/0008-human-in-the-loop-approval.md)) |
-| User-assigned MI `id-doc-agent-mcp` | Agent identity blueprint | Federated identity credential | `onboard-agent.ps1` | Secretless agent-user token exchange in the gateway |
+| Agent identity `documentation-agent` (hosted) | Gateway app (`ado_mcp`) | App role `Mcp.Tools.Read.All` | [`onboard-agent.ps1 -ReadOnly`](../infra/scripts/onboard-agent.ps1) | The gateway accepts only this identity since 2026-10-16 ([ADR 0021](adr/0021-agent-user-and-ado-mcp-gateway.md), [ADR 0024](adr/0024-hosted-documentation-runtime.md)) |
+| Agent **user** `documentation-agent` (linked to the agent identity) | Azure DevOps org and project | Access level **Stakeholder**, project **Readers**; delegated consent `Ado.Mcp.Tools wit.read wiki.read` for this user only | `onboard-agent.ps1 -ReadOnly` | Read-only: the gateway also sends `X-MCP-Readonly: true` upstream |
+| Agent identity `documentation-agent` (hosted) | Foundry project `proj-agentic` | Foundry User | [setup](setup.md#read-only-toolbox-and-hosted-assessment-p2-2026-10-16) | Model calls and the toolbox `documentation-agent-readonly` |
+| Agent identity `documentation-agent` (hosted) | Application Insights `appi-foundry-agentic` | Monitoring Metrics Publisher | [setup](setup.md#read-only-toolbox-and-hosted-assessment-p2-2026-10-16) | Runtime telemetry |
+| Project managed identity | Container registry | AcrPull | [setup](setup.md#read-only-toolbox-and-hosted-assessment-p2-2026-10-16) | Pulls the hosted agent image |
+| Agent identity `doc-agent` (prompt) | Gateway app (`ado_mcp`) | App role `Mcp.Tools.ReadWrite.All` | `onboard-agent.ps1` | Kept for rollback; the gateway rejects it (`403`) while it points at `documentation-agent` |
+| Agent **user** `doc-agent` (linked to the agent identity) | Azure DevOps org and project | Access level **Basic**, project **Contributors**; delegated consent to the Azure DevOps MCP app for this user only | `onboard-agent.ps1` | Kept for rollback. Reads work items and wiki; **wiki write only through the approval-gated tool** ([R3](risks.md#r3), [ADR 0008](adr/0008-human-in-the-loop-approval.md)) |
+| User-assigned MI `id-doc-agent-mcp` | Both agents' identity blueprints | Federated identity credential | `onboard-agent.ps1` | Secretless agent-user token exchange in the gateway |
 | User-assigned MI `id-doc-agent-mcp` | Container registry | AcrPull | [setup](setup.md) | Pulls the gateway image |
 | Project managed identity | Azure AI Search | Search Index Data Reader | [`setup-foundry-iq.ps1`](../infra/scripts/setup-foundry-iq.ps1) | The Foundry IQ connection authenticates as the project, so every agent in it can read the standard ([guide](workshop/foundry-iq-guide.md)) |
 | Connection `github-mcp` (fine-grained token) | One GitHub repo | Contents and Pull requests: read-only | [`setup-github-mcp.ps1`](../infra/scripts/setup-github-mcp.ps1) | GitHub doesn't accept Entra tokens. The token expires after 90 days ([guide](workshop/github-mcp-guide.md)) |
-| Agent identity `documentation-agent` (hosted stub) | – | None | – | Gets the same rows as `doc-agent` when it replaces it |
 | Operator (whoever runs the setup scripts) | Azure AI Search | Search Service Contributor, Search Index Data Contributor | `setup-foundry-iq.ps1` | Creates the index and uploads the standard |
 | Workshop participants (team accounts) | Foundry resource | Foundry User | [setup](setup.md#team-accounts-sign-in-to-azure-foundry-and-azure-devops-with-these) | Use the playground and run agents |
 

@@ -10,17 +10,27 @@
 
       1. Reads the agent's instance identity and blueprint from Foundry.
       2. Creates the agent user <AgentName>@<default domain> (Graph beta agentUser).
-      3. Adds the agent user to Azure DevOps (Basic + project Contributors).
+      3. Adds the agent user to Azure DevOps (Basic + project Contributors; -ReadOnly: Stakeholder + Readers).
       4. Grants delegated consent to the Azure DevOps MCP app for the agent user only (consentType Principal).
       5. Adds the gateway's managed identity as a federated credential on the agent's blueprint.
-      6. Assigns the gateway app role to the agent identity.
+      6. Assigns the gateway app role to the agent identity (-ReadOnly: creates Mcp.Tools.Read.All if missing).
       7. Re-points the gateway (Container App env vars) to this agent and waits until it is healthy.
+
+    -ReadOnly onboards with read access only: Stakeholder + project Readers, scopes without wiki.write, app role
+    Mcp.Tools.Read.All, and the gateway sets X-MCP-Readonly on every upstream call (ADO_MCP_READONLY=true).
 
     Requires: Azure CLI signed in as an account that can create users and grants in Entra and add users in Azure DevOps.
     The agent must already have the MCP tool that uses the gateway connection (guide step 8).
 
 .EXAMPLE
     ./infra/scripts/onboard-agent.ps1 -AgentName doc-agent `
+        -ProjectEndpoint https://<account>.services.ai.azure.com/api/projects/<project> `
+        -ResourceGroup rg-foundry-agentic-pattern -GatewayAppId <gateway-app-id> `
+        -AdoOrg foundry-agentic -AdoProject integration-team
+
+.EXAMPLE
+    # Hosted agent, read-only Azure DevOps access
+    ./infra/scripts/onboard-agent.ps1 -AgentName documentation-agent -ReadOnly `
         -ProjectEndpoint https://<account>.services.ai.azure.com/api/projects/<project> `
         -ResourceGroup rg-foundry-agentic-pattern -GatewayAppId <gateway-app-id> `
         -AdoOrg foundry-agentic -AdoProject integration-team
@@ -37,10 +47,18 @@ param(
     [string]$ManagedIdentity = 'id-doc-agent-mcp',
     [string]$GatewayRole = 'Mcp.Tools.ReadWrite.All',
     [string]$AdoScopes = 'Ado.Mcp.Tools wit.read wiki.read wiki.write',
+    [switch]$ReadOnly,
     [switch]$SkipGateway
 )
 
 $ErrorActionPreference = 'Stop'
+if ($ReadOnly) {
+    if (-not $PSBoundParameters.ContainsKey('GatewayRole')) { $GatewayRole = 'Mcp.Tools.Read.All' }
+    if (-not $PSBoundParameters.ContainsKey('AdoScopes')) { $AdoScopes = 'Ado.Mcp.Tools wit.read wiki.read' }
+    $AdoAccess = @{ License = 'stakeholder'; Group = 'projectReader'; Label = 'Stakeholder, Readers' }
+} else {
+    $AdoAccess = @{ License = 'express'; Group = 'projectContributor'; Label = 'Basic, Contributors' }
+}
 $AdoMcpAppId = '2a72489c-aab2-4b65-b93a-a91edccf33b8'   # Microsoft "Azure DevOps MCP" application
 $AdoResource = '499b84ac-1321-427f-aa17-267ca6975798'   # Azure DevOps
 $Graph = 'https://graph.microsoft.com'
@@ -112,7 +130,7 @@ if ($user) {
     Done "created: $upn ($($user.id))"
 }
 
-Step '3. Azure DevOps membership (Basic + Contributors)'
+Step "3. Azure DevOps membership ($($AdoAccess.Label))"
 $adoToken = Get-Token $AdoResource
 $entitlementsUri = "https://vsaex.dev.azure.com/$AdoOrg/_apis/userentitlements"
 $existing = (Invoke-Api GET "${entitlementsUri}?`$filter=name eq '$upn'&api-version=7.1-preview.3" $adoToken).members |
@@ -123,13 +141,13 @@ if ($existing) {
     $project = Invoke-Api GET "https://dev.azure.com/$AdoOrg/_apis/projects/${AdoProject}?api-version=7.1" $adoToken
     Invoke-WithRetry {
         $result = Invoke-Api POST "${entitlementsUri}?api-version=7.1-preview.3" $adoToken @{
-            accessLevel         = @{ accountLicenseType = 'express' }
+            accessLevel         = @{ accountLicenseType = $AdoAccess.License }
             user                = @{ principalName = $upn; subjectKind = 'user' }
-            projectEntitlements = @(@{ group = @{ groupType = 'projectContributor' }; projectRef = @{ id = $project.id } })
+            projectEntitlements = @(@{ group = @{ groupType = $AdoAccess.Group }; projectRef = @{ id = $project.id } })
         }
         if (-not $result.isSuccess) { throw "Azure DevOps: $($result.operationResult.errors | ConvertTo-Json -Compress)" }
     }
-    Done "added to $AdoOrg with Basic, Contributors in $AdoProject"
+    Done "added to $AdoOrg with $($AdoAccess.Label) in $AdoProject"
 }
 
 Step '4. Delegated consent to Azure DevOps MCP for the agent user only'
@@ -172,22 +190,37 @@ if ((Invoke-Api GET $ficUri $graphToken).value | Where-Object subject -eq $mi.pr
 Step "6. Gateway app role '$GatewayRole' for the agent identity"
 $gatewaySp = (Invoke-Api GET "$Graph/v1.0/servicePrincipals?`$filter=appId eq '$GatewayAppId'&`$select=id,appRoles" $graphToken).value[0]
 $roleId = ($gatewaySp.appRoles | Where-Object value -eq $GatewayRole).id
+if (-not $roleId -and $ReadOnly) {
+    $gatewayApp = Invoke-Api GET "$Graph/v1.0/applications(appId='$GatewayAppId')?`$select=id,appRoles" $graphToken
+    $roleId = [guid]::NewGuid().ToString()
+    $roles = @($gatewayApp.appRoles) + @{
+        id = $roleId; value = $GatewayRole; isEnabled = $true; allowedMemberTypes = @('Application')
+        displayName = 'Read Azure DevOps MCP tools'; description = 'Call the gateway; upstream calls are read-only.'
+    }
+    Invoke-Api PATCH "$Graph/v1.0/applications/$($gatewayApp.id)" $graphToken @{ appRoles = $roles } | Out-Null
+    Done "created app role $GatewayRole on the gateway app"
+}
 if (-not $roleId) { throw "App role $GatewayRole not found on gateway app $GatewayAppId" }
 $assigned = (Invoke-Api GET "$Graph/v1.0/servicePrincipals/$($gatewaySp.id)/appRoleAssignedTo" $graphToken).value |
     Where-Object { $_.principalId -eq $identityId -and $_.appRoleId -eq $roleId }
 if ($assigned) {
     Done 'exists'
 } else {
-    Invoke-Api POST "$Graph/v1.0/servicePrincipals/$($gatewaySp.id)/appRoleAssignedTo" $graphToken @{
-        principalId = $identityId; resourceId = $gatewaySp.id; appRoleId = $roleId
-    } | Out-Null
+    Invoke-WithRetry {
+        Invoke-Api POST "$Graph/v1.0/servicePrincipals/$($gatewaySp.id)/appRoleAssignedTo" $graphToken @{
+            principalId = $identityId; resourceId = $gatewaySp.id; appRoleId = $roleId
+        } | Out-Null
+    }
     Done 'assigned'
 }
 
 if ($SkipGateway) { Step '7. Gateway: skipped'; return }
 
 Step "7. Re-point gateway '$ContainerApp' to this agent"
-$desired = [ordered]@{ AGENT_BLUEPRINT_CLIENT_ID = $blueprintAppId; AGENT_IDENTITY_CLIENT_ID = $identityClientId; AGENT_USER_UPN = $upn }
+$desired = [ordered]@{
+    AGENT_BLUEPRINT_CLIENT_ID = $blueprintAppId; AGENT_IDENTITY_CLIENT_ID = $identityClientId; AGENT_USER_UPN = $upn
+    MCP_REQUIRED_ROLE = $GatewayRole; ADO_MCP_READONLY = $ReadOnly.IsPresent.ToString().ToLower()
+}
 $app = az containerapp show -g $ResourceGroup -n $ContainerApp -o json | ConvertFrom-Json
 $current = @{}; $app.properties.template.containers[0].env | ForEach-Object { $current[$_.name] = $_.value }
 $changes = $desired.Keys | Where-Object { $current[$_] -ne $desired[$_] }

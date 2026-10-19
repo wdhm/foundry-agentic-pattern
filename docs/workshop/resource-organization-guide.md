@@ -50,9 +50,9 @@ Region is per resource. Capacity pushed us into **three regions**: Foundry in Sw
 | Account managed identity | `foundry-agentic-R8N3LD` | Resource-level access to other Azure services | None assigned; not needed in the MVP |
 | **Project managed identity** | `foundry-agentic-R8N3LD/projects/proj-agentic` | Connections with auth `ProjectManagedIdentity`; also federates the shared agent identity blueprint | **Search Index Data Reader** on AI Search (Foundry IQ) |
 | Shared project agent identity | in the project's JSON view (`agentIdentity`) | Default identity for in-development agents in the agent application model | None; our agents use their own identity |
-| **Agent identity: `doc-agent`** | `foundry-agentic-R8N3LD-proj-agentic-doc-agent-AgentIdentity` | Connection `ado-mcp-proxy` (`AgenticIdentityToken`) | App role `Mcp.Tools.ReadWrite.All` on the gateway app; linked **agent user** for Azure DevOps ([agent identity guide](agent-identity-guide.md)) |
-| Agent identity: `documentation-agent` | `foundry-agentic-R8N3LD-proj-agentic-documentation-agent-AgentIdentity` | Hosted agent runtime | None yet (stub) |
-| User-assigned MI `id-doc-agent-mcp` | `id-doc-agent-mcp` | Gateway: federated credential on the agent's blueprint for the agent-user token exchange | **AcrPull** on the ACR |
+| Agent identity: `doc-agent` | `foundry-agentic-R8N3LD-proj-agentic-doc-agent-AgentIdentity` | Connection `ado-mcp-proxy` (`AgenticIdentityToken`) | App role `Mcp.Tools.ReadWrite.All` on the gateway app; linked **agent user** (Basic + Contributors). Kept for rollback: the gateway no longer accepts it |
+| **Agent identity: `documentation-agent`** | `foundry-agentic-R8N3LD-proj-agentic-documentation-agent-AgentIdentity` | Hosted agent runtime; connection `ado-mcp-proxy` | App role `Mcp.Tools.Read.All` on the gateway app; linked **agent user** (Stakeholder + Readers, read-only) ([agent identity guide](agent-identity-guide.md#read-only-onboarding-hosted-agent)) |
+| User-assigned MI `id-doc-agent-mcp` | `id-doc-agent-mcp` | Gateway: federated credential on both agents' blueprints for the agent-user token exchange | **AcrPull** on the ACR |
 
 Key point for the workshop: **the connection decides which identity is presented**. The same agent uses three identities across its three tools:
 

@@ -4,9 +4,10 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from agent_framework import Content, FunctionInvocationContext, FunctionMiddleware, MiddlewareFailure
-from mcp.types import CallToolResult
+from mcp.types import CallToolResult, TextResourceContents
 from pydantic import BaseModel
 
+from contracts.evaluation import ExecutionRecord
 from contracts.v1 import AgentRequest
 
 from .settings import AssessmentSettings
@@ -63,6 +64,14 @@ def parse_read_result(result: CallToolResult) -> str:
         raise MiddlewareFailure("Source tool returned an error; assessment stopped.")
     if result.structuredContent is not None:
         return json.dumps(result.structuredContent)
+    # GitHub get_file_contents returns a status line plus the file as an embedded text resource.
+    documents = [
+        {"uri": str(item.resource.uri), "content": item.resource.text}
+        for item in result.content
+        if item.type == "resource" and isinstance(item.resource, TextResourceContents)
+    ]
+    if documents:
+        return json.dumps({"documents": documents})
     text = [item.text for item in result.content if item.type == "text"]
     if not text:
         raise MiddlewareFailure("Source tool returned no readable content.")
@@ -72,10 +81,13 @@ def parse_read_result(result: CallToolResult) -> str:
 class ReadOnlyPolicy(FunctionMiddleware):
     """Enforce actions before dispatch and retain evidence for this invocation only."""
 
-    def __init__(self, request: AgentRequest, settings: AssessmentSettings) -> None:
+    def __init__(
+        self, request: AgentRequest, settings: AssessmentSettings, record: ExecutionRecord | None = None
+    ) -> None:
         self.request = request
         self.settings = settings
         self.calls: list[dict[str, Any]] = []
+        self.record = record
 
     async def process(self, context: FunctionInvocationContext, call_next: Callable[[], Awaitable[None]]) -> None:
         arguments = (
@@ -103,3 +115,5 @@ class ReadOnlyPolicy(FunctionMiddleware):
                 "output": output,
             }
         )
+        if self.record is not None:
+            self.record.tool_calls.append(dict(self.calls[-1]))

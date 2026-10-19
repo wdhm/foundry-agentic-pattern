@@ -36,13 +36,44 @@ were not exposed by the outer response. Sanitized request, concrete-version
 session, response, result and verification records remain in the deployment
 owner's ignored `.azure/approved-hosted-assessment/`; no credentials are stored.
 
+### Version selection and later P1 handoff
+
+The October 19 read-only check found latest version 7 but named serving pinned
+to version 6 at 100%. Before the smoke, concrete version 6's full definition,
+immutable digest, identity, metadata and active status matched the original
+reviewed baseline exactly. The smoke used the **original fixture from source
+`2b77527`**, not today's task-aware example: version 6 does not accept the new
+`request.task` field.
+
+P1's [October 19 handoff on #80](https://github.com/wdhm/foundry-agentic-pattern/pull/80)
+reports version 7 built from main `89e8593`, digest
+`sha256:a12275d5a2176b722e6a65de23355d44ed7a327edf024f00451ac7872649dcf0`,
+with the same read-only configuration, application `0.4.0` and no serving
+promotion. It reports both task-aware cases passing three times each, but not
+the full P3 gate. Those are P1's reported results, not extra invocations by this
+deployment session.
+
+P1 also reports a version-7 session/outer-response discrepancy: session GET
+binds `version_ref=7`, while outer Responses `agent_reference.version` says `6`
+(the serving version). Preserve both identifiers; do not treat that outer field
+alone as candidate-version binding proof. The version-6 smoke above had matching
+session and outer version 6. Neither observation certifies evaluation mode,
+actual model revision or nested tool accuracy.
+
 ## Historical configuration observations
 
-**Latest read-only follow-up, 2026-10-16:** after P1 reported fixing access,
+The remainder is the dated preparation record, **not current deployment
+instructions**. P1/P2 subsequently completed the gateway/toolbox/hosted work
+documented in [setup](../setup.md#read-only-toolbox-and-hosted-assessment-p2-2026-10-16).
+The early version 4 observation predates version 6 and removal of intermediates.
+Do not rerun the old transition proposal or administrator bootstrap merely
+because a historical hold below remains in the record.
+
+**Read-only follow-up, 2026-10-16:** after P1 reported fixing access,
 the approved configuration-only tool setup was independently observed already
-present. Hosted `documentation-agent:4` is active with assessment configuration,
+present. Hosted `documentation-agent:4` was active with assessment configuration,
 an immutable image and version-specific `documentation-agent-readonly:1` endpoint.
-Its named selector remains `@latest` at 100%, so it now selects version 4.
+Its named selector was `@latest` at 100%, selecting version 4 at that time.
 The prompt agent remains version 3. These changes were not deployed by this
 preparation session; no duplicate setup or reconciliation writes were performed.
 
@@ -70,7 +101,7 @@ certification or Teams publication. No Azure mutations or remote invocations
 were performed. The canonical, environment-specific plan is the deployment
 owner's ignored `.azure/deployment-plan.md`; this guide contains no tenant IDs.
 
-## Verified state and blockers
+## Historical verified state and blockers (before cutover)
 
 | Surface | Read-only result |
 |---------|------------------|

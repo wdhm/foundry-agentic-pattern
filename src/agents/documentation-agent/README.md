@@ -4,20 +4,66 @@ The **Documentation Agent**: a Microsoft Foundry **hosted agent** (container) bu
 
 ## Hosted assessment implementation (P1, #13)
 
+### Task-aware assessment fix (local code, not deployed)
+
+Application `0.4.0` accepts `request.task` with a `scope` and `question`. This
+fixes the missing task channel found in hosted v6 acceptance. The existing
+source references define what may be read; the task defines what question those
+sources should answer. It cannot change tool permissions or authorize writes.
+
+| Scope | Behaviour |
+|---|---|
+| `change_review` | Review documentation for explicit changed paths; do not invent a release/change-log task or let an unrequested date block the review |
+| `information_review` | Check the specific requested facts; report unsupported facts in `missing_information` even if unrelated documentation gaps also exist |
+| Omitted/null task | Previous source-based assessment; not a substitute for a caller's missing question |
+
+The model receives the full validated request JSON. Question text is not injected
+into system instructions. Versioned `app/prompts/gap-analysis-v1.1.txt` describes
+scope and status precedence; the existing policy and read guards remain unchanged.
+Contradictory task output fails explicitly; the app never forces a passing status.
+
+Use `examples/assessment-request.json` for the original PR-change question and
+`examples/information-review-request.json` for the original missing-information
+question. They preserve the scenario questions and pinned sources, without
+altering P3's datasets or scoring. Generate fresh request/correlation IDs for
+live runs. The model still has only the allowed file-read tools; a question's
+reference to a PR diff does not grant a new tool or permission.
+
+**Deployment handoff:** hosted v6 does not accept the task field. P3 must deploy
+the reviewed task-aware artifact and map scenario/CLI intent into `request.task`;
+do not silently discard it. Re-run both original acceptance expectations on that
+exact version before closing #13. Local fake-model tests are not quality acceptance.
+No source connections, remote versions or serving settings changed in this fix.
+
+The opt-in [P1 evaluation interface](EVALUATION_INTERFACE.md) adds controlled
+source snapshots and request-correlated model/tool evidence for P3 integration.
+It is local code only and disabled by default. Existing stub/assessment payloads
+are unchanged. The interface is not a replacement for P3's release/evaluation
+workflow and is not enabled on the deployed agent.
+
 For the separate #1 approval experiment, see the
 [native approval spike guide](../../../docs/workshop/hosted-approval-spike.md).
 It has its own local-only entry point and a dummy state receipt; it does not
 enable writes in assessment mode or change the deployed agent.
 
+For #15, the opt-in [exact-call Toolbox approval runtime](TOOL_APPROVAL.md)
+reuses the spike's native transport/state preconditions but dispatches an actual
+configured tool after approval. It is not deployed. Its policy pins one tool and
+target. The `propose_result` adapter connects a selected v1 proposed change and
+its evidence to approval when the configured tool supports section-scoped writes;
+whole-page composition is deliberately not guessed. Teams publication and shared
+permission changes are not included.
+
 The main runtime is now the hosted Python app ([ADR 0024](../../../docs/adr/0024-hosted-documentation-runtime.md)).
-Its assessment path is implemented locally, but **not deployed or verified
-against live tools**. P2 must supply the toolbox endpoint and source access;
-the shared gateway has not been switched away from the working prompt agent.
+Assessment mode is deployed as `documentation-agent:6` and verified end to end
+against live tools through P2's read-only toolbox `documentation-agent-readonly`
+([setup](../../../docs/setup.md#read-only-toolbox-and-hosted-assessment-p2-2026-10-16)).
 
 | Mode | Input | Behaviour |
 |---|---|---|
 | `DOCUMENTATION_MODE=stub` (default) | Contract v0 | Existing deterministic #7 demo; no model or tool calls |
 | `DOCUMENTATION_MODE=assessment` | Contract v1 | Direct Foundry model call through Agent Framework, read-only toolbox tools, validated result |
+| `DOCUMENTATION_MODE=approval` plus explicit enable flag | Proposed content / native approval / modify / inspect | Separate exact-call approval runtime; requires a reviewed target policy and verified hosted actor |
 
 The default remains stub for compatibility. Assessment mode fails startup if
 required configuration is absent; it never silently falls back to a stub result.
@@ -35,7 +81,7 @@ Each invocation owns its clients, credentials and tool evidence; state is not
 shared between requests. The model receives the versioned prompt/policy packaged
 in `app/prompts/` and `app/policies/`. It produces only `AnalysisOutput`. The
 runtime adds the input request ID, model configuration, application version
-`0.2.0` (not the Foundry deployment version), and instruction/policy hashes.
+`0.4.0` (not the Foundry deployment version), and instruction/policy hashes.
 No unvalidated model tokens are streamed to the caller.
 
 The official `FoundryToolbox` adapter handles authentication and platform call-ID
@@ -44,9 +90,11 @@ mode is for local development. Tool/client failures, missing tools, refusals,
 invalid output, unmatched evidence and a 180-second invocation timeout fail
 explicitly, not as successful assessments.
 
-### P2 integration inputs (not provisioned by this change)
+### P2 integration inputs
 
-P2 provides a toolbox in the existing project with these exact exposed names:
+P2 provides the toolbox `documentation-agent-readonly`
+([`setup-toolbox.ps1`](../../../infra/scripts/setup-toolbox.ps1)) with these
+exact exposed names:
 
 | Tool | P1 runtime restriction |
 |---|---|
@@ -63,15 +111,17 @@ to the four filtered read tools; the runtime rejects write actions independently
 of toolbox approval metadata. Enabling writes requires #15, not a configuration
 toggle on this assessment runner.
 
-P2 must also verify the hosted identity's model/tool permissions, existing
-connection authentication, and the ADO gateway transition. The gateway serves
-one agent identity; do not run onboarding to switch it without coordination.
-This implementation creates no toolbox, connection or role assignment.
+P2 verified the hosted identity's model/tool permissions, connection
+authentication and the ADO gateway transition; see
+[setup](../../../docs/setup.md#read-only-toolbox-and-hosted-assessment-p2-2026-10-16).
+The gateway serves one agent identity; do not run onboarding to switch it
+without coordination.
 
 Evidence verification reuses `contracts.evidence`, also used by the scenario
 checker. It supports P2's documented Git `documents[].content`, wiki
-`page`/`eTag`, and work-item `fields`/`rev` outputs. Different output shapes must
-be verified during integration; unsupported evidence is rejected. This matches
+`page`/`eTag`, and work-item `fields`/`rev` outputs. GitHub MCP returns the
+file as an embedded text `resource`; `parse_read_result` maps it to
+`documents[].content`. Unsupported evidence is rejected. This matches
 actual source excerpts, not the truth of every generated inference.
 
 ### Run assessment mode after P2 supplies access
@@ -111,6 +161,53 @@ with in-memory model/tool doubles: valid/invalid requests, writes blocked before
 execution, pinned source access, output/evidence validation, timeout, streaming,
 per-request isolation and resource cleanup. They are not a substitute for the
 live hosted scenarios after P2 integration.
+
+### Prepare #13 acceptance without touching P3's caller or gold
+
+`documentation_agent.acceptance` is an offline helper for the two original live
+cases, not an invocation client or a replacement evaluation gate. After P3 gives
+you the concrete deployment version containing PR #84, prepare a **new** directory:
+
+```powershell
+# Replace 42 with the actual candidate version supplied by P3; it is not discovered here.
+.\.venv\Scripts\python.exe -m documentation_agent.acceptance prepare `
+  --agent-version 42 --output-dir .azure\acceptance-candidate
+```
+
+It verifies the P1 examples still match the canonical sources/questions, adds
+the explicit scope, generates fresh request/correlation IDs and saves single-line
+JSON requests plus a `prepared_not_run` manifest with scenario hashes. It does not
+change datasets, thresholds, resources or sessions. A version entered here is
+not deployment proof.
+
+Invoke each request through the coordinated exact-version hosted path and save
+raw output locally. Confirm the session version binding separately; application
+version in `AgentResult` is not the Foundry deployment version. Then extract:
+
+```powershell
+.\.venv\Scripts\python.exe -m documentation_agent.acceptance extract `
+  --request .azure\acceptance-candidate\order-sync-retry-request.json `
+  --response .azure\acceptance-candidate\order-sync-retry-response.txt `
+  --expected-app-version 0.4.0 `
+  --output .azure\acceptance-candidate\order-sync-retry-result.json `
+  --analysis-output .azure\acceptance-candidate\order-sync-retry-analysis.json
+
+.\.venv\Scripts\python.exe evals\check_planted_gaps.py `
+  --scenario evals\datasets\order-sync-retry.json `
+  --result .azure\acceptance-candidate\order-sync-retry-analysis.json
+```
+
+Repeat with `order-sync-information-missing`. Extraction accepts Responses JSON
+or azd SSE output, rejects failed/incomplete/approval output and wrong request or
+application provenance, and produces both the full v1 result and the exact
+analysis-only shape required by the existing checker. It never alters scores,
+statuses or source evidence and refuses to overwrite old outputs.
+
+The unchanged checker's saved-result path does not independently prove source
+reads. Preserve raw outputs and session binding, keep the scenario hashes stable,
+and complete the P3 gate for #13 closure. The known Markdown-backtick URL-host
+false positive is not suppressed by this helper. Clean up only your own live
+test sessions after the separately authorized invocation.
 
 ## M1 local stub (#7)
 
@@ -199,6 +296,8 @@ The image uses Python 3.13, runs as a non-root user and listens on port 8088.
 Its build context includes all three packages declared in `pyproject.toml`
 (`contracts`, `documentation_agent` and `tools`); omitting `src/tools` fails
 the wheel build even though the hosted entry point does not use the trigger CLI.
+The allowlist also includes declared contract schemas, including the opt-in
+evaluation interface schemas; packaging them does not enable evaluation mode.
 The explicit `linux/amd64` build target avoids producing an ARM64 image on
 ARM-based development machines. Docker Desktop may use emulation for this build.
 The root `.dockerignore` allowlists only build inputs, excluding credentials,
