@@ -1,106 +1,132 @@
 # Five-minute CLI trigger
 
-The manual fallback for [#10](https://github.com/wdhm/foundry-agentic-pattern/issues/10)
-uses the **existing prompt agent `doc-agent`**, not the separately hosted v0
-`documentation-agent`. It reads an exact agent version and invokes the Responses
-API with `agent_reference`. It never creates/configures agents or changes tools,
-instructions, gateway routing or infrastructure. `documentation-prompt` remains
-the separate no-tools contract demonstration.
+The default manual trigger targets **hosted `documentation-agent` assessment**,
+per [ADR 0024](../adr/0024-hosted-documentation-runtime.md). The CLI does not deploy
+an image, create an agent version, change routing, grant permissions, repoint a
+gateway or publish to Teams. Invoking an existing hosted version creates a fresh
+version-bound session and can incur compute/model/tool charges; run only with
+separate invocation approval.
 
-## Install and invoke
+## Prerequisites and input
 
-Python 3.11+, Azure CLI login (`az login`) and permission to read/invoke the
-Foundry project are required. Install in a virtual environment from the repo:
+Install Python 3.11+ and `python -m pip install -e ".[agent,prompt]"` in a virtual
+environment. Existing Azure CLI authentication and read/invoke/model-read access
+to the exact project are required; this command does not log in for you.
 
-```powershell
-python -m pip install -e ".[prompt]"
-documentation-trigger invoke --help
-```
+P1/P2 must have built/published the reviewed immutable container, configured and
+deployed **assessment**, supplied the real toolbox and verified hosted identity
+access. `agent.yaml`'s historical stub default is not an assessment. See the
+[runtime guide](../../src/agents/documentation-agent/README.md) and
+[release prerequisites](evaluation-release-guide.md).
 
-`python -m tools.cli invoke` is equivalent after installation. Verify the exact
-existing prompt-agent version in Foundry and its model version in deployment
-configuration. There is no `latest` fallback. On 2026-10-16 the live selection was
-`doc-agent:3`, deployment `gpt-6-luna`, model version `2026-09-22`; recheck these
-before using a different selection.
+Create an operator-reviewed artifact JSON (no credentials) with the strict
+`tools.hosted.HostedArtifact` fields:
 
-For a changed-code assessment, supply an actual full Git commit SHA. This example
-uses the pinned demo PR's commit and source references:
+| Field | Review requirement |
+|---|---|
+| `image` | Actual registry/repository `@sha256:<64 lowercase hex>`; tags are rejected |
+| `source_commit` | Full build source commit |
+| `build_reference` | Build/publish evidence associating that source with the exact digest |
+| `readiness_review_reference` | P1/P2 review of packaged runtime, settings, tools and access |
+| `runtime_provenance` | Actual P1 `contracts.v1.Provenance`, including application version and instruction/policy hashes |
+
+The CLI compares the active version's stable SDK definition, image, Responses
+2.0.0 protocol, managed-identity settings, project and deployed model version.
+It reuses P1's `AssessmentSettings` and `AssessmentAgent` instruction assembly
+to verify expected provenance against locally installed reviewed code. Install
+the runtime revision corresponding to the image, not an unrelated wheel.
+The build reference is an operator attestation, not a registry signature:
+the CLI cannot independently prove which source files an image contains.
+
+After assessment deployment and invocation approval:
 
 ```powershell
 documentation-trigger invoke `
-  --project-endpoint https://foundry-agentic-r8n3ld.services.ai.azure.com/api/projects/proj-agentic `
-  --agent-name doc-agent --agent-version 3 --model-version 2026-09-22 `
+  --project-endpoint "<existing-project-endpoint>" `
+  --agent-version "<concrete-Foundry-version>" --model-version "<actual-model-revision>" `
+  --artifact "<reviewed-hosted-artifact.json>" `
   --repo wdhm/foundry-agentic-pattern --commit ad623147fbb1eeb9a6423d437df199c91db15a9e `
   --path samples/sample-integration/config/settings.json `
   --path samples/sample-integration/src/order_sync.py `
-  --pr-reference https://github.com/wdhm/foundry-agentic-pattern/pull/62 `
   --wiki-page "/Order Sync/Overview" --work-item 1 `
-  --documentation-standard-ref data/documentation-standard.md `
+  --documentation-standard-ref "<verified-documentation-standard-reference>" `
   --requested-by demo-reviewer
 ```
 
-Replace the paths, wiki page and work item with the sources for your scenario.
-`--path`, `--wiki-page`, `--work-item` and `--adr-ref` are repeatable;
-`--pr-reference` is optional. `--request-id` and `--correlation-id` accept UUIDs
-for external correlation; otherwise fresh UUIDs are generated. A pinned commit
-takes precedence over an advanced branch/PR. References identify sources, not
-evidence: the agent must retrieve actual content.
+`--agent-name` defaults to `documentation-agent` for hosted mode. `--path`,
+`--wiki-page`, `--work-item` and `--adr-ref` are repeatable; `--pr-reference`
+is optional. Full Git SHA is mandatory. `--request-id` and `--correlation-id`
+accept UUIDs; otherwise each invocation generates fresh IDs.
 
-## Result and provenance
+Task-aware runtime app `0.4.0` also supports paired `--task-question` and
+`--task-scope change_review|information_review`, serialized as canonical
+`request.task`. Omit both to preserve legacy source-based assessment.
+`change_review` requires changed paths; `information_review` makes the missing-fact
+intent explicit. Task text is a question/scope, never gold answers, source evidence
+or write authorization. The CLI keeps P1's task validation and status precedence.
 
-Stdout is one JSON object with `run_id` (the first real Responses API response
-ID), `response_ids` (including continuations), `request_id`, `correlation_id` and
-`result` (a schema- and semantics-validated `contracts.v1.AgentResult`).
-Extract **`result`** when passing it to a consumer such as the planted-gaps checker;
-the whole run report is not an AgentResult. Stderr contains correlation IDs,
-response IDs, tool approval details and errors. Exit 0 means a valid assessment,
-including an honest `insufficient_information`; invocation, retrieval errors,
-refusals or invalid output exit nonzero without a success-shaped result.
+The actual model input is **only one bare AgentRequest v1 JSON user text**.
+The CLI does not wrap it in a scenario prompt, source bundle, gold answer or
+chat history, and does not attempt `tool_choice=none` to override P1's internal
+Agent Framework loop. Only P1's configured read tools execute.
 
-The CLI sends request/correlation IDs as Responses metadata and preserves them
-locally. It adds provenance from the selected agent's name/version, deployment
-name, SHA-256 of the exact instructions and required policy-version metadata.
-`--model-version` is a caller assertion from deployment configuration, not a
-model-generated value or independently discovered model revision.
-Validation checks evidence relationships and version shapes, not source truth
-or recall. No telemetry exporter or custom audit store is added.
+## Output and version identity
 
-A read-only smoke invocation on 2026-10-16 against `doc-agent:3` returned a
-validated `gaps_found` AgentResult with Git/wiki/work-item evidence.
-Run ID: `resp_0c26cb44747c1c09006ad1d8edf2a48194b2b67d734931f75d`;
-correlation ID: `e94dcd51-52ca-4d43-8494-9a9eb34cb062`.
-This establishes CLI invocation/validation, not eval thresholds or publishing.
+Stdout is one report containing real `run_id`/`response_ids`,
+`agent_session_id`, exact Foundry `agent_version`, image/build/source lineage,
+request/correlation IDs and the actual validated `result`.
+`result` is already P1's `contracts.v1.AgentResult`: it is **not** reassembled
+from `AnalysisOutput` or given invented caller provenance.
 
-## Native approvals and the current P1 boundary
+P1's `result.provenance.agent_version` is the **application version** (currently
+`0.4.0`), not the Foundry version. Both identities are retained independently.
+Request ID, Git evidence SHA and reviewed runtime provenance must match.
+Failed/incomplete responses, invalid JSON, wrong version/correlation, refusals
+and unexpected tools/approval requests exit nonzero without a success report.
+The hosted CLI never resumes approvals or turns proposals into writes.
 
-When Foundry emits `mcp_approval_request`, the CLI displays its ID, server, tool
-and full arguments on stderr. A human at an interactive terminal must type exactly
-**Approve** or **Reject**. It sends `mcp_approval_response` for that exact request
-ID with `previous_response_id`, retaining the pinned agent version and correlation
-metadata. Rejection sends `approve=false`; the agent may then return an honest
-assessment. Multiple requests/rounds are reviewed individually. Invalid input,
-EOF, noninteractive stdin or malformed/replayed approval IDs stop without
-resuming. There is no auto-approve flag or custom persistence/resume service.
+Each invocation explicitly creates a fresh session bound to the selected
+version, GET-confirms its binding/readiness, then uses the agent's Responses
+endpoint with `agent_session_id`. This **bypasses serving selection** and is not
+named-endpoint serving-pin proof. Sessions do not migrate when routing changes.
+Created sessions are retained; no implicit stop/delete or routing cleanup occurs.
+Record their IDs and manage their lifecycle through a separately approved plan.
 
-**The current policy is assessment-only.** The CLI checks for the shared
-assessment policy, v1 schema, policy metadata and native wiki-write approval
-configuration before invoking; it does not relax any of them. The current agent
-must return proposals and must not ask to write, even if asked to complete docs.
-Do not use a live wiki write to smoke-test this CLI. Approval/rejection/resume
-are covered with mocks. A proposed change or `requires_human_review=true` is
-not a pending tool call and is never treated as permission to publish.
+The report separately retains `session_version_indicator`, `outer_agent_reference`
+and `version_evidence`. If the outer reference is absent, the report labels the
+evidence `session_get_only`, not independent executing-image proof. If the outer
+reference names another agent/version, the CLI logs both values and the real
+session/response IDs on stderr, then exits nonzero without candidate-version
+success. P1 reported session GET version 7 versus outer version 6 on 2026-10-19;
+this branch tests that discrepancy offline and does not hide it behind matching
+application provenance. No cloud reproduction or platform resolution is claimed.
 
-A full assess -> approve -> wiki-write/Teams flow still depends on P1's
-publishing/runtime policy and native HITL integration
-([#15](https://github.com/wdhm/foundry-agentic-pattern/issues/15),
-[#16](https://github.com/wdhm/foundry-agentic-pattern/issues/16),
-[#31](https://github.com/wdhm/foundry-agentic-pattern/issues/31)).
-The CLI does not implement that orchestration or convert assessment proposals
-into writes. The old hosted v0 stub cannot return this v1 result.
+This is a valid assessment smoke path when real P2 access is ready, not release
+certification: P1's nested tool traces are not in outer Responses. The full
+five-case gate remains blocked on **P3 adapter integration** of P1's separately
+opted-in evaluation interface, isolated configuration/evaluator mappings and
+trustworthy version evidence. Main's `contracts.evaluation` now supports supplied
+sources and observed execution records, but ordinary assessment remains unchanged.
+This CLI rejects evaluation/approval modes rather than silently enabling or
+interpreting their envelopes as AgentResult. No live evaluator result is claimed here.
 
-See [ADR 0022](../adr/0022-mvp-scope-platform-first.md) (P3 approved 2026-10-16;
-older proposed wording is historical) and
-[ADR 0023](../adr/0023-versioned-structured-output-contract.md).
-Platform references:
-[Responses API and agent_reference](https://learn.microsoft.com/azure/foundry/agents/how-to/migrate#migrate-runs-to-responses),
-[native MCP approvals and continuation](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/model-context-protocol?pivots=python#create-an-agent-in-python-with-the-mcp-tool).
+## Explicit prompt compatibility
+
+The earlier behavior remains available by adding `--agent-kind prompt`.
+`--agent-name` then defaults to `doc-agent`; `--artifact` is not used. Existing
+request/model/version flags and `python -m tools.cli invoke` remain supported.
+This secondary path uses project Responses `agent_reference.version`, validates
+`AnalysisOutput`, and assembles caller-owned `AgentResult`. Its interactive
+native MCP approval handling is unchanged: exact Approve/Reject, no automatic
+approval, no noninteractive resume. It must not be confused with hosted write
+enforcement. `documentation-prompt` is still the separate no-tools contract demo.
+
+Historical prompt smoke on 2026-10-16 against `doc-agent:3` returned `gaps_found`:
+run `resp_0c26cb44747c1c09006ad1d8edf2a48194b2b67d734931f75d`,
+correlation `e94dcd51-52ca-4d43-8494-9a9eb34cb062`.
+That remains prompt-only evidence, not a hosted baseline or release score.
+
+Official sources:
+[hosted session sample](https://github.com/Azure/azure-sdk-for-python/blob/main/sdk/ai/azure-ai-projects/samples/hosted_agents/sample_sessions_crud.py),
+[session Responses invocation](https://github.com/Azure/azure-sdk-for-python/blob/main/sdk/ai/azure-ai-projects/samples/hosted_agents/sample_session_log_stream.py),
+[session management](https://learn.microsoft.com/azure/foundry/agents/how-to/manage-hosted-sessions).

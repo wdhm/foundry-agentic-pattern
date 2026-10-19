@@ -1,179 +1,236 @@
-# Prompt-agent evaluation and release automation
+# Hosted documentation-agent evaluation and release
 
-**Offline implementation only, 2026-10-16.** Bounded #25/#26/#27 MVP work;
-not completion evidence for #25/#27/#33. P3 approved ADR 0022's platform-first
-scope on this date. Five handmade cases, Foundry built-in evaluators, explicit
-release criteria, manual promotion and rollback. No custom metric framework,
-prompt-agent container build, canary or untrusted-PR execution.
+**Offline alignment, reconciled 2026-10-19.** Hosted **`documentation-agent`** is the primary
+workshop/release target, per P3's direction and [ADR 0024](../adr/0024-hosted-documentation-runtime.md).
+The former prompt `doc-agent` runner remains an explicitly selected compatibility
+path. This package does not claim a deployed assessment, live evaluation,
+promotion, rollback, Teams delivery or completion of #13/#25/#27/#33.
 
-## Dependencies and target
+## Implemented and deliberately blocked
 
-The runner reuses these dependencies, now merged into main:
-
-| Dependency | Original commit | Purpose |
-|---|---|---|
-| [#71](https://github.com/wdhm/foundry-agentic-pattern/pull/71) | `5e5e42b3753466b122d6509498b08f93f8921b36` | `tools.cli` assessment parsing and selected-version provenance |
-| [#72](https://github.com/wdhm/foundry-agentic-pattern/pull/72) | `a48ab8d58719375ded2db254c20663b5c5e2c219` | dataset/contract v1, five cases and pinned snapshots |
-
-Original dependency cherry-picks remain separate from the runner implementation
-commit. After the coordinator merged both dependency PRs, this branch integrated
-main at `40a43d2b559dd2d9bfc4fce62106726204855591`, preserving the canonical CLI,
-datasets, checker, dataset README and complete packaging/type-check configuration.
-The integration also retains the merged monitoring, rollback guide, slides and
-hosted approval spike; this package did not merge those PRs.
-
-Target: **prompt `doc-agent`**, not PR #74's hosted `documentation-agent`.
-The no-tools `contracts.prompt` demonstration is unchanged. CLI public behavior,
-shared contracts, checker, datasets, P1/P2 runtime policy and infrastructure are
-unchanged by the runner. The candidate path conservatively supports only
-**appending reviewed instructions**, with all base instructions, model, tools,
-structured schema and policy metadata retained verbatim. More extensive policy
-or tool changes require a separate reviewed release path.
-
-## What the runner does
-
-`python -m tools.release` takes a local reviewed plan, the existing
-`evals/datasets/suite.json`, `EVAL_MODEL_DEPLOYMENT`, a fresh output directory,
-and a separate `--execute-approved-cloud` acknowledgement. Without execution
-approval it exits blocked; there is no implicit dry-run score or synthetic pass.
-Offline verification uses mocked tests, not this execution flag.
-
-1. Validate the five-case suite, contract requests, snapshot blob identities and
-   pinned documentation standard. Generate fresh request/correlation IDs per run.
-2. Require unexpired approval, exclusive writer hold and evaluator compatibility
-   references, a nonempty explicitly selected evaluator deployment, exact
-   model-version expectations and all three numeric thresholds.
-3. GET the exact named serving agent. Require complete endpoint/identity equality
-   with the reviewed snapshot and exactly one concrete version at 100%. Confirm
-   active serving/base versions, base still latest, append-only instructions and
-   deployment model versions. Recheck approval and serving pin before creation.
-4. Create one immutable candidate via `project.agents.create_version`, GET it back,
-   require the exact reviewed definition/metadata and active status. Record its
-   **actual returned version**, not the base version or application version.
-5. Invoke that candidate explicitly with `agent_reference.version`. This deliberately
-   **bypasses serving routing**; it is not proof of protected named-endpoint traffic.
-   Two live-source cases retain tool execution and verify all pinned reads,
-   source content/versions, actual evidence excerpts and Foundry IQ retrieval.
-   Unexpected sources or evidence drift block before evaluator submission.
-   Three supplied-source cases get only their allowlisted snapshots, with
-   `tool_choice="none"`; any returned tool use/discovery blocks.
-6. Validate `AnalysisOutput`, assemble caller-owned `AgentResult`, enforce unchanged
-   expected status and retain response/run/correlation IDs plus actual provenance.
-   Native approvals, tool failures, refusals and incomplete outputs block; the
-   unattended runner never approves or resumes a tool request.
-7. Submit precomputed outputs to the supported Foundry/OpenAI Evals JSONL
-   `file_content` API. Run `builtin.groundedness` and `builtin.task_adherence`
-   on all five cases; additionally `builtin.tool_call_accuracy` on the two live
-   cases using actual discovered schemas, calls, arguments and tool results.
-   Tools-disabled cases are explicitly **not applicable**, not fabricated
-   tool-call passes. Both groups are mandatory. There is no score for reference
-   answers, no reference-answer leakage into model input, and no baseline comparison.
-8. Poll with a bounded timeout, paginate every output row, require all rows and
-   evaluator results, completed status, finite in-range scores, passing labels
-   when reported, `passed=true`, and every explicitly approved threshold.
-   Missing/failed/skipped/incomplete/duplicate results block. Recheck serving
-   configuration and model versions, then record `eligible_for_manual_review`.
-   **No code path patches routing, promotes, rolls back or deletes candidates.**
-
-Run, candidate and evaluation IDs are persisted as they become available.
-`decision.json` starts blocked and only becomes eligible at the very end.
-Unexpected SDK/cloud errors propagate nonzero with their traceback; the blocked
-decision and already-written diagnostics remain. Interrupted or failed candidates
-are retained for manual investigation, never silently cleaned up. A failed
-evaluation does not trigger a compensating serving write.
-
-## Release plan contract
-
-Create the plan only after separate live authorization and a coordinated writer
-hold. Do not copy current `@latest` into a plan or guess values. The strict
-`ReleasePlan` model in `src/tools/release.py` is the canonical schema:
-
-| Field | Required reviewed value |
+| Surface | Behavior |
 |---|---|
-| `project_endpoint`, `agent_name` | Exact Foundry project URL and prompt-agent name |
-| `base_version`, `serving_version` | Positive integer version strings, latest reviewed base and retained serving pin |
-| `expected_endpoint`, `expected_identity` | Full `agent_endpoint` and `instance_identity` dictionaries from the approved GET |
-| `candidate_definition` | Full exact base prompt definition with only appended instructions; no credentials in committed plans |
-| `model_version`, `eval_model_version` | Explicit deployment model versions checked against `project.deployments.get(...).model_version` |
-| `thresholds` | All of `groundedness` (1..5), `task_adherence` (0..1), `tool_call_accuracy` (1..5); every case must meet each applicable threshold |
-| `approval_reference`, `approved_by` | External authorization record and accountable reviewer |
-| `writer_hold_reference` | P1/P2/portal/other writer hold record covering the whole execution |
-| `evaluator_compatibility_reference` | Evidence that chosen deployment/evaluator inputs are compatible in this project/region |
-| `expires_at` | Future timezone-aware ISO timestamp bounding approval and hold |
+| `documentation-trigger invoke` | Defaults to hosted; validates reviewed immutable artifact and active assessment settings, creates a concrete-version session, sends only bare P1 `AgentRequest`, validates actual P1 `AgentResult` |
+| `python -m tools.release` | Defaults to hosted; validates a strict reviewed plan and unchanged five-case suite; writes **blocked** diagnostics before any credential discovery/cloud work |
+| `tools.hosted_release.prepare_candidate` | Offline-tested SDK primitive for guarded immutable-version creation, bounded readiness and exact readback; **not reached by the current CLI/workflow** |
+| Hosted evaluator adapter | Uses the actual request/result for groundedness/task-adherence inputs; never wraps hosted output as prompt `AnalysisOutput` or invents tool traces |
+| One manual workflow | Default offline P1/P3 regression + wheel build; optional cloud job is disabled by default and stops at unintegrated-evaluation preflight before login |
+| Prompt compatibility | `--agent-kind prompt` on CLI; `--target prompt` on release; earlier append-only prompt runner/tests retained |
 
-No default acceptance threshold or "good baseline" is supplied. Test thresholds
-are synthetic fixtures, not recommended production criteria. Review/calibrate
-criteria with authorized evidence before enabling cloud execution. The plan's
-references are operator attestations, **not a distributed lock or proof of approval**;
-the protected GitHub environment and coordination process must enforce them.
-Repeated GETs detect drift but are not atomic writes. No ETag/If-Match contract
-is assumed. Workflow concurrency serializes this workflow only.
+**Current P3 integration limits prevent full hosted release certification:**
 
-After separate approval, a trusted operator can run:
+1. Assessment accepts **only bare AgentRequest v1**. The unchanged suite's three
+   `supplied_sources` cases require isolated source snapshots with tools disabled,
+   which ordinary assessment does not implement. P1 now provides the separate
+   [opt-in evaluation interface](../../src/agents/documentation-agent/EVALUATION_INTERFACE.md)
+   and canonical `contracts.evaluation` models for both live capture and isolated
+   snapshots. This P3 runner has **not integrated that transport or its evaluator
+   mappings**. Do not wrap a source envelope around ordinary AgentRequest,
+   suppress internal tools with an outer `tool_choice`, change the gold, drop
+   cases, or turn unavailable wiki content into a live wiki read.
+2. P1 verifies nested tool evidence internally but returns only AgentResult in
+   ordinary outer Responses. Correlated calls/results and discovered schemas are
+   not exported by ordinary assessment. Opted-in `EvaluationResponse.execution`
+   contains observed model/tool calls, schemas and source context; this is locally
+   implemented, not automatically certified by the release adapter.
+   Ordinary outer Responses is therefore insufficient for pinned live-read
+   verification or honest `builtin.tool_call_accuracy`. Neither prompt traces nor
+   empty tool arrays count as hosted tool-call passes.
+
+P1 main at `89e8593` includes task-aware runtime app `0.4.0` and a separate
+selected-proposal approval path. This branch preserves those contracts, generated
+evaluation schemas, policies and tests. Assessment CLI supports optional paired
+`--task-question` / `--task-scope`, forwarded as canonical `request.task`.
+Evaluation requires `DOCUMENTATION_MODE=evaluation` **and**
+`DOCUMENTATION_ENABLE_EVALUATION=true`, on a separately authorized isolated version.
+Approval requires its own opt-in mode/policy; this CLI neither submits proposals
+for execution nor resumes approval. None of these capabilities is enabled by P3.
+
+**Observed version discrepancy (P1 report, 2026-10-19):** deployed version 7
+sessions GET as `version_ref=7`, while outer Responses reports
+`agent_reference.version=6` (named serving pin). Runtime app `0.4.0` is not enough
+to distinguish those image versions. The caller GET-confirms the created session,
+preserves outer reference/session/response identifiers in stderr, and **fails
+closed** on disagreement instead of producing candidate-version success.
+Matching or absent outer references are recorded separately (`version_evidence`);
+absence means session-GET evidence only, not independent executing-image proof.
+This discrepancy still needs platform/deployment investigation before a candidate
+can be certified. No cloud reproduction was performed by this reconciliation.
+
+These are release-gate blockers, **not a blanket block on meaningful assessment
+smoke**. The [hosted CLI](cli-trigger-guide.md) can invoke a valid assessment when
+real P2 configuration/access exists and version evidence does not conflict.
+P3 must review and wire P1's implemented source-isolation/capture interface in a
+separate adapter change. The current preflight
+cannot be overridden by enable switches or `--execute-approved-cloud`; it does not
+create a doomed candidate or incur evaluator costs.
+
+## Smallest supported artifact and deployment sequence
+
+Use the existing P1 container and shared project; no new IaC, project, model,
+Cosmos store or APIM rollout. Keep build/publish separate from version creation
+so reviewers know the immutable digest **before** the candidate is created.
+
+1. Build from a reviewed source commit at repository root with P1's Dockerfile,
+   targeting `linux/amd64`; run P1's local contract/assessment checks. The manual
+   workflow currently builds the Python wheel offline, not a network-dependent
+   container. P1/deployment owns image input fixes and actual container verification.
+2. After separate build/publish approval, a trusted publisher with existing
+   registry access builds/pushes the image and records the returned registry
+   digest, source commit and build evidence. Do not put credentials in build
+   arguments, plans or artifacts. A wheel alone is not a runnable hosted container.
+3. Review `HostedArtifact`: immutable image `@sha256`, `source_commit`,
+   `build_reference`, `readiness_review_reference`, actual P1 `runtime_provenance`.
+   This association is an operator-reviewed attestation, not cryptographic proof
+   that the registry image contains a particular source tree.
+4. Construct the actual **stable SDK** hosted definition using
+   `container_configuration: {image, registry_connection_id?}`,
+   `protocol_versions: [{protocol: responses, version: "2.0.0"}]`, CPU/memory and
+   the assessment environment. The historical flat `agent.yaml` image/protocol
+   keys are **not** the stable `HostedAgentDefinition` wire shape. Preserve registry
+   auth, telemetry/RAI/session settings and nonrouting metadata from the reviewed base.
+5. Only after full-suite capability, fresh coordinated writer hold, hosted serving
+   pin/readback/runtime proof and separate billable approval: create one version
+   using `project.agents.create_version(..., definition=HostedAgentDefinition(...))`.
+   Record the actual returned version, poll that version to `active` with a bounded
+   timeout, compare exact definition/metadata, and recheck the serving pin. This
+   primitive is mocked here; current hosted CLI release blocks before it.
+6. Evaluate the exact candidate with fresh version-bound sessions. P1 source and
+   tool-trace dependencies above must be resolved first. All five cases and all
+   applicable built-in results are required. Only a complete passing gate can
+   become eligible for **manual review**, never automatic promotion.
+
+The [official hosted CI quickstart](https://learn.microsoft.com/en-us/azure/foundry/agents/quickstarts/set-up-cicd-hosted-agent?pivots=azd)
+uses azd/OIDC and existing infrastructure. Its push trigger, automatic deploy and
+nonempty smoke-response test are **not** this repo's release safety contract.
+We deliberately keep manual-only dispatch, reviewed digest before creation and
+strict P1 contract/evaluator checks. We do not scaffold an azd environment or
+run `azd deploy` hooks that could affect serving selection.
+The [azure.yaml reference](https://learn.microsoft.com/azure/foundry/agents/concepts/azure-yaml-reference)
+supports a prebuilt `image:` path; any future azd adoption must preserve the
+same digest/pin/hold/readback safeguards and inspect its hooks first.
+
+## Assessment settings and ownership
+
+| Configuration | Required value / owner |
+|---|---|
+| `DOCUMENTATION_MODE` | Explicit `assessment`; default `stub` is v0 and not an assessment |
+| `DOCUMENTATION_AUTH_MODE` | Explicit `managed_identity` in Foundry; no local Azure CLI credential fallback |
+| `DOCUMENTATION_PROJECT_ENDPOINT` | Exact existing Foundry project |
+| `AZURE_AI_MODEL_DEPLOYMENT_NAME`, `DOCUMENTATION_MODEL_VERSION` | Reviewed existing chat deployment and actual revision; GET checked, not changed by P3 |
+| `TOOLBOX_ENDPOINT` | Real P2 toolbox HTTPS MCP endpoint with hosted access |
+| `DOCUMENTATION_ADO_PROJECT`, `DOCUMENTATION_ADO_WIKI` | Actual permitted ADO scope |
+| `HOST`, `PORT` | `0.0.0.0`, `8088` |
+| Protocol/resources/registry | P1 Responses 2.0.0, reviewed CPU/memory and existing registry connection/access |
+
+P2 must expose exactly `knowledge___knowledge_base_retrieve`,
+`github___get_file_contents`, `ado___wiki`, `ado___wit_work_item` and verify hosted
+identity/model/toolbox/source access. The shared ADO gateway currently supports a
+single selected agent identity: **no repointing or onboarding is part of this
+alignment**. P1's read guards and evidence validation remain authoritative.
+Assessment stays read-only. The PR #76 local approval spike used a dummy receipt.
+Newer main also implements selected-proposal approval under its separate mode and
+policy; it does not authorize assessment writes or make the P3 CLI an approval
+client. Preserve P1's approval boundary and its own documented verification limits.
+
+Native monitoring MI configuration and historical **prompt** trace ingestion are
+not hosted instrumentation proof. P1/P3 still need to verify runtime model/tool
+instrumentation, exporter/auth configuration and hosted session/response/version
+correlation in the existing App Insights connection. Do not claim the native
+connection alone exports P1's internal guard calls/schemas.
+
+## Reviewed release plan and serving safeguards
+
+`tools.hosted_release.HostedReleasePlan` reuses the existing `ReleasePlan`
+approval/threshold fields rather than duplicating contracts. It requires:
+
+| Field | Reviewed requirement |
+|---|---|
+| Project/name/base/serving versions | Exact hosted target; concrete positive integer Foundry versions, active base/serving and base still latest |
+| `expected_endpoint`, `expected_identity` | Complete approved GET snapshots; exactly one concrete serving version at 100% |
+| `candidate_definition` | Full nested stable SDK hosted definition and explicit assessment settings; image matches artifact |
+| `artifact` | Strict `HostedArtifact` described above; P1 instruction/policy assembly validates provenance against installed source |
+| `serving_path_proof` | Hosted name/version, fresh session/response IDs, timezone-aware observation within one hour, evidence reference and selection `fresh_named_endpoint_session_without_version_override` |
+| Models/thresholds | Concrete chat/evaluator revisions and all three calibrated thresholds: groundedness 1..5, task adherence 0..1, tool-call accuracy 1..5 |
+| Approval/hold/evaluator references | Fresh explicit authorization, accountable reviewer, exclusive writer hold, evaluator compatibility evidence and future timezone-aware expiry |
+
+Proof references are **operator attestations**, not an authentication service,
+distributed lock or atomic ETag guarantee. Obtain concrete hosted serving runtime
+proof under the hold, without explicit-version/session bypass. Verify the pin
+immediately before candidate creation. The former `doc-agent:3` pin approval was
+paused and does not transfer to hosted `documentation-agent`.
+
+Version-specific hosted test sessions deliberately bypass serving selection.
+`get_openai_client(agent_name=...)` uses the agent's endpoint, and
+`create_session(..., VersionRefIndicator(agent_version=C))` binds the candidate.
+Responses uses `extra_body={"agent_session_id": returned_id}`. Check session
+ID/binding/readiness before sending one bare request. Existing sessions do not
+migrate after selector changes. **Candidate-session success is not serving-path
+runtime proof.**
+
+There is no auto-pin, canary, promotion, rollback, role assignment or candidate/
+session deletion. Preserve all nonrouting endpoint/identity/protocol/auth state.
+GET rechecks detect drift but are not atomic with creation; all external writers
+must hold. Follow [the manual routing runbook](release-rollback-guide.md) only
+under fresh target-specific approval. Retain good versions/images and treat
+interrupted candidates/sessions as manual investigation, not cleanup permission.
+
+## Offline preflight and validation
 
 ```powershell
-$env:EVAL_MODEL_DEPLOYMENT = "<explicit compatible deployment>"
-python -m tools.release --plan "<reviewed-plan.json>" `
-  --output "evals/results/<new-run-directory>" --execute-approved-cloud
+python -m pip install ".[agent,prompt,dev]"
+python -m tools.release --plan "<reviewed-hosted-plan.json>" --output "evals/results/<fresh-directory>"
+python -m pytest tests/release tests/evals tests/tools tests/contracts tests/agents -q
+python -m ruff check src/tools tests/release tests/tools
+python -m mypy src/tools/cli.py src/tools/hosted.py src/tools/hosted_release.py src/tools/release.py src/tools/release_sources.py
+python -m contracts.generate_schema --check
+python -m pip wheel --no-deps --wheel-dir dist .
 ```
 
-Install the existing `.[prompt,dev]` extras. The command does not provision resources,
-change environment settings, configure OIDC, choose a fallback judge or grant roles.
-Treat raw tool responses/evaluator inputs as sensitive source data. Artifacts are
-ignored by Git under `evals/results/`; review access before uploading them.
+Preflight intentionally exits nonzero and persists `decision.json` with blocked
+dependencies. Missing evaluator configuration/results never default to passing.
+No default model or threshold is supplied. `EVAL_MODEL_DEPLOYMENT` was unset at
+the previous observation; judge compatibility and calibrated criteria require
+separately authorized work. The recorded quota 500/250 discrepancy and chat
+`OnceNewDefaultVersionAvailable` policy are not resolved by version checks.
+Coordinate model writers; pre/post GET cannot prevent an upgrade mid-run.
 
-## Current live blockers and authorization boundaries
+The [single workflow configuration](../../.github/workflows/README.md) requires
+protected environment reviewers, no self-review, trusted main, environment-bound
+OIDC federation, existing least-privilege data-plane/registry access and explicit
+enable/execute switches. This code configures none of those. Source/evaluation
+artifacts in this public repo require publication review; upload is gated by
+`P3_ARTIFACT_PUBLICATION_APPROVED`, and retention is three days.
 
-PR [#73](https://github.com/wdhm/foundry-agentic-pattern/pull/73), head
-`d299e42633425668703237bca8b7fd0193373f3c`, documents the verified v1 GET/create/selector
-contract and manual routing runbook. Its **writer hold remains unconfirmed**;
-`doc-agent:3` is active but its named endpoint still follows `@latest`/100%.
-It has **not** been pinned. Candidate creation is therefore blocked.
+## Historical prompt compatibility and evaluator contract
 
-PR [#70](https://github.com/wdhm/foundry-agentic-pattern/pull/70) reports native MI
-monitoring already available; do not recreate it. Chat deployment `gpt-6-luna`,
-model `2026-09-22`, uses `OnceNewDefaultVersionAvailable`, not a pinned model.
-No separate judge deployment or evaluator compatibility has been established,
-`EVAL_MODEL_DEPLOYMENT` is unset, and quota 500/250 requires reconciliation.
-Model-version pre/post checks cannot prevent mid-run upgrades; coordinate a
-model-deployment writer hold too. No configuration/model writes are authorized here.
+PR [#77](https://github.com/wdhm/foundry-agentic-pattern/pull/77) implemented the
+original prompt release gate using merged CLI [#71](https://github.com/wdhm/foundry-agentic-pattern/pull/71)
+and dataset [#72](https://github.com/wdhm/foundry-agentic-pattern/pull/72).
+That code remains behind `python -m tools.release --target prompt ...`.
+Its plan is the existing `tools.release.ReleasePlan`: prompt name, exact
+base/serving snapshots, append-only instructions, inherited model/tools/schema/
+policy metadata, approval/hold/evaluator compatibility, concrete models and
+explicit thresholds. It is not used by the primary workflow and must not be
+used to certify the hosted image.
 
-The OIDC workflow requires later protected-environment/federation/RBAC setup and
-an explicit enable switch; see [workflow configuration](../../.github/workflows/README.md).
-This implementation authorizes **none** of those changes or a workflow dispatch.
-No live inference, candidate creation, endpoint PATCH, promotion, rollback,
-publication, Teams delivery or timed rollback demo was performed.
+The prompt adapter's two live-source cases verify all pinned read outputs and
+Foundry IQ retrieval; three source-bundle cases disable tools. Native approvals,
+tool failures, invalid contracts and incomplete outputs block. Five cases are
+submitted as precomputed JSONL `file_content` items to Foundry/OpenAI Evals,
+using `builtin.groundedness`/`builtin.task_adherence` on all cases and
+`builtin.tool_call_accuracy` on actual live calls/schemas only. Tools-disabled
+cases are not applicable to tool scoring, not invented passes.
+All completed rows, finite in-range scores, `passed=true`, valid labels and every
+approved threshold are required. Missing/failed/skipped/duplicate/incomplete
+results block. Model/serving checks precede eligibility. No baseline comparison
+is claimed and gold/reference answers never become agent input.
 
-Promotion/rollback remain **manual runbook operations requiring separate approval**.
-Review the current PR #73 runbook (or its merged guide) rather than interpreting
-an eligible decision as permission to PATCH. Preserve the concrete serving pin,
-verify the exact selector and fresh named-endpoint sessions, and coordinate all
-writers. No canary support is assumed; the guidance conflicts.
-
-## Offline verification and API references
-
-```powershell
-python -m pytest tests/release tests/evals tests/tools tests/contracts -q
-python -m ruff check src/tools/release.py src/tools/release_sources.py tests/release
-python -m mypy src/tools/release.py src/tools/release_sources.py
-```
-
-Mocks demonstrate complete good/bad scores, unchanged serving configuration,
-no promotion, no-tools source isolation, missing prerequisites before mutation,
-approval/tool failures, live evidence drift and incomplete/skipped evaluation
-blocking. These are **mock outcomes**, not baseline or cloud acceptance evidence.
-
-Supported interfaces were checked against installed SDK source and official
-documentation, not guessed SDK operations:
-
-- [Cloud evaluation client](https://learn.microsoft.com/azure/foundry/observability/how-to/cloud-evaluation)
-- [Inline JSONL schema, mappings and built-in criteria](https://learn.microsoft.com/azure/foundry/observability/how-to/cloud-evaluation-datasets)
-- [Polling, pagination and result fields](https://learn.microsoft.com/azure/foundry/observability/how-to/cloud-evaluation-results)
-- [Agent evaluator inputs and scales](https://learn.microsoft.com/azure/foundry/concepts/evaluation-evaluators/agent-evaluators)
-- [Task adherence SDK example](https://github.com/Azure/azure-sdk-for-python/blob/main/sdk/ai/azure-ai-projects/samples/evaluations/agentic_evaluators/sample_task_adherence.py)
-- [Tool call accuracy SDK example](https://github.com/Azure/azure-sdk-for-python/blob/main/sdk/ai/azure-ai-projects/samples/evaluations/agentic_evaluators/sample_tool_call_accuracy.py)
-- [Agent endpoint contract](https://learn.microsoft.com/azure/foundry/agents/how-to/configure-agent)
-
-Actual judge compatibility, pass thresholds, cloud result payloads and cost/latency
-still require a separately approved live run. This code makes no score, baseline,
-live release or rollback claim.
+Official API sources:
+[stable hosted image sample](https://github.com/Azure/azure-sdk-for-python/blob/main/sdk/ai/azure-ai-projects/samples/hosted_agents/sample_create_hosted_agent_from_image.py),
+[SDK models](https://github.com/Azure/azure-sdk-for-python/blob/main/sdk/ai/azure-ai-projects/azure/ai/projects/models/_models.py),
+[session sample](https://github.com/Azure/azure-sdk-for-python/blob/main/sdk/ai/azure-ai-projects/samples/hosted_agents/sample_sessions_crud.py),
+[session Responses invocation](https://github.com/Azure/azure-sdk-for-python/blob/main/sdk/ai/azure-ai-projects/samples/hosted_agents/sample_session_log_stream.py),
+[cloud evaluator inputs](https://learn.microsoft.com/azure/foundry/observability/how-to/cloud-evaluation-datasets),
+[evaluation results](https://learn.microsoft.com/azure/foundry/observability/how-to/cloud-evaluation-results),
+[agent evaluator scales](https://learn.microsoft.com/azure/foundry/concepts/evaluation-evaluators/agent-evaluators).

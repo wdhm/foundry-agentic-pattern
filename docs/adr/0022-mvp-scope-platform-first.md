@@ -16,7 +16,9 @@ The plan had grown to more than 45 issues, and M1 was still not done. Several it
 > **P1 runtime update (2026-10-16):** John selected the hosted Agent Framework
 > app as the main runtime. [ADR 0024](0024-hosted-documentation-runtime.md)
 > records the revised direction and transition constraints. The table below
-> preserves the earlier MVP decision; this change does not automatically
+> reflects that runtime target; earlier prompt-agent implementations remain
+> compatibility/reference paths. P3 confirmed the hosted release/workshop target
+> on 2026-10-16. This change does not automatically
 > restore Cosmos DB or make native prompt-agent approvals apply to hosted code.
 
 We build an **MVP**: one simple happy path that shows each platform capability once.
@@ -31,9 +33,9 @@ We build an **MVP**: one simple happy path that shows each platform capability o
 
 | Area | MVP approach | Status |
 |---|---|---|
-| Agent runtime (P1) | Foundry **prompt agent** (already running). The hosted agent remains a separate P1 demo. | Decided (P1, 2026-10-13) |
+| Agent runtime (P1) | **Hosted `documentation-agent`**, using P1's Agent Framework assessment runtime (ADR 0024). The earlier prompt `doc-agent` remains a compatibility/reference path until coordinated transition. | Direction confirmed (P1/P3, 2026-10-16); live integration not implied |
 | Output contract (P1) | Structured JSON output on the agent; the Pydantic models stay the schema source | Decided (P1, 2026-10-13) |
-| Human-in-the-loop (P1) | **Foundry's native MCP tool approval** (`require_approval`), already proven; Teams as the showcase channel | Decided (P1, 2026-10-13) |
+| Human-in-the-loop (P1) | Native prompt MCP approval was proven on the earlier path. Hosted assessment remains read-only; newer P1 main implements selected-proposal approval under a separate opt-in mode/policy. Neither the earlier dummy-receipt spike nor this P3 CLI certifies live approval or Teams publication. | Earlier decision (P1, 2026-10-13); hosted direction ADR 0024, implementation update 2026-10-19 |
 | State & audit (P1) | Foundry traces/conversations + the wiki history; no Cosmos DB in the MVP | Decided (P1, 2026-10-13) |
 | Knowledge (P2) | Foundry IQ knowledge base with the documentation standard; the wiki is read live via Azure DevOps (no indexed copy) | Decided |
 | Tools (P2) | Azure DevOps via the gateway (done, ADR 0021); GitHub source via MCP | Decided |
@@ -41,7 +43,7 @@ We build an **MVP**: one simple happy path that shows each platform capability o
 | Mock data (P2) | A small hand-made set with 2–3 planted gaps; no generator | Decided |
 | Observability (P3) | Foundry tracing and monitoring views; no custom workbook | Decided (P3, 2026-10-16) |
 | Evals (P3) | Foundry built-in evaluators on about 5 cases, run from one GitHub Action | Decided (P3, 2026-10-16) |
-| CI/CD (P3) | One workflow: create the agent version, then run evals. Rollback via `version_selector` is shown manually. | Decided (P3, 2026-10-16) |
+| CI/CD (P3) | One manual workflow, hosted primary: reviewed immutable container digest/config, serving-pin safeguards, candidate version then built-in evals. P3 integration of P1's opt-in evaluation interface and verified version evidence remain blocked before creation; promotion/rollback remain manual and separately approved. | Decided (P3, 2026-10-16); reconciled 2026-10-19, not live certification |
 | AI Gateway (P3) | Foundry's AI gateway option if setup is simple; otherwise slides | Decided (P3, 2026-10-16) |
 | IaC (P3) | Runbook + scripts are enough for the demo; `azd up` only if time allows | Decided (P3, 2026-10-16) |
 

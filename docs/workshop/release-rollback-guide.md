@@ -6,6 +6,16 @@
 
 ## Read-only evidence
 
+**Hosted target correction (2026-10-16):** the primary workshop/release target
+is now hosted `documentation-agent` under ADR 0024. Historical prompt-agent
+evidence and paused `doc-agent:3` approval below remain scoped to that agent;
+they are **not transferable hosted approval or serving-path proof**.
+Use the [hosted release guide](evaluation-release-guide.md) for current P3
+preflight. A separately coordinated deployment may change live state after the
+snapshot below; re-read it rather than treating historical values as current.
+Hosted assessment smoke can be valid with real P2 access even while the full
+five-case release gate is blocked.
+
 WSL Ubuntu Azure CLI **2.80.0**, using its existing authentication, successfully read the shared Sweden Central account and project on 2026-10-16. Windows Azure credentials were not used. IDs and tokens are intentionally omitted.
 
 | Surface | Observed result |

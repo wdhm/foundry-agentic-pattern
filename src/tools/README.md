@@ -4,13 +4,31 @@ Tool and API integrations exposed to agents through a Foundry **Toolbox** (MCP) 
 
 ## Implemented code
 
+The primary P3 consumer is `documentation-trigger invoke` for hosted
+`documentation-agent`; `--agent-kind prompt` retains the earlier `doc-agent`
+compatibility path. [`hosted.py`](hosted.py) validates the reviewed container
+digest/settings and actual P1 `AgentResult`, preserving application provenance
+separately from Foundry deployment/session versions.
+[`hosted_release.py`](hosted_release.py) provides offline preflight and mocked
+candidate/readiness primitives; the full hosted gate blocks on unintegrated P1
+opt-in evaluation transport/scorer and version evidence before any cloud action.
+The task-aware assessment CLI preserves `request.task`, and GET-confirmed
+session/outer-reference discrepancies fail closed without overwriting provenance. See the
+[CLI](../../docs/workshop/cli-trigger-guide.md) and
+[release guide](../../docs/workshop/evaluation-release-guide.md).
+
 | Folder | What | Decision |
 |---|---|---|
 | [`ado_mcp/`](ado_mcp/README.md) | Gateway to Microsoft's remote Azure DevOps MCP server. The agent acts in Azure DevOps as its **agent user** (work items, wiki). | [ADR 0021](../../docs/adr/0021-agent-user-and-ado-mcp-gateway.md), [guide](../../docs/workshop/agent-identity-guide.md) |
 
 ## Tools the agent uses (MVP)
 
-All three are **MCP tools** on the agent, each backed by a Foundry project connection. Set them up with the scripts in [`infra/scripts`](../../infra/scripts); to point them at your own sources, see the [bring-your-own guide](../../docs/workshop/bring-your-own-guide.md).
+The following table describes the existing **prompt-agent** source configuration,
+not proof of hosted toolbox access. Hosted assessment requires P2's four exact
+read-tool names and separate identity/access review in the
+[runtime guide](../agents/documentation-agent/README.md).
+The scripts in [`infra/scripts`](../../infra/scripts) must not be used to repoint
+the shared single-identity gateway without coordination.
 
 | Agent tool | Server | Connection · identity | Reads / writes | Exact version for evidence | Guide |
 |---|---|---|---|---|---|

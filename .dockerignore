@@ -17,6 +17,7 @@
 !src/agents/documentation-agent/Dockerfile
 !src/agents/documentation-agent/app/
 !src/agents/documentation-agent/app/*.py
+!src/agents/documentation-agent/app/py.typed
 !src/agents/documentation-agent/app/prompts/
 !src/agents/documentation-agent/app/prompts/*.txt
 !src/agents/documentation-agent/app/policies/

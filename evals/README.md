@@ -1,5 +1,19 @@
 # evals/
 
+**Primary runtime update (2026-10-16):** hosted `documentation-agent`, per
+ADR 0024 and P3's confirmed target. The unchanged five-case dataset below is
+not proof of hosted runtime compatibility. Ordinary assessment accepts bare
+`AgentRequest` and does not export nested tool-call/schema evidence.
+**Main update, 2026-10-19:** P1's separate disabled-by-default evaluation interface
+supports isolated supplied sources and observed execution records; see
+[the canonical interface](../src/agents/documentation-agent/EVALUATION_INTERFACE.md).
+The P3 release runner has not integrated that envelope/evaluator mapping or
+certified an isolated evaluation deployment. The [release preflight](../docs/workshop/evaluation-release-guide.md)
+blocks those integration and version-evidence limits before creation/evaluation;
+it never sends gold answers to the model
+or drops required cases. The checker's existing `--invoke` path below remains
+**prompt compatibility/diagnostics**, not hosted release certification.
+
 **MVP: five hand-made cases, existing checker, Foundry built-in evaluators later.**
 P3 approved the platform-first scope on 2026-10-16
 ([ADR 0022](../docs/adr/0022-mvp-scope-platform-first.md)).
