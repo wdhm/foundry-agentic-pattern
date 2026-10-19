@@ -10,8 +10,10 @@ compatibility path. [`hosted.py`](hosted.py) validates the reviewed container
 digest/settings and actual P1 `AgentResult`, preserving application provenance
 separately from Foundry deployment/session versions.
 [`hosted_release.py`](hosted_release.py) provides offline preflight and mocked
-candidate/readiness primitives; the full hosted gate blocks on unsupported suite
-inputs/tool tracing before any cloud action. See the
+candidate/readiness primitives; the full hosted gate blocks on unintegrated P1
+opt-in evaluation transport/scorer and version evidence before any cloud action.
+The task-aware assessment CLI preserves `request.task`, and GET-confirmed
+session/outer-reference discrepancies fail closed without overwriting provenance. See the
 [CLI](../../docs/workshop/cli-trigger-guide.md) and
 [release guide](../../docs/workshop/evaluation-release-guide.md).
 

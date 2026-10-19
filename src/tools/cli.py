@@ -11,7 +11,7 @@ from uuid import UUID, uuid4
 
 from contracts.models import RequestContext, Subject
 from contracts.prompt import OUTPUT_INSTRUCTIONS, structured_format
-from contracts.v1 import CONTRACT_VERSION, AgentRequest, AnalysisOutput, Provenance, assemble_result
+from contracts.v1 import CONTRACT_VERSION, AgentRequest, AnalysisOutput, AssessmentTask, Provenance, assemble_result
 
 if TYPE_CHECKING:
     from openai import OpenAI
@@ -24,6 +24,8 @@ def parser() -> argparse.ArgumentParser:
     invoke.add_argument("--agent-kind", choices=("hosted", "prompt"), default="hosted")
     invoke.add_argument("--agent-name")
     invoke.add_argument("--artifact", type=Path, help="Reviewed hosted image/build/runtime provenance JSON.")
+    invoke.add_argument("--task-question", help="Explicit assessment question, never gold answers or authorization.")
+    invoke.add_argument("--task-scope", choices=("change_review", "information_review"))
     invoke.add_argument("--agent-version", required=True, help="Exact positive integer version; never latest.")
     invoke.add_argument("--model-version", required=True, help="Exact version verified in deployment configuration.")
     invoke.add_argument("--repo", required=True, help="Repository URL or owner/repository.")
@@ -41,6 +43,8 @@ def parser() -> argparse.ArgumentParser:
 
 
 def build_request(args: argparse.Namespace) -> AgentRequest:
+    if bool(args.task_question) != bool(args.task_scope):
+        raise ValueError("--task-question and --task-scope must be supplied together.")
     return AgentRequest(
         contract_version=CONTRACT_VERSION,
         request_id=args.request_id or uuid4(),
@@ -59,6 +63,7 @@ def build_request(args: argparse.Namespace) -> AgentRequest:
             adr_refs=args.adr_ref,
         ),
         documentation_standard_ref=args.documentation_standard_ref,
+        task=AssessmentTask(question=args.task_question, scope=args.task_scope) if args.task_question else None,
     )
 
 

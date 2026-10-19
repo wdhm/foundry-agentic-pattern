@@ -157,6 +157,25 @@ def test_ids_generated_per_request(agent_request):
     assert agent_request.correlation_id != other.correlation_id
 
 
+def test_task_flags_preserve_canonical_task():
+    request = build_request(parser().parse_args(arguments() + [
+        "--task-question", "Identify missing business ownership.",
+        "--task-scope", "information_review",
+    ]))
+    assert request.task.scope == "information_review"
+    assert request.model_dump()["task"]["question"] == "Identify missing business ownership."
+
+
+@pytest.mark.parametrize("flags", [
+    ["--task-question", "Review changes."],
+    ["--task-scope", "change_review"],
+    ["--task-question", "Review changes.", "--task-scope", "change_review"],
+])
+def test_partial_task_or_change_task_without_paths_is_rejected(flags):
+    with pytest.raises(ValueError):
+        build_request(parser().parse_args(arguments() + flags))
+
+
 def test_provenance_uses_selected_definition_without_mutation(definition, provenance):
     original = deepcopy(definition)
     assert provenance.prompt_version == "sha256:" + hashlib.sha256(definition["instructions"].encode()).hexdigest()

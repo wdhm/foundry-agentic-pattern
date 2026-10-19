@@ -58,6 +58,13 @@ documentation-trigger invoke `
 is optional. Full Git SHA is mandatory. `--request-id` and `--correlation-id`
 accept UUIDs; otherwise each invocation generates fresh IDs.
 
+Task-aware runtime app `0.4.0` also supports paired `--task-question` and
+`--task-scope change_review|information_review`, serialized as canonical
+`request.task`. Omit both to preserve legacy source-based assessment.
+`change_review` requires changed paths; `information_review` makes the missing-fact
+intent explicit. Task text is a question/scope, never gold answers, source evidence
+or write authorization. The CLI keeps P1's task validation and status precedence.
+
 The actual model input is **only one bare AgentRequest v1 JSON user text**.
 The CLI does not wrap it in a scenario prompt, source bundle, gold answer or
 chat history, and does not attempt `tool_choice=none` to override P1's internal
@@ -72,23 +79,36 @@ request/correlation IDs and the actual validated `result`.
 from `AnalysisOutput` or given invented caller provenance.
 
 P1's `result.provenance.agent_version` is the **application version** (currently
-`0.2.0`), not the Foundry version. Both identities are retained independently.
+`0.4.0`), not the Foundry version. Both identities are retained independently.
 Request ID, Git evidence SHA and reviewed runtime provenance must match.
 Failed/incomplete responses, invalid JSON, wrong version/correlation, refusals
 and unexpected tools/approval requests exit nonzero without a success report.
 The hosted CLI never resumes approvals or turns proposals into writes.
 
 Each invocation explicitly creates a fresh session bound to the selected
-version, checks the returned binding/readiness, then uses the agent's Responses
+version, GET-confirms its binding/readiness, then uses the agent's Responses
 endpoint with `agent_session_id`. This **bypasses serving selection** and is not
 named-endpoint serving-pin proof. Sessions do not migrate when routing changes.
 Created sessions are retained; no implicit stop/delete or routing cleanup occurs.
 Record their IDs and manage their lifecycle through a separately approved plan.
 
+The report separately retains `session_version_indicator`, `outer_agent_reference`
+and `version_evidence`. If the outer reference is absent, the report labels the
+evidence `session_get_only`, not independent executing-image proof. If the outer
+reference names another agent/version, the CLI logs both values and the real
+session/response IDs on stderr, then exits nonzero without candidate-version
+success. P1 reported session GET version 7 versus outer version 6 on 2026-10-19;
+this branch tests that discrepancy offline and does not hide it behind matching
+application provenance. No cloud reproduction or platform resolution is claimed.
+
 This is a valid assessment smoke path when real P2 access is ready, not release
 certification: P1's nested tool traces are not in outer Responses. The full
-five-case gate remains blocked on supplied-source isolation and trace/schema
-export. No hosted telemetry ingestion, tool recall or live result is claimed here.
+five-case gate remains blocked on **P3 adapter integration** of P1's separately
+opted-in evaluation interface, isolated configuration/evaluator mappings and
+trustworthy version evidence. Main's `contracts.evaluation` now supports supplied
+sources and observed execution records, but ordinary assessment remains unchanged.
+This CLI rejects evaluation/approval modes rather than silently enabling or
+interpreting their envelopes as AgentResult. No live evaluator result is claimed here.
 
 ## Explicit prompt compatibility
 

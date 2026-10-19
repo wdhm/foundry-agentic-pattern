@@ -16,7 +16,8 @@ P3's [CLI](docs/workshop/cli-trigger-guide.md) and single manual
 [release workflow](docs/workshop/evaluation-release-guide.md) now target that
 **hosted assessment runtime by default**. The prompt path is explicitly secondary.
 Hosted CLI smoke and full release certification are different: the five-case gate
-blocks until P1 supports source-isolated inputs and correlated nested tool traces.
+blocks until P3 integrates P1's separately opted-in source-isolation/execution
+interface and verifies isolated evaluation configuration and version evidence.
 No deployed-state or live-evaluation claim follows from this offline alignment.
 
 ---

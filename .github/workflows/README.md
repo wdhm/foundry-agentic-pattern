@@ -16,12 +16,15 @@ OIDC permission. This implementation has not been dispatched against Azure.
 The reserved cloud job requires all of: trusted `main`, successful offline checks,
 explicit execution input, `P3_RELEASE_ENABLED=true`, and the separately configured
 `p3-agent-release` environment approval. Opening this PR cannot start a cloud run.
-Even with those switches, **current P1 suite incompatibilities block before Azure
+Even with those switches, **current P3 evaluation-integration limits block before Azure
 login**. `DOCUMENTATION_MODE=assessment` supports valid real-source smoke via
 the CLI, but not three source-bundle cases or exported nested tool-call evidence.
 The preflight never skips these requirements or certifies only two cases.
-The login/evaluation steps are reserved for a reviewed integration change after
-those dependencies are resolved, not a working hosted release claim.
+P1 now provides a separate opt-in evaluation mode with isolated supplied sources
+and observed execution records. The login/evaluation steps are reserved for a
+reviewed P3 transport/scorer integration and version-evidence validation, not
+a working hosted release claim. Session GET/outer response disagreement is
+explicitly surfaced and blocks candidate-version success.
 
 Before an operator enables that job, configure environment required reviewers,
 prevent self-review, restrict deployment branches to protected `main`, establish

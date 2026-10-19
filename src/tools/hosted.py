@@ -120,6 +120,10 @@ def invoke_hosted(
         require_binding()
     if session.status not in {"active", "idle"}:
         raise ValueError(f"Hosted session is not ready: {session.status!r}; retained session {session_id}.")
+    session = project.agents.get_session(agent_name=name, session_id=session_id)
+    if session.agent_session_id != session_id or session.status not in {"active", "idle"}:
+        raise ValueError("Hosted session GET does not confirm the ready created session.")
+    require_binding()
     with project.get_openai_client(agent_name=name) as client:
         raw = client.responses.create(
             input=request.model_dump_json(),
@@ -127,6 +131,21 @@ def invoke_hosted(
         ).model_dump()
     if not isinstance(raw.get("id"), str) or not raw["id"].strip():
         raise ValueError("Hosted response ID is missing.")
+    outer_reference = raw.get("agent_reference")
+    print(json.dumps({
+        "response_id": raw["id"], "agent_session_id": session_id,
+        "session_version_indicator": {"type": "version_ref", "agent_version": version},
+        "outer_agent_reference": outer_reference,
+    }), file=sys.stderr)
+    if outer_reference is not None and (
+        not isinstance(outer_reference, dict)
+        or outer_reference.get("name") != name
+        or outer_reference.get("version") != version
+    ):
+        raise ValueError(
+            "Hosted response agent_reference disagrees with the GET-confirmed session binding; "
+            "no candidate-version success is certified. See retained session/response identifiers on stderr."
+        )
     result = result_from_response(raw, request, artifact)
     return {
         "run_id": raw["id"],
@@ -134,6 +153,9 @@ def invoke_hosted(
         "agent_name": name,
         "agent_version": version,
         "agent_session_id": session_id,
+        "session_version_indicator": {"type": "version_ref", "agent_version": version},
+        "outer_agent_reference": outer_reference,
+        "version_evidence": "session_get_and_matching_outer_reference" if outer_reference else "session_get_only",
         "image": artifact.image,
         "source_commit": artifact.source_commit,
         "build_reference": artifact.build_reference,
@@ -149,12 +171,14 @@ def suite_blockers(cases: list[dict[str, Any]]) -> list[str]:
     supplied = [case["id"] for case in cases if case["mode"] == "supplied_sources"]
     if supplied:
         blockers.append(
-            "P1 assessment accepts bare AgentRequest only; no tools-disabled supplied-source input: "
+            "Selected assessment mode accepts bare AgentRequest only; supplied-source evaluation requires "
+            "P1's separately opted-in EvaluationRequest/Response and a reviewed P3 adapter: "
             + ", ".join(supplied)
         )
     blockers.append(
-        "P1 assessment does not export correlated nested tool calls, results and discovered schemas; "
-        "builtin.tool_call_accuracy and pinned live-source verification cannot be certified from outer Responses."
+        "Ordinary assessment does not export nested execution records. P1's opt-in evaluation interface now "
+        "captures model/tool records, but this P3 release path has not integrated or verified its evaluator mappings, "
+        "isolated deployment and session/outer-version evidence; builtin.tool_call_accuracy remains blocked."
     )
     return blockers
 

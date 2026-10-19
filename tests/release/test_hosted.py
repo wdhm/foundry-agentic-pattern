@@ -106,6 +106,7 @@ def session(status="active", version="4", session_id="offline-session"):
 def project_for(raw):
     project = MagicMock()
     project.agents.create_session.return_value = session()
+    project.agents.get_session.return_value = session()
     client = project.get_openai_client.return_value.__enter__.return_value
     client.responses.create.return_value.model_dump.return_value = raw
     return project, client
@@ -355,7 +356,7 @@ def test_real_sdk_hosted_session_and_named_responses_wire_contract(cases, raw, a
     class Response(HttpResponse):
         def __init__(self, request):
             super().__init__(request, None)
-            self.status_code = 201
+            self.status_code = 201 if request.method == "POST" else 200
             self.headers = {"content-type": "application/json"}
             self.content_type = "application/json"
 
@@ -381,14 +382,19 @@ def test_real_sdk_hosted_session_and_named_responses_wire_contract(cases, raw, a
 
         def send(self, request, **kwargs):
             requests.append(request)
-            assert request.url.endswith("/agents/documentation-agent/endpoint/sessions?api-version=v1")
-            assert request.method == "POST"
-            assert json.loads(request.body) == {
-                "version_indicator": {"type": "version_ref", "agent_version": "4"},
-            }
+            if request.method == "POST":
+                assert request.url.endswith("/agents/documentation-agent/endpoint/sessions?api-version=v1")
+                assert json.loads(request.body) == {
+                    "version_indicator": {"type": "version_ref", "agent_version": "4"},
+                }
+            else:
+                assert request.method == "GET"
+                assert request.url.endswith(
+                    "/agents/documentation-agent/endpoint/sessions/offline-session?api-version=v1"
+                )
             return Response(request)
 
-    credential = MagicMock()
+    credential = MagicMock(spec=["get_token"])
     credential.get_token.return_value = AccessToken("offline-not-a-credential", int(time.time()) + 3600)
 
     def respond(request):
@@ -410,7 +416,49 @@ def test_real_sdk_hosted_session_and_named_responses_wire_contract(cases, raw, a
         ))
         report = invoke_hosted(project, cases[0]["request"], "documentation-agent", "4", artifact)
     assert report["agent_session_id"] == "offline-session"
-    assert len(requests) == 2
+    assert len(requests) == 3
+
+
+@pytest.mark.parametrize("reference", [
+    {"type": "agent_reference", "name": "documentation-agent", "version": "6"},
+    {"type": "agent_reference", "name": "another-agent", "version": "7"},
+    {"type": "agent_reference", "name": "documentation-agent"},
+    "invalid",
+])
+def test_session_get_v7_outer_v6_discrepancy_is_preserved_and_blocks(reference, cases, raw, artifact, capsys):
+    raw["agent_reference"] = reference
+    project, client = project_for(raw)
+    project.agents.create_session.return_value = session(version="7")
+    project.agents.get_session.return_value = session(version="7")
+    with pytest.raises(ValueError, match="disagrees"):
+        invoke_hosted(project, cases[0]["request"], "documentation-agent", "7", artifact)
+    diagnostics = [json.loads(line) for line in capsys.readouterr().err.splitlines()]
+    assert diagnostics[-1]["session_version_indicator"]["agent_version"] == "7"
+    assert diagnostics[-1]["outer_agent_reference"] == reference
+    assert diagnostics[-1]["response_id"] == raw["id"]
+    assert client.responses.create.call_count == 1
+    project.agents.update_details.assert_not_called()
+
+
+def test_matching_outer_reference_and_session_evidence_are_separate(cases, raw, artifact):
+    raw["agent_reference"] = {"type": "agent_reference", "name": "documentation-agent", "version": "4"}
+    project, _ = project_for(raw)
+    report = invoke_hosted(project, cases[0]["request"], "documentation-agent", "4", artifact)
+    assert report["outer_agent_reference"] == raw["agent_reference"]
+    assert report["session_version_indicator"] == {"type": "version_ref", "agent_version": "4"}
+    assert report["version_evidence"] == "session_get_and_matching_outer_reference"
+    assert report["result"]["provenance"]["agent_version"] == "0.4.0"
+
+
+def test_existing_eval_interface_is_opt_in_not_an_assessment_override(version, artifact):
+    from contracts.evaluation import EvaluationRequest
+
+    version["definition"]["environment_variables"].update(
+        DOCUMENTATION_MODE="evaluation", DOCUMENTATION_ENABLE_EVALUATION="true",
+    )
+    with pytest.raises(ValueError, match="assessment"):
+        validate_hosted_version(version, artifact, "https://offline.example/api/projects/test", "2026-09-22")
+    assert "source_mode" in EvaluationRequest.model_fields
 
 
 def test_readiness_poll_is_bounded_and_fails_closed(plan, tmp_path, monkeypatch):

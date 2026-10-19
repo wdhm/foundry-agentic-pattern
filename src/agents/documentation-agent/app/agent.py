@@ -16,9 +16,10 @@ from agent_framework.exceptions import AgentInvalidRequestException
 from pydantic import ValidationError
 
 from contracts import CONTRACT_VERSION, AgentRequest, AgentResult, Provenance
+from contracts.evaluation import EvaluationResponse
 from contracts.v1 import AgentResult as AssessmentResult
 
-ContractResult = AgentResult | AssessmentResult
+ContractResult = AgentResult | AssessmentResult | EvaluationResponse
 
 
 def request_text(messages: AgentRunInputs | None) -> str:
@@ -47,7 +48,7 @@ def request_text(messages: AgentRunInputs | None) -> str:
 
 
 class DocumentationAgent(BaseAgent):
-    result_model: type[AgentResult] | type[AssessmentResult] = AgentResult
+    result_model: type[AgentResult] | type[AssessmentResult] | type[EvaluationResponse] = AgentResult
 
     def __init__(self) -> None:
         super().__init__(

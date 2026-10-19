@@ -73,9 +73,9 @@ jobs:
           test -n "$AZURE_TENANT_ID"
           test -n "$AZURE_SUBSCRIPTION_ID"
           python -c 'import os; from pathlib import Path; from tools.hosted_release import HostedReleasePlan; p=Path(os.environ["PLAN_PATH"]).resolve(); assert p.is_relative_to(Path.cwd()), "Plan must be in trusted checkout"; HostedReleasePlan.model_validate_json(p.read_text())'
-      - name: Fail closed on unsupported hosted suite before Azure login
-        # Current P1 lacks supplied-source input and exported tool traces. This
-        # intentionally blocks: enabling the job is not a capability override.
+      - name: Fail closed on unintegrated hosted evaluation before Azure login
+        # P1's separate opt-in eval interface exists; P3 has not integrated its
+        # transport/scorer/version evidence. Enable flags do not certify it.
         run: python -m tools.release --plan "$PLAN_PATH" --output evals/results/preflight --execute-approved-cloud
       - uses: azure/login@v2
         with:

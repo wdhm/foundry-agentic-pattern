@@ -267,7 +267,7 @@ def test_local_header_identity_is_not_treated_as_verified(monkeypatch):
     from azure.ai.agentserver.core import FoundryAgentRequestContext
 
     monkeypatch.setattr(
-        "documentation_agent.approval_spike.get_request_context",
+        "documentation_agent.approval_common.get_request_context",
         lambda: FoundryAgentRequestContext(user_id="caller-claimed-identity"),
     )
     assert ApprovalSpikeAgent(allow_local=True).actor() == "local-unverified"

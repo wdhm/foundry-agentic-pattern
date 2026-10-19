@@ -1,6 +1,6 @@
 # Hosted documentation-agent evaluation and release
 
-**Offline alignment, 2026-10-16.** Hosted **`documentation-agent`** is the primary
+**Offline alignment, reconciled 2026-10-19.** Hosted **`documentation-agent`** is the primary
 workshop/release target, per P3's direction and [ADR 0024](../adr/0024-hosted-documentation-runtime.md).
 The former prompt `doc-agent` runner remains an explicitly selected compatibility
 path. This package does not claim a deployed assessment, live evaluation,
@@ -14,26 +14,54 @@ promotion, rollback, Teams delivery or completion of #13/#25/#27/#33.
 | `python -m tools.release` | Defaults to hosted; validates a strict reviewed plan and unchanged five-case suite; writes **blocked** diagnostics before any credential discovery/cloud work |
 | `tools.hosted_release.prepare_candidate` | Offline-tested SDK primitive for guarded immutable-version creation, bounded readiness and exact readback; **not reached by the current CLI/workflow** |
 | Hosted evaluator adapter | Uses the actual request/result for groundedness/task-adherence inputs; never wraps hosted output as prompt `AnalysisOutput` or invents tool traces |
-| One manual workflow | Default offline P1/P3 regression + wheel build; optional cloud job is disabled by default and currently stops at unsupported-suite preflight before login |
+| One manual workflow | Default offline P1/P3 regression + wheel build; optional cloud job is disabled by default and stops at unintegrated-evaluation preflight before login |
 | Prompt compatibility | `--agent-kind prompt` on CLI; `--target prompt` on release; earlier append-only prompt runner/tests retained |
 
-**Two hard P1 dependencies prevent full hosted release certification:**
+**Current P3 integration limits prevent full hosted release certification:**
 
 1. Assessment accepts **only bare AgentRequest v1**. The unchanged suite's three
    `supplied_sources` cases require isolated source snapshots with tools disabled,
-   which P1 does not implement. Do not wrap a source envelope around AgentRequest,
+   which ordinary assessment does not implement. P1 now provides the separate
+   [opt-in evaluation interface](../../src/agents/documentation-agent/EVALUATION_INTERFACE.md)
+   and canonical `contracts.evaluation` models for both live capture and isolated
+   snapshots. This P3 runner has **not integrated that transport or its evaluator
+   mappings**. Do not wrap a source envelope around ordinary AgentRequest,
    suppress internal tools with an outer `tool_choice`, change the gold, drop
    cases, or turn unavailable wiki content into a live wiki read.
 2. P1 verifies nested tool evidence internally but returns only AgentResult in
-   outer Responses. Actual correlated calls/results and discovered schemas are
-   not exported. Outer Responses is therefore insufficient for pinned live-read
+   ordinary outer Responses. Correlated calls/results and discovered schemas are
+   not exported by ordinary assessment. Opted-in `EvaluationResponse.execution`
+   contains observed model/tool calls, schemas and source context; this is locally
+   implemented, not automatically certified by the release adapter.
+   Ordinary outer Responses is therefore insufficient for pinned live-read
    verification or honest `builtin.tool_call_accuracy`. Neither prompt traces nor
    empty tool arrays count as hosted tool-call passes.
 
+P1 main at `89e8593` includes task-aware runtime app `0.4.0` and a separate
+selected-proposal approval path. This branch preserves those contracts, generated
+evaluation schemas, policies and tests. Assessment CLI supports optional paired
+`--task-question` / `--task-scope`, forwarded as canonical `request.task`.
+Evaluation requires `DOCUMENTATION_MODE=evaluation` **and**
+`DOCUMENTATION_ENABLE_EVALUATION=true`, on a separately authorized isolated version.
+Approval requires its own opt-in mode/policy; this CLI neither submits proposals
+for execution nor resumes approval. None of these capabilities is enabled by P3.
+
+**Observed version discrepancy (P1 report, 2026-10-19):** deployed version 7
+sessions GET as `version_ref=7`, while outer Responses reports
+`agent_reference.version=6` (named serving pin). Runtime app `0.4.0` is not enough
+to distinguish those image versions. The caller GET-confirms the created session,
+preserves outer reference/session/response identifiers in stderr, and **fails
+closed** on disagreement instead of producing candidate-version success.
+Matching or absent outer references are recorded separately (`version_evidence`);
+absence means session-GET evidence only, not independent executing-image proof.
+This discrepancy still needs platform/deployment investigation before a candidate
+can be certified. No cloud reproduction was performed by this reconciliation.
+
 These are release-gate blockers, **not a blanket block on meaningful assessment
 smoke**. The [hosted CLI](cli-trigger-guide.md) can invoke a valid assessment when
-real P2 configuration/access exists. P1 must review source-isolation and correlated
-trace support; P3 then wires it in a separate reviewed change. The current preflight
+real P2 configuration/access exists and version evidence does not conflict.
+P3 must review and wire P1's implemented source-isolation/capture interface in a
+separate adapter change. The current preflight
 cannot be overridden by enable switches or `--execute-approved-cloud`; it does not
 create a doomed candidate or incur evaluator costs.
 
@@ -100,8 +128,10 @@ P2 must expose exactly `knowledge___knowledge_base_retrieve`,
 identity/model/toolbox/source access. The shared ADO gateway currently supports a
 single selected agent identity: **no repointing or onboarding is part of this
 alignment**. P1's read guards and evidence validation remain authoritative.
-Assessment stays read-only. The PR #76 local approval spike uses a dummy receipt;
-it is not real Toolbox approval enforcement, wiki publication or Teams completion.
+Assessment stays read-only. The PR #76 local approval spike used a dummy receipt.
+Newer main also implements selected-proposal approval under its separate mode and
+policy; it does not authorize assessment writes or make the P3 CLI an approval
+client. Preserve P1's approval boundary and its own documented verification limits.
 
 Native monitoring MI configuration and historical **prompt** trace ingestion are
 not hosted instrumentation proof. P1/P3 still need to verify runtime model/tool
