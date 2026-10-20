@@ -11,6 +11,28 @@ The agent proposes changes to a system of record (the wiki). Writes must only ha
 
 ## Decision
 
+### Delivered MVP clarification (2026-10-20)
+
+Under accepted [ADR 0022](0022-mvp-scope-platform-first.md), the deployed
+implementation uses the Foundry SDK state store rather than Cosmos. The
+Responses bridge did not display approval buttons; a native Activity handler
+in the same hosted app renders Adaptive Cards and forwards decisions to the
+existing exact-call approval engine. Modify captures the reviewer's replacement
+text and feedback and requires fresh approval; it does not claim model regeneration.
+
+John chose **People in your organization**, and the demo tenant administrator
+approved publication. The handler supports personal Teams chats in that tenant;
+group/channel approval is not implemented. Live Approve/Modify/Reject and stale
+decision rejection were observed, with independent wiki readback for Approve.
+The [Teams guide](../../src/agents/documentation-agent/TEAMS_APPROVAL.md)
+records the implementation, evidence and limitations.
+
+Approver/decision context is stored in SDK state. Cosmos audit and approver/run-ID
+commit-message attribution remain deferred hardening, not completed features.
+The original target architecture below is retained for reference.
+
+### Original target architecture
+
 - The wiki-write tool is configured in the Toolbox with **`require_approval: always`**.
 - The **hosted agent runtime enforces the approval**. The Toolbox MCP endpoint does not block `tools/call` on its own ([R1](../risks.md#r1)). The runtime pauses, **persists the pending tool call** (Cosmos DB), collects the decision, and then **resumes or rejects that exact call**.
 - The agent is **published to Microsoft Teams**. Reviewers choose:

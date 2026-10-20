@@ -4,7 +4,7 @@ Verified risks and open questions for Agentic Pattern v1. Each risk has a status
 
 | ID | Topic | Status | Owner | ADRs | Spike |
 |---|---|---|---|---|---|
-| [R1](#r1) | Tool approval enforcement and approval UX in Teams | 🟡 Partly verified, spike needed | P1 · John | [0008](adr/0008-human-in-the-loop-approval.md), [0009](adr/0009-hosted-agent-runtime.md), [0016](adr/0016-state-and-audit-cosmos-db.md) | [#1](https://github.com/wdhm/foundry-agentic-pattern/issues/1) |
+| [R1](#r1) | Tool approval enforcement and approval UX in Teams | 🟢 Go for MVP: native Activity cards and runtime enforcement | P1 · John | [0008](adr/0008-human-in-the-loop-approval.md), [0009](adr/0009-hosted-agent-runtime.md), [0016](adr/0016-state-and-audit-cosmos-db.md) | [#1](https://github.com/wdhm/foundry-agentic-pattern/issues/1) |
 | [R2](#r2) | Publish to Teams and roll back a pinned agent version | 🟡 Serving pin recorded; candidate evidence/channel/rollback proof open | P3 · Louise | [0008](adr/0008-human-in-the-loop-approval.md), [0009](adr/0009-hosted-agent-runtime.md), [0013](adr/0013-evaluation-gate-in-ci.md), [0018](adr/0018-region-sweden-central.md) | [#4](https://github.com/wdhm/foundry-agentic-pattern/issues/4) |
 | [R3](#r3) | Agent identity lifecycle and Azure DevOps access | 🟢 Go: agent user + gateway ([ADR 0021](adr/0021-agent-user-and-ado-mcp-gateway.md)); onboarding scripted, CI open | P2 · Rickard | [0012](adr/0012-agent-identity-and-rbac.md), [0014](adr/0014-infrastructure-scope.md), [0021](adr/0021-agent-user-and-ado-mcp-gateway.md) | [#2](https://github.com/wdhm/foundry-agentic-pattern/issues/2) |
 | [R4](#r4) | AI Gateway token limits and per-agent cost attribution | 🟡 Design adjusted | P3 · Louise | [0014](adr/0014-infrastructure-scope.md) | [#3](https://github.com/wdhm/foundry-agentic-pattern/issues/3) |
@@ -14,23 +14,27 @@ Verified risks and open questions for Agentic Pattern v1. Each risk has a status
 <a id="r1"></a>
 ## R1: Tool approval enforcement and approval UX in Teams
 
-**Runtime update (2026-10-20 audit):** P1's merged selected-proposal approval
-implementation covers matching decisions, reject/modify, persistence, replay and
-actual local HTTP MCP/Toolbox integration tests
-([#15](https://github.com/wdhm/foundry-agentic-pattern/issues/15),
-[caller contract](../src/agents/documentation-agent/TOOL_APPROVAL.md)).
-It does not establish a deployed reviewer context, live hosted wiki writes or
-Teams delivery. Assessment versions remain read-only.
+**MVP decision (2026-10-20): Go with native Activity Adaptive Cards.**
+The Responses-to-Teams bridge displayed the preview but not decision buttons.
+The Activity handler merged in [PR #94](https://github.com/wdhm/foundry-agentic-pattern/pull/94)
+reuses the #15 approval engine and SDK state store inside the same hosted app.
+On served v13, the user verified card delivery, Reject, stale-decision rejection,
+Modify with new pending ID/content, invalidation of the original proposal and
+Approve with a success card. An independent ADO readback confirmed exactly the
+approved sandbox page content. See the
+[Teams guide and dated evidence](../src/agents/documentation-agent/TEAMS_APPROVAL.md#live-teams-evidence-2026-10-20).
+Assessment versions retain application-level read guards; P2's shared gateway
+and identity now permit writes, so gateway-level read-only isolation is not claimed.
 
 **Earlier local spike (2026-10-16):** the
 [hosted native-approval experiment](workshop/hosted-approval-spike.md) exercises
 Approve / Reject and explicit Modify through the Responses protocol. It persists
 the exact pending call and a dummy receipt with SDK state storage, and rejects
 tampered, replayed and superseded decisions. This is a local dummy-target result,
-not a Toolbox integration or Teams verification. R1 remains open: no Teams
-go/no-go decision, real approver identity or external-write guarantee is claimed.
+not a Toolbox integration or Teams verification by itself. The subsequent live
+Teams result above establishes the MVP go/no-go outcome.
 
-**Status:** 🟡 Partly verified. Spike needed for the Teams approval UX.
+**Status:** 🟢 MVP verified and documented. Production hardening remains deferred.
 
 **Findings**
 - The Toolbox MCP endpoint does **not** block `tools/call` when `require_approval: always` is set. The **hosted agent runtime** must pause, collect the approval decision, and then resume or reject **that exact tool call**.
@@ -41,10 +45,16 @@ go/no-go decision, real approver identity or external-write guarantee is claimed
 **Impact:** without explicit runtime enforcement, an approval-gated write could run without approval. Evidence links would also be lost in Teams if we relied on native citations.
 
 **Mitigation**
-- The hosted approval runtime must execute only an exact matching approved call. Its local persistence/decision guarantees are tested; the deployed remote state/reviewer and real write target still require integration proof. Cosmos DB is deferred under [ADR 0022](adr/0022-mvp-scope-platform-first.md), not an implemented MVP dependency.
+- The hosted approval runtime executes only a matching approved call. Native Teams decisions are checked against the saved tenant/user/conversation/session binding, then delegated to the same hash/policy/ETag-claim checks as Responses. Cosmos DB is deferred under [ADR 0022](adr/0022-mvp-scope-platform-first.md), not an implemented MVP dependency.
 - Evidence is rendered inline in the Teams message body as a compact list with exact versions.
 
-**Spike (M0, [#1](https://github.com/wdhm/foundry-agentic-pattern/issues/1)):** demonstrate Approve / Modify / Reject in Teams for a hosted agent, with the wiki-write call executed only after approval.
+**Scope limits:** Reject/Modify results are user-observed live UI evidence plus
+automated runtime tests; no independent live gateway call-count audit is claimed.
+The approved write has independent page readback, not a distributed exactly-once
+guarantee. Wiki ETag concurrency, full audit/commit-message attribution and
+automated PR-to-Teams posting remain follow-ups. Live client screenshots and
+mobile-specific checks are workshop packaging, not evidence already collected.
+The demo used an explicitly approved sandbox and no-concurrent-editor agreement.
 
 ---
 
