@@ -276,6 +276,31 @@ def test_candidate_primitive_uses_digest_and_real_returned_version_only(plan, cl
     assert not hasattr(cloud, "respond")  # Never inherits prompt transport/evaluation assumptions.
 
 
+def test_foundry_owned_toolbox_metadata_is_not_copied_or_compared(plan, cloud, tmp_path):
+    service = {"toolbox_name": "documentation-agent-readonly", "toolbox_version": "1", "toolsetid": "offline"}
+    base = cloud.version.side_effect
+    cloud.version.side_effect = lambda name, selected: {
+        **base(name, selected), "metadata": {"retained": "true", **service},
+    }
+    cloud.await_candidate.return_value["metadata"] = {"retained": "true", "toolsetid": "service-assigned"}
+    assert prepare_candidate(cloud, plan, "judge", tmp_path) == "4"
+    assert cloud.create.call_args.args[1] == {"retained": "true"}
+
+
+@pytest.mark.parametrize("protocols", [
+    [{"protocol": "responses", "version": "2.0.0"}, {"protocol": "activity", "version": "2.0.0"}],
+])
+def test_teams_activity_protocol_may_accompany_responses(protocols, version, artifact):
+    changed = deepcopy(version)
+    changed["definition"]["protocol_versions"] = protocols
+    validate_hosted_version(changed, artifact, "https://offline.example/api/projects/test", "2026-09-22")
+    changed["definition"]["protocol_versions"] = protocols + [{"protocol": "invocations", "version": "1.0.0"}]
+    with pytest.raises(ValueError):
+        validate_hosted_version(changed, artifact, "https://offline.example/api/projects/test", "2026-09-22")
+    changed["definition"]["protocol_versions"] = protocols[1:]
+    with pytest.raises(ValueError):
+        validate_hosted_version(changed, artifact, "https://offline.example/api/projects/test", "2026-09-22")
+
 @pytest.mark.parametrize("problem", ["latest", "identity", "model", "resources", "registry", "proof", "race"])
 def test_hosted_candidate_preconditions_block_before_mutation(problem, plan, cloud, tmp_path):
     if problem == "latest":
@@ -1086,6 +1111,10 @@ def test_real_p1_framework_capture_consumes_adapter_without_network(case_index, 
         settings, live=AssessmentAgent(settings, LiveRunner()), supplied=SuppliedRunner(),
     )
     report = asyncio.run(runtime.evaluate(payload.model_dump_json()))
+    # gpt-6 models emit reasoning items next to the answer; they are not scorer content.
+    report.execution.model_calls[-1]["output"][0]["content"].insert(
+        0, {"type": "text_reasoning", "text": "private reasoning"},
+    )
     raw = deepcopy(fixture)
     raw["output"][0]["content"][0]["text"] = report.model_dump_json()
     checked = validate_report(
@@ -1094,9 +1123,12 @@ def test_real_p1_framework_capture_consumes_adapter_without_network(case_index, 
     )
     row = evaluator_row(case, payload, checked, evaluation_plan.candidate_definition)
     assert len(row["tool_calls"]) == len(report.execution.tool_calls)
+    scored = json.dumps(row["response"])
+    assert "private reasoning" not in scored and "fabricated passage" not in scored
     repair_inputs = [
         call for call in report.execution.model_calls
         if "Verification of your previous AnalysisOutput failed" in json.dumps(call["input"])
     ]
     assert len(repair_inputs) == (1 if repair else 0)
-    assert json.loads(report.execution.model_calls[-1]["output"][0]["content"][0]["text"]) == json.loads(output)
+    final = report.execution.model_calls[-1]["output"][0]["content"]
+    assert json.loads(next(item["text"] for item in final if item["type"] == "text")) == json.loads(output)
