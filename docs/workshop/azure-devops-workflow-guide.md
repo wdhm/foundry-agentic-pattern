@@ -96,6 +96,24 @@ certification can proceed. Do not weaken the version guard or move serving v8
 merely to obtain matching metadata; any additional model assessment needs fresh
 authorization. No paid evaluation or generated evaluation suite was run.
 
+### Follow-up routing investigation
+
+Microsoft's [session-management documentation](https://learn.microsoft.com/azure/foundry/agents/how-to/manage-hosted-sessions)
+specifies `create_session(..., version_indicator=VersionRefIndicator(agent_version=...))`
+for concrete-version pinning. The transport already uses that method, verifies
+the session by GET, and invokes through `get_openai_client(agent_name=...)`.
+The [migration documentation](https://learn.microsoft.com/azure/foundry/agents/how-to/migrate-hosted-agent-preview)
+explicitly replaces the legacy shared-project `agent_reference` request route
+with this agent-specific endpoint. Switching back to that legacy route is not
+a supported fix for the current hosted deployment.
+
+A later read-only inventory found evaluation version 12 and Teams-card
+approval version 13 active, while serving remained on approved version 8.
+Those versions were not created by this P3 source rollout. Their existence is
+not a serving promotion or Teams-delivery proof. No further deployment or
+model request was made during this investigation. Coordinate with the current
+P1/P2 writers before any maintenance-window test; do not overwrite their work.
+
 ## Rollout gates
 
 Initial read-only live inventory during this change found the shared endpoint already
