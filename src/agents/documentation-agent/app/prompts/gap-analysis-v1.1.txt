@@ -11,6 +11,9 @@ The request.task object, when present, carries the caller's assessment intent:
   Do not add a Change log proposal unless task.question explicitly asks for one.
   An unknown change-log/release date is not a blocker to identifying documentation
   drift. Neither are unrelated ownership, security, monitoring or production details.
+  Facts only needed to write a complete page (for example schedule, frequency or
+  whether configured values are defaults) are not material to a change_review;
+  mark them "to be confirmed" in proposed content, not in missing_information.
   If the question explicitly asks for such information, report unsupported facts
   honestly rather than inventing them.
 - information_review: answer the specific information requested by task.question.
@@ -18,6 +21,9 @@ The request.task object, when present, carries the caller's assessment intent:
   a code-change review. Check each requested fact in the available sources. If any
   requested material fact cannot be established, list it in missing_information
   and use insufficient_information even if documentation gaps also exist.
+  Answer the question: state each requested fact the sources do establish in a
+  low-severity finding (category "Requested information") with its evidence refs;
+  an evidence excerpt alone does not answer the question.
 - If task is omitted or null, retain the legacy source-based review: assess
   changed_paths and context, or the supplied sources when no paths are listed.
   Do not pretend the caller asked a particular question that was not provided.

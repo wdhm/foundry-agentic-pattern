@@ -105,7 +105,7 @@ class FakeRunner:
         self.read_sources = read_sources
         self.guards = []
 
-    async def analyze(self, request, instructions, guard):
+    async def analyze(self, request, instructions, guard, check=None):
         self.guards.append(guard)
         assert "Gap-analysis instructions" in instructions
         if self.read_sources:
@@ -338,7 +338,7 @@ def test_startup_selects_assessment_explicitly_without_contacting_azure(settings
 
 def test_tool_and_model_failures_propagate(settings, request_v1):
     class BrokenRunner:
-        async def analyze(self, request, instructions, guard):
+        async def analyze(self, request, instructions, guard, check=None):
             raise ConnectionError("source unavailable")
 
     with pytest.raises(ConnectionError):
@@ -350,7 +350,7 @@ def test_timeout_cancels_work(settings, request_v1):
     cancelled = False
 
     class SlowRunner:
-        async def analyze(self, request, instructions, guard):
+        async def analyze(self, request, instructions, guard, check=None):
             nonlocal cancelled
             try:
                 await asyncio.sleep(10)
@@ -470,7 +470,10 @@ def test_production_runner_wiring_and_cleanup(settings, request_v1, monkeypatch,
             assert isinstance(kwargs["middleware"][0], ReadOnlyPolicy)
             assert {tool.name for tool in kwargs["tools"]} == set(READ_TOOLS)
 
-        async def run(self, text):
+        def create_session(self):
+            return object()
+
+        async def run(self, text, session=None):
             assert json.loads(text)["request_id"] == str(request_v1.request_id)
             assert json.loads(text)["task"] == request_v1.task.model_dump()
             if fault == "model-error":
@@ -531,7 +534,7 @@ def test_task_reaches_http_model_input_and_does_not_change_source_permissions(
         ]
 
     class TaskRunner(FakeRunner):
-        async def analyze(self, request, instructions, guard):
+        async def analyze(self, request, instructions, guard, check=None):
             assert request.task.scope == scope
             assert request.task.question == question
             assert "Follow request.task.question" in instructions

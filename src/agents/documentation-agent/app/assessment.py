@@ -1,8 +1,9 @@
 import asyncio
 import hashlib
 import json
+from collections.abc import Callable
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 from uuid import uuid4
 
 from agent_framework import AgentRunInputs
@@ -21,16 +22,41 @@ from .settings import AssessmentSettings
 APP_VERSION = "0.4.0"
 APP_DIR = Path(__file__).parent
 
+Check = Callable[[str], list[str]]
+
+
+def repair_message(problems: list[str]) -> str:
+    return (
+        "Verification of your previous AnalysisOutput failed: " + "; ".join(problems) + ". "
+        "Return a corrected AnalysisOutput. Copy every evidence excerpt verbatim from the exact tool output "
+        "or supplied source it cites, with that source's exact URI and version. "
+        "Remove any evidence you cannot quote exactly."
+    )
+
+
+async def run_with_repair(agent: Any, message: str, check: Check | None) -> Any:
+    """Run once; if verification finds problems, give the model one corrected attempt in the same session."""
+    session = agent.create_session()
+    response = await agent.run(message, session=session)
+    problems = check(response.text) if check is not None else []
+    if problems:
+        response = await agent.run(repair_message(problems), session=session)
+    return response
+
 
 class AnalysisRunner(Protocol):
-    async def analyze(self, request: AgentRequest, instructions: str, guard: ReadOnlyPolicy) -> str: ...
+    async def analyze(
+        self, request: AgentRequest, instructions: str, guard: ReadOnlyPolicy, check: Check | None = None
+    ) -> str: ...
 
 
 class FoundryAnalysisRunner:
     def __init__(self, settings: AssessmentSettings) -> None:
         self.settings = settings
 
-    async def analyze(self, request: AgentRequest, instructions: str, guard: ReadOnlyPolicy) -> str:
+    async def analyze(
+        self, request: AgentRequest, instructions: str, guard: ReadOnlyPolicy, check: Check | None = None
+    ) -> str:
         from agent_framework import Agent
         from agent_framework.foundry import FoundryChatClient
         from agent_framework_foundry_hosting import FoundryToolbox
@@ -81,7 +107,7 @@ class FoundryAnalysisRunner:
                     middleware=[guard],
                     default_options={"store": False, "response_format": AnalysisOutput},
                 )
-                response = await agent.run(request.model_dump_json())
+                response = await run_with_repair(agent, request.model_dump_json(), check)
                 if response.user_input_requests:
                     raise RuntimeError("Assessment requested approval; no approvals are submitted by this runtime.")
                 if response.finish_reason in {"length", "content_filter"}:
@@ -165,10 +191,25 @@ class AssessmentAgent(DocumentationAgent):
         record.status = "completed"
         return EvaluationResponse(result=result, execution=record)
 
+    @staticmethod
+    def analysis_problems(request: AgentRequest, guard: ReadOnlyPolicy, text: str) -> list[str]:
+        try:
+            output = AnalysisOutput.model_validate_json(text)
+        except ValidationError:
+            return []
+        problems = [
+            f"evidence {evidence.id} Git version must be the request commit_sha"
+            for evidence in output.evidence
+            if evidence.source == "git" and evidence.version != request.subject.commit_sha
+        ]
+        return problems + trace_evidence_problems({"output": guard.calls}, output.model_dump(mode="json"))
+
     async def assess(self, request: AgentRequest, record: ExecutionRecord | None = None) -> AgentResult:
         guard = ReadOnlyPolicy(request, self.settings, record)
         async with asyncio.timeout(self.settings.timeout_seconds):
-            text = await self.runner.analyze(request, self.instructions, guard)
+            text = await self.runner.analyze(
+                request, self.instructions, guard, lambda answer: self.analysis_problems(request, guard, answer)
+            )
         try:
             output = AnalysisOutput.model_validate_json(text)
         except ValidationError as exc:

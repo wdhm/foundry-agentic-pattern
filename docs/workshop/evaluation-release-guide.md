@@ -3,8 +3,43 @@
 **Offline evaluation integration, 2026-10-20.** Hosted **`documentation-agent`** is the primary
 workshop/release target, per P3's direction and [ADR 0024](../adr/0024-hosted-documentation-runtime.md).
 The former prompt `doc-agent` runner remains an explicitly selected compatibility
-path. This package does not claim a deployed assessment, live evaluation,
-promotion, rollback, Teams delivery or completion of #13/#25/#27/#33.
+path. This package does not claim promotion, rollback or Teams delivery by the
+release tooling.
+
+## Live gate evidence (2026-10-20)
+
+The full gate ran live twice against isolated candidates, with the same five
+cases and the evaluator deployment `eval-gpt-5.4-mini`. Serving `documentation-agent:13`
+stayed at 100% throughout, and both candidates were deleted afterwards.
+
+| Case | Blocked candidate v17 (G / TA / TCA) | Passing candidate v18 (G / TA / TCA) |
+|---|---|---|
+| order-sync-retry (live) | 5 / 1 / 5 | 5 / 1 / 5 |
+| order-sync-information-missing (live) | 5 / 1 / 5 | 5 / 1 / 5 |
+| order-sync-dead-letter-stub | 5 / 1 / – | 5 / 1 / – |
+| order-sync-wiki-unavailable | 4 / 1 / – | 4 / 1 / – |
+| order-sync-version-isolation | **2 / 0 (blocked)** | **5 / 1** |
+
+G = groundedness, TA = task adherence, TCA = tool-call accuracy.
+
+- **Why v17 was blocked:** the version-isolation case asks for the retry and ERP
+  timeout values. v17 only put them in evidence and did not state them, so task
+  adherence failed. Its low groundedness came from a gate bug: the user query
+  was sent as a plain string, so the evaluator saw an empty query.
+- **What v18 changed:** v18 (image built from `d8bcf12`) states each requested
+  fact in information reviews as a low-severity "Requested information" finding.
+  The gate now sends evaluator queries as text items.
+- **Gate decision:** v18 got `eligible_for_manual_review` with thresholds
+  groundedness ≥ 3, task adherence = 1 and tool-call accuracy ≥ 3. It was
+  `promoted=false` and `promotion_eligible=false`.
+
+**Calibration notes:**
+- `builtin.task_adherence` is binary: it returns 0 or 1 with the label pass or
+  fail.
+- Foundry rejects task adherence thresholds below 1, so the plan validator
+  requires a threshold of exactly 1.
+- The expected status in the deterministic source checks is exact, so model
+  variance can still block. That counts as a failed gate, not a flaky test.
 
 ## Implemented, with live gates still required
 
@@ -170,7 +205,7 @@ approval/threshold fields rather than duplicating contracts. It requires:
 | `candidate_definition` | Full nested stable SDK hosted definition; explicit evaluation mode/enable flag when `evaluation` config is present; image matches artifact |
 | `artifact` | Strict `HostedArtifact` described above; P1 instruction/policy assembly validates provenance against installed source |
 | `serving_path_proof` | Hosted name/version, fresh session/response IDs, timezone-aware observation within one hour, evidence reference and selection `fresh_named_endpoint_session_without_version_override` |
-| Models/thresholds | Concrete chat/evaluator revisions and all three calibrated thresholds: groundedness 1..5, task adherence 0..1, tool-call accuracy 1..5 |
+| Models/thresholds | Concrete chat/evaluator revisions and all three calibrated thresholds: groundedness 1..5, task adherence exactly 1 (binary evaluator), tool-call accuracy 1..5 |
 | Approval/hold/evaluator references | Fresh explicit authorization, accountable reviewer, exclusive writer hold, evaluator compatibility evidence and future timezone-aware expiry |
 | `evaluation` | Required for full gate; reviewed isolation reference, exact evaluator deployment, expected observed model name and explicit task scopes for every case |
 
