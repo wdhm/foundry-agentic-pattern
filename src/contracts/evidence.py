@@ -4,6 +4,9 @@ import html
 import json
 import re
 from typing import Any
+from urllib.parse import unquote, urlsplit
+
+from .repositories import AzureRepository, matches_azure_file
 
 
 def source_records(raw: dict[str, Any]) -> list[dict[str, Any]]:
@@ -12,7 +15,9 @@ def source_records(raw: dict[str, Any]) -> list[dict[str, Any]]:
         if call.get("type") != "mcp_call" or call.get("status") != "completed" or call.get("error"):
             continue
         tool = (call.get("server_label"), call.get("name"))
-        if tool not in {("github", "get_file_contents"), ("ado", "wiki"), ("ado", "wit_work_item")}:
+        if tool not in {
+            ("github", "get_file_contents"), ("ado", "repo_file"), ("ado", "wiki"), ("ado", "wit_work_item")
+        }:
             continue
         args = json.loads(call["arguments"])
         # Directory listings may be followed by a duplicate structuredResponse.
@@ -32,6 +37,18 @@ def source_records(raw: dict[str, Any]) -> list[dict[str, Any]]:
                         "content": doc["content"],
                     }
                 )
+        elif tool == ("ado", "repo_file") and args.get("action") == "get_content":
+            version, path = args.get("version", ""), args.get("path", "")
+            if args.get("versionType") != "Commit" or not re.fullmatch(r"[a-fA-F0-9]{40}", version):
+                continue
+            for doc in payload.get("documents", []):
+                uri = doc.get("uri", "")
+                parts = urlsplit(uri).path.strip("/").split("/")
+                if len(parts) != 7:
+                    continue
+                repository = AzureRepository(unquote(parts[0]), args.get("project", ""), args.get("repositoryId", ""))
+                if matches_azure_file(uri, repository, path, version):
+                    records.append({"source": "git", "version": version, "uris": [uri], "content": doc["content"]})
         elif tool == ("ado", "wiki") and args.get("action") == "get_page":
             page = payload.get("page", {})
             etags = payload.get("eTag", [])

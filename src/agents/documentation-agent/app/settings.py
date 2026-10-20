@@ -15,6 +15,7 @@ class AssessmentSettings(ContractModel):
     model_version: NonBlank
     ado_project: NonBlank
     ado_wiki: NonBlank
+    ado_organization: NonBlank | None = None
     auth_mode: Literal["managed_identity", "azure_cli"] = "managed_identity"
     timeout_seconds: int = Field(default=180, gt=0, le=600)
 
@@ -36,6 +37,7 @@ class AssessmentSettings(ContractModel):
             "model_version": "DOCUMENTATION_MODEL_VERSION",
             "ado_project": "DOCUMENTATION_ADO_PROJECT",
             "ado_wiki": "DOCUMENTATION_ADO_WIKI",
+            "ado_organization": "DOCUMENTATION_ADO_ORGANIZATION",
             "auth_mode": "DOCUMENTATION_AUTH_MODE",
         }
         return cls.model_validate({field: values[env] for field, env in names.items() if env in values})

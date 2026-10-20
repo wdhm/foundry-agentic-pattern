@@ -16,7 +16,7 @@ from contracts.v1 import CONTRACT_VERSION, AgentRequest, AgentResult, AnalysisOu
 
 from .agent import DocumentationAgent, request_text
 from .execution import CaptureModel
-from .read_policy import READ_TOOLS, ReadOnlyPolicy, parse_read_result
+from .read_policy import ReadOnlyPolicy, parse_read_result, read_tools
 from .settings import AssessmentSettings
 
 APP_VERSION = "0.4.0"
@@ -70,14 +70,14 @@ class FoundryAnalysisRunner:
             FoundryToolbox(
                 credential,
                 url=self.settings.toolbox_endpoint,
-                allowed_tools=READ_TOOLS,
+                allowed_tools=read_tools(self.settings),
                 tool_name_prefix="",
                 approval_mode="never_require",
                 parse_tool_results=parse_read_result,
             ) as toolbox,
         ):
             available = {function.name for function in toolbox.functions}
-            missing = set(READ_TOOLS) - available
+            missing = set(read_tools(self.settings)) - available
             if missing:
                 raise RuntimeError(f"P2 toolbox is missing required read tools: {', '.join(sorted(missing))}")
             if guard.record is not None:
@@ -134,7 +134,7 @@ class AssessmentAgent(DocumentationAgent):
                 "Only when task is omitted or null, assess changed_paths and context; "
                 "if changed_paths is empty, assess the supplied sources. "
                 "The full commit_sha is already provided: do not resolve a newer PR head. "
-                "Use the tools named " + ", ".join(READ_TOOLS) + ". "
+                "Use the tools named " + ", ".join(read_tools(settings)) + ". "
                 "Git get_file_contents accepts a directory path for discovery and a file path for content; "
                 "use sha=<request commit_sha> on every read. "
                 "Use ado wiki action=get_page with includeContent=true, or wit_work_item action=get. "
@@ -142,6 +142,17 @@ class AssessmentAgent(DocumentationAgent):
                 "and the configured wikiIdentifier on every wiki call. "
                 "Only pages and work items listed in the request are available. "
                 "If necessary context is omitted, report missing_information rather than expanding source access.",
+                *(
+                    [
+                        "For an Azure Repos subject.repo URL, use ado___repo_file action=get_content. "
+                        "Pass project and repositoryId from that URL, path as an absolute repository file path, "
+                        "version=<request commit_sha> and versionType=Commit on every read. "
+                        "Do not use the GitHub tool for Azure Repos. Cite the exact returned embedded resource URI "
+                        "and commit as git evidence. Directory discovery and branch reads are not enabled. "
+                        "Configured Azure DevOps organization: " + settings.ado_organization
+                    ]
+                    if settings.ado_organization is not None else []
+                ),
                 "ADO source configuration: "
                 + json.dumps(
                     {

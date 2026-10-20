@@ -120,6 +120,18 @@ def test_hosted_cli_is_primary():
     assert args.agent_kind == "hosted" and args.agent_name is None
 
 
+def test_hosted_definition_inherits_container_port(version, artifact):
+    del version["definition"]["environment_variables"]["PORT"]
+    validate_hosted_version(version, artifact, "https://offline.example/api/projects/test", "2026-09-22")
+
+
+@pytest.mark.parametrize("port", ["", "8080", "8089", None])
+def test_hosted_definition_rejects_nonstandard_port(port, version, artifact):
+    version["definition"]["environment_variables"]["PORT"] = port
+    with pytest.raises(ValueError, match="listen on"):
+        validate_hosted_version(version, artifact, "https://offline.example/api/projects/test", "2026-09-22")
+
+
 def test_version_bound_bare_request_preserves_runtime_provenance(cases, raw, artifact):
     project, client = project_for(raw)
     report = invoke_hosted(project, cases[0]["request"], "documentation-agent", "4", artifact)

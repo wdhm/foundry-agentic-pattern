@@ -110,11 +110,37 @@ exact exposed names:
 | `ado___wiki` | `action=get_page`, configured project/wiki, requested page path |
 | `ado___wit_work_item` | `action=get`, configured project, requested integer work-item ID |
 
+### Azure Repos source support (opt-in)
+
+On 2026-10-20 this support was deployed as non-serving assessment version 11
+with read toolbox version 2. The single smoke test returned pinned repository
+and wiki evidence, but failed session/outer version agreement (11 versus 8).
+It is **not a certified hosted integration**; the serving approval endpoint
+remains on version 8. See the [rollout record](../../../docs/workshop/azure-devops-workflow-guide.md#hosted-rollout-record-2026-10-20).
+
+Set `DOCUMENTATION_ADO_ORGANIZATION` only after reviewing a new read-toolbox
+version that adds `ado___repo_file`. Existing configurations retain exactly the
+four tools above. The extra tool accepts only `action=get_content`, the requested
+repository, configured organization/project, an explicit file path and the
+request's full commit SHA with `versionType=Commit`. Branch reads and write
+actions are rejected before dispatch. The returned embedded file resource must
+match the repository, path and commit before it can become Git evidence.
+
+Use [examples/azure-repos-request.json](examples/azure-repos-request.json) for the
+fictional Azure Repos baseline; generate fresh request/correlation IDs for a
+real invocation. The same bare v1 contract, CLI, assessment and proposal-only
+boundary are retained. No evaluation gold is sent to the agent.
+
+See the [Azure DevOps workflow guide](../../../docs/workshop/azure-devops-workflow-guide.md)
+for the verified sample, source-tool discovery, identity/deployment gates and
+the separate automatic-event/Teams work. A direct user-account file read is
+not proof of hosted agent-user repository access.
+
 The triple underscore is Foundry's MCP tool namespace separator. No write tools,
 tool-search dispatchers, code execution, unknown tools or automatic approvals
 are exposed. Function middleware checks actions **before** dispatch, so a
 multi-action `wiki` tool cannot be used for updates. `never_require` applies only
-to the four filtered read tools; the runtime rejects write actions independently
+to the filtered read tools; the runtime rejects write actions independently
 of toolbox approval metadata. Enabling writes requires #15, not a configuration
 toggle on this assessment runner.
 

@@ -118,16 +118,18 @@ def evaluator_row(
     definition: dict[str, Any],
 ) -> dict[str, Any]:
     """Use actual model call IDs and policy results, never synthetic calls or gold text."""
-    from documentation_agent.read_policy import READ_TOOLS, require_read
+    from documentation_agent.read_policy import read_tools, require_read, require_read_output
     from documentation_agent.settings import AssessmentSettings
 
     record = report.execution
     settings = AssessmentSettings.from_environment(definition["environment_variables"])
+    allowed_tools = read_tools(settings)
     schemas: dict[str, dict[str, Any]] = {}
     for schema in record.tool_schemas:
         name = schema.get("name")
         if (
-            name not in READ_TOOLS or name in schemas or not isinstance(schema.get("parameters"), dict)
+            not isinstance(name, str) or name not in allowed_tools or name in schemas
+            or not isinstance(schema.get("parameters"), dict)
             or not isinstance(schema.get("description", ""), str)
         ):
             raise ValueError("Unexpected, duplicated or malformed discovered read-tool schema.")
@@ -136,7 +138,7 @@ def evaluator_row(
         except SchemaError as exc:
             raise ValueError("Malformed discovered read-tool JSON schema.") from exc
         schemas[name] = schema
-    if payload.source_mode == "live_sources" and set(schemas) != set(READ_TOOLS):
+    if payload.source_mode == "live_sources" and set(schemas) != set(allowed_tools):
         raise ValueError("Live evaluation did not discover all canonical read tools.")
 
     first_input = record.model_calls[0]["input"]
@@ -212,6 +214,10 @@ def evaluator_row(
                         or model_results.get(call_id) != evidence["output"]
                     ):
                         raise ValueError("Model call and successful observed policy result do not correlate.")
+                    try:
+                        require_read_output(name, args, evidence["output"], payload.request)
+                    except MiddlewareFailure as exc:
+                        raise ValueError("Observed tool output violates the source identity policy.") from exc
                     call = {"type": "tool_call", "tool_call_id": call_id, "name": name, "arguments": args}
                     calls.append(call)
                     response.extend([
