@@ -234,7 +234,7 @@ def evaluator_row(
     return {
         "case_id": case["id"],
         "query": [{"role": "system", "content": record.instructions},
-                  {"role": "user", "content": content["text"]}],
+                  {"role": "user", "content": [{"type": "text", "text": content["text"]}]}],
         "response": response,
         "context": json.dumps(
             [call["output"] for call in record.tool_calls] if payload.source_mode == "live_sources"

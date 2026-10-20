@@ -18,7 +18,7 @@ from contracts.v1 import assemble_result
 from tools.cli import analysis_from_response, selected_provenance
 from tools.release_sources import evaluator_item, load_cases, verify_sources
 
-METRICS = {"groundedness": (1, 5), "task_adherence": (1, 5), "tool_call_accuracy": (1, 5)}
+METRICS = {"groundedness": (1, 5), "task_adherence": (0, 1), "tool_call_accuracy": (1, 5)}
 
 
 class ReleasePlan(BaseModel):
@@ -50,6 +50,8 @@ class ReleasePlan(BaseModel):
             raise ValueError("Explicit release thresholds for all three built-in evaluators are required.")
         for metric, threshold in self.thresholds.items():
             lower, upper = METRICS[metric]
+            # Foundry's task_adherence is a 0/1 verdict whose threshold must be 1.
+            lower = max(lower, 1)
             if not math.isfinite(threshold) or not lower <= threshold <= upper:
                 raise ValueError(f"Invalid threshold for {metric}; expected {lower}..{upper}.")
         if not self.expected_identity or not self.expected_endpoint:

@@ -239,7 +239,10 @@ def evaluator_item(case: dict[str, Any], raw: dict[str, Any], result: AgentResul
         raise ValueError("Live tool-call scoring requires actual calls and discovered tool schemas.")
     return {
         "case_id": case["id"],
-        "query": [{"role": "system", "content": instructions}, {"role": "user", "content": case["input"]}],
+        "query": [
+            {"role": "system", "content": instructions},
+            {"role": "user", "content": [{"type": "text", "text": case["input"]}]},
+        ],
         "response": conversation,
         "context": json.dumps(case["sources"]),
         "tool_calls": calls,

@@ -215,8 +215,9 @@ def test_bad_hosted_result_is_never_wrapped_as_analysis(problem, cases, raw, art
 def test_hosted_eval_uses_actual_request_result_no_gold_or_tool_claims(cases, raw, artifact):
     result = result_from_response(raw, cases[0]["request"], artifact)
     row = evaluator_item(cases[0], {"result": result.model_dump(mode="json")}, "P1 instructions")
-    assert json.loads(row["query"][1]["content"]) == cases[0]["request"].model_dump(mode="json")
-    assert "reference_answer" not in row["query"][1]["content"] and "source_allowlist" not in row["query"][1]["content"]
+    user = row["query"][1]["content"][0]["text"]
+    assert json.loads(user) == cases[0]["request"].model_dump(mode="json")
+    assert "reference_answer" not in user and "source_allowlist" not in user
     assert "tool_calls" not in row and "tool_definitions" not in row
     returned = json.loads(row["response"][0]["content"][0]["text"])
     assert returned["provenance"] == artifact.runtime_provenance.model_dump()

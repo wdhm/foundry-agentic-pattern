@@ -216,7 +216,7 @@ def evaluator_item(case: dict[str, Any], report: dict[str, Any], instructions: s
         "case_id": case["id"],
         "query": [
             {"role": "system", "content": instructions},
-            {"role": "user", "content": case["request"].model_dump_json()},
+            {"role": "user", "content": [{"type": "text", "text": case["request"].model_dump_json()}]},
         ],
         "response": [{"role": "assistant", "content": [{"type": "text", "text": result.model_dump_json()}]}],
         "context": json.dumps(case["sources"]),
