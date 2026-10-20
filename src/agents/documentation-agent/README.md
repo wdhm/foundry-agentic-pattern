@@ -48,11 +48,18 @@ enable writes in assessment mode or change the deployed agent.
 
 For #15, the opt-in [exact-call Toolbox approval runtime](TOOL_APPROVAL.md)
 reuses the spike's native transport/state preconditions but dispatches an actual
-configured tool after approval. It is not deployed. Its policy pins one tool and
+configured tool after approval. It was deployed in v8 and reused in v13. Its policy pins one tool and
 target. The `propose_result` adapter connects a selected v1 proposed change and
 its evidence to approval when the configured tool supports section-scoped writes;
 whole-page composition is deliberately not guessed. Teams publication and shared
 permission changes are not included.
+
+The opt-in [Teams approval card adapter](TEAMS_APPROVAL.md) adds a native Activity
+handler alongside Responses, with server-bound Approve/Modify/Reject controls.
+It was deployed as v13 and selected on 2026-10-20. The user verified real Teams
+cards, Reject, Modify, old-decision rejection and Approve; independent ADO readback
+confirmed the approved sandbox content. See the guide for the recorded image,
+source snapshot, evidence and remaining audit/concurrency limitations.
 
 The main runtime is now the hosted Python app ([ADR 0024](../../../docs/adr/0024-hosted-documentation-runtime.md)).
 Assessment mode is deployed as `documentation-agent:6` and verified end to end
