@@ -12,7 +12,27 @@ rather than an editable mapping so mypy can resolve the hosted package's
 included `py.typed` marker; no type-error suppression is added.
 
 Dispatch defaults to **offline regression tests only**, without Azure login or
-OIDC permission. This implementation has not been dispatched against Azure.
+OIDC permission. The cloud job was first dispatched successfully on 2026-10-20:
+[run 39436721419](https://github.com/wdhm/foundry-agentic-pattern/actions/runs/39436721419)
+evaluated candidate v19 to `eligible_for_manual_review`, and serving v13 was
+untouched. Gate decisions and scores (no source content) are written to the job
+summary.
+
+**Configured on 2026-10-20 (P2):**
+- **Environment:** `p3-agent-release` with required reviewer @wdhm, restricted
+  to the `main` branch.
+- **Identity:** UAMI `id-gh-agent-release` in `rg-foundry-agentic-pattern`.
+  Its federated credentials cover both GitHub OIDC subject formats:
+  `repo:wdhm/foundry-agentic-pattern:environment:p3-agent-release` and the
+  ID-based `repo:wdhm@253040606/foundry-agentic-pattern@1407061088:environment:p3-agent-release`.
+  It has `Foundry User` on the Foundry account.
+- **Variables:** the environment variables are set, and the repository variable
+  `P3_RELEASE_ENABLED=true`.
+- **Plans:** reviewed plans live in `evals/release-plans/`. A plan's serving-path
+  proof is valid for one hour, so build and merge it immediately before dispatch.
+
+**Security debt:** self-review is allowed, and the identity's role is broader
+than needed. Tighten both in the hardening pass.
 The optional cloud job requires all of: trusted `main`, successful offline checks,
 explicit execution input, `P3_RELEASE_ENABLED=true`, and the separately configured
 `p3-agent-release` environment approval. Opening this PR cannot start a cloud run.

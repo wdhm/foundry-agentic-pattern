@@ -1,0 +1,121 @@
+{
+  "project_endpoint": "https://foundry-agentic-r8n3ld.services.ai.azure.com/api/projects/proj-agentic",
+  "agent_name": "documentation-agent",
+  "base_version": "13",
+  "serving_version": "13",
+  "expected_endpoint": {
+    "version_selector": {
+      "version_selection_rules": [
+        {
+          "type": "FixedRatio",
+          "agent_version": "13",
+          "traffic_percentage": 100
+        }
+      ]
+    },
+    "protocols": [
+      "activity",
+      "responses"
+    ],
+    "protocol_configuration": {
+      "activity": {},
+      "responses": {}
+    },
+    "authorization_schemes": [
+      {
+        "type": "Entra"
+      },
+      {
+        "type": "BotServiceTenant"
+      }
+    ],
+    "publish_approval_status": "approved"
+  },
+  "expected_identity": {
+    "principal_id": "ea9e8fb5-8b89-4d27-ba76-7ee1a2540d40",
+    "client_id": "ea9e8fb5-8b89-4d27-ba76-7ee1a2540d40"
+  },
+  "candidate_definition": {
+    "kind": "hosted",
+    "container_protocol_versions": [],
+    "cpu": "0.5",
+    "memory": "1Gi",
+    "environment_variables": {
+      "AZURE_AI_MODEL_DEPLOYMENT_NAME": "gpt-6-luna",
+      "DOCUMENTATION_ADO_PROJECT": "integration-team",
+      "DOCUMENTATION_ADO_WIKI": "integration-team.wiki",
+      "DOCUMENTATION_APPROVAL_POLICY": "/app/approval/sandbox-policy.json",
+      "DOCUMENTATION_AUTH_MODE": "managed_identity",
+      "DOCUMENTATION_ENABLE_APPROVAL": "true",
+      "DOCUMENTATION_MODE": "evaluation",
+      "DOCUMENTATION_MODEL_VERSION": "2026-09-22",
+      "DOCUMENTATION_PROJECT_ENDPOINT": "https://foundry-agentic-r8n3ld.services.ai.azure.com/api/projects/proj-agentic",
+      "HOST": "0.0.0.0",
+      "TOOLBOX_ENDPOINT": "https://foundry-agentic-r8n3ld.services.ai.azure.com/api/projects/proj-agentic/toolboxes/documentation-agent-readonly/versions/1/mcp?api-version=v1",
+      "DOCUMENTATION_ENABLE_TEAMS": "true",
+      "DOCUMENTATION_TEAMS_TENANT_ID": "cc48e4fe-6662-414d-aeff-4eb633735b38",
+      "DOCUMENTATION_ENABLE_EVALUATION": "true"
+    },
+    "container_configuration": {
+      "image": "acrfoundryagenticr8n3ld.azurecr.io/documentation-agent@sha256:3c9e19d6b6ba92573c639d91847921ffb156b366bbd237c7219deec68469c118"
+    },
+    "protocol_versions": [
+      {
+        "protocol": "responses",
+        "version": "2.0.0"
+      },
+      {
+        "protocol": "activity",
+        "version": "2.0.0"
+      }
+    ]
+  },
+  "model_version": "2026-09-22",
+  "eval_model_version": "2026-03-17",
+  "thresholds": {
+    "groundedness": 3.0,
+    "task_adherence": 1.0,
+    "tool_call_accuracy": 3.0
+  },
+  "approval_reference": "M4 eval gate approved by rwidholm in team session 2026-10-20T14:08Z",
+  "writer_hold_reference": "Team session 2026-10-20T14:08Z: P1/P2/P3 in the same room; no other agent-version writers",
+  "evaluator_compatibility_reference": "eval-gpt-5.4-mini smoke test 2026-10-20 (#49, docs/setup.md)",
+  "approved_by": "rwidholm (P2, tenant admin)",
+  "expires_at": "2026-10-20T19:08:54.544412+02:00",
+  "artifact": {
+    "image": "acrfoundryagenticr8n3ld.azurecr.io/documentation-agent@sha256:3c9e19d6b6ba92573c639d91847921ffb156b366bbd237c7219deec68469c118",
+    "source_commit": "d8bcf12a1e76e3e80c72c44259f2eb63b047371d",
+    "build_reference": "az acr build documentation-agent:m4-d8bcf12",
+    "readiness_review_reference": "M4 operator review 2026-10-20T14:08Z",
+    "runtime_provenance": {
+      "agent_name": "documentation-agent",
+      "agent_version": "0.4.0",
+      "model": "gpt-6-luna",
+      "model_version": "2026-09-22",
+      "prompt_version": "sha256:8e23cda576c04b6cdbe99e912733321a53add03e81d17afdbc058908ef17dc1f",
+      "policy_version": "sha256:23b4627c6598934fac64cd9d69fbba45f23df326d9b416b70ba012d9ed773687",
+      "contract_version": "1.0.0"
+    }
+  },
+  "serving_path_proof": {
+    "agent_name": "documentation-agent",
+    "version": "13",
+    "agent_session_id": "ede80de62bfbd56df43674c1e41b5e048d3af0363661566d2b2c6fa70e3e2d9",
+    "response_id": "caresp_052fc9377f4e985700Q7bso582ZhxosBFTEb4DXDzEsDbiX2yL",
+    "selection": "fresh_named_endpoint_session_without_version_override",
+    "observed_at": "2026-10-20T16:08:56.633889+02:00",
+    "evidence_reference": "Operator serving-path probe (response caresp_052fc9377f4e985700Q7bso582ZhxosBFTEb4DXDzEsDbiX2yL); raw response kept privately"
+  },
+  "evaluation": {
+    "isolation_review_reference": "Evaluation candidate reached only via version-specific sessions; serving selector unchanged",
+    "evaluator_deployment": "eval-gpt-5.4-mini",
+    "observed_model": "gpt-6-luna-2026-09-22",
+    "task_scopes": {
+      "order-sync-retry": "change_review",
+      "order-sync-information-missing": "information_review",
+      "order-sync-version-isolation": "information_review",
+      "order-sync-dead-letter-stub": "information_review",
+      "order-sync-wiki-unavailable": "information_review"
+    }
+  }
+}

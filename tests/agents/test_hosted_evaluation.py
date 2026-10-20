@@ -120,7 +120,7 @@ def test_supplied_task_is_forwarded_and_conflicting_intent_never_runs(settings, 
     class TaskDouble:
         calls = 0
 
-        async def analyze(self, envelope, record):
+        async def analyze(self, envelope, record, check=None):
             self.calls += 1
             assert envelope.request.task.question == question
             assert envelope.request.task.scope == "information_review"
@@ -145,7 +145,7 @@ class SuppliedDouble:
         self.output = output
         self.received = []
 
-    async def analyze(self, payload, record):
+    async def analyze(self, payload, record, check=None):
         self.received.append((payload, record))
         record.model_calls.append({"status": "completed", "input": payload.model_dump(mode="json")})
         return json.dumps(self.output)
@@ -338,7 +338,10 @@ def test_no_source_network_or_toolbox_in_supplied_production_runner(settings, pa
             assert kwargs["default_options"]["store"] is False
             assert "No tools are available" in kwargs["instructions"]
 
-        async def run(self, body):
+        def create_session(self):
+            return object()
+
+        async def run(self, body, session=None):
             assert json.loads(body)["sources"] == payload["sources"]
             return SimpleNamespace(user_input_requests=[], finish_reason="stop", text=json.dumps(output_for(payload)))
 
@@ -438,7 +441,7 @@ def test_live_evaluation_uses_the_same_assessment_without_supplied_runner(settin
     live_payload = {"interface_version": "1.0.0", "source_mode": "live_sources", "request": payload["request"]}
 
     class LiveDouble:
-        async def analyze(self, request, instructions, guard):
+        async def analyze(self, request, instructions, guard, check=None):
             guard.calls.append(
                 {
                     "type": "mcp_call",
@@ -477,7 +480,7 @@ def test_live_evaluation_uses_the_same_assessment_without_supplied_runner(settin
 
 def test_supplied_model_claims_without_capture_do_not_become_completed_results(settings, payload):
     class Unobserved:
-        async def analyze(self, envelope, record):
+        async def analyze(self, envelope, record, check=None):
             return json.dumps(output_for(payload))
 
     with pytest.raises(ValueError, match="incomplete"):
@@ -488,7 +491,7 @@ def test_supplied_timeout_propagates(settings, payload):
     settings.timeout_seconds = 1
 
     class Slow:
-        async def analyze(self, envelope, record):
+        async def analyze(self, envelope, record, check=None):
             await asyncio.sleep(30)
 
     with pytest.raises(TimeoutError):

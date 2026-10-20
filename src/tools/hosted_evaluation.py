@@ -178,10 +178,14 @@ def evaluator_row(
     final_text: list[str] = []
     observed = iter(record.tool_calls)
     for model in record.model_calls:
+        # A completed answer followed by another model call was rejected by self-repair; only the last is scored.
+        superseded = model is not record.model_calls[-1] and model.get("finish_reason") == "stop"
         for message in model["output"]:
             if message.get("role") != "assistant" or not message.get("content"):
                 raise ValueError("Unexpected model output role or empty content.")
             for item in message["content"]:
+                if item.get("type") == "text_reasoning" or (superseded and item.get("type") == "text"):
+                    continue
                 if item.get("type") == "text" and isinstance(item.get("text"), str):
                     response.append({"role": "assistant", "content": [{"type": "text", "text": item["text"]}]})
                     if model is record.model_calls[-1]:
@@ -236,7 +240,7 @@ def evaluator_row(
     return {
         "case_id": case["id"],
         "query": [{"role": "system", "content": record.instructions},
-                  {"role": "user", "content": content["text"]}],
+                  {"role": "user", "content": [{"type": "text", "text": content["text"]}]}],
         "response": response,
         "context": json.dumps(
             [call["output"] for call in record.tool_calls] if payload.source_mode == "live_sources"
@@ -250,9 +254,11 @@ def evaluator_row(
 def invoke_evaluation(
     project: Any, case: dict[str, Any], payload: EvaluationRequest, name: str, version: str,
     artifact: HostedArtifact, definition: dict[str, Any], observed_model: str,
+    serving_version: str | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     raw, lineage = hosted_response(
         project, payload.request, name, version, artifact, evaluation_input=payload.model_dump_json(),
+        endpoint_label_version=serving_version,
     )
     report = validate_report(raw, payload, artifact, definition, lineage, observed_model)
     row = evaluator_row(case, payload, report, definition)

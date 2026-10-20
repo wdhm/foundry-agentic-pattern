@@ -136,7 +136,7 @@ def test_mismatched_file_resource_is_not_recorded(settings, request_v1, uri):
 
 def test_azure_repos_assessment_preserves_the_normal_result_contract(settings, request_v1):
     class Runner:
-        async def analyze(self, request, instructions, guard):
+        async def analyze(self, request, instructions, guard, check=None):
             assert "ado___repo_file action=get_content" in instructions
             for name, args, output in [
                 ("knowledge___knowledge_base_retrieve", {}, '{"rules": "DS-14"}'),

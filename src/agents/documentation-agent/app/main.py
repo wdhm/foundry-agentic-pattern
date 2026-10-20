@@ -9,6 +9,8 @@ from .agent import DocumentationAgent
 
 def create_server() -> ResponsesHostServer:
     mode = os.environ.get("DOCUMENTATION_MODE", "stub")
+    if os.environ.get("DOCUMENTATION_ENABLE_TEAMS") == "true" and mode != "approval":
+        raise ValueError("Teams cards require approval mode; assessment/evaluation remain unchanged.")
     agent: BaseAgent
     if mode == "stub":
         agent = DocumentationAgent()
@@ -30,6 +32,10 @@ def create_server() -> ResponsesHostServer:
         from .approval import ToolApprovalAgent, ToolApprovalPolicy
 
         agent = ToolApprovalAgent(ToolApprovalPolicy.from_environment())
+        if os.environ.get("DOCUMENTATION_ENABLE_TEAMS") == "true":
+            from .teams import create_teams_server
+
+            return create_teams_server(agent)
     else:
         raise ValueError(
             "DOCUMENTATION_MODE must be 'stub', 'assessment' or explicitly enabled 'evaluation'/'approval'."

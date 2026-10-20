@@ -50,6 +50,8 @@ class ReleasePlan(BaseModel):
             raise ValueError("Explicit release thresholds for all three built-in evaluators are required.")
         for metric, threshold in self.thresholds.items():
             lower, upper = METRICS[metric]
+            # Foundry's task_adherence is a 0/1 verdict whose threshold must be 1.
+            lower = max(lower, 1)
             if not math.isfinite(threshold) or not lower <= threshold <= upper:
                 raise ValueError(f"Invalid threshold for {metric}; expected {lower}..{upper}.")
         if not self.expected_identity or not self.expected_endpoint:
