@@ -17,6 +17,10 @@
     If the toolbox already has a version, nothing is changed unless -NewVersion is given. Prints the version-pinned
     MCP endpoint to set as TOOLBOX_ENDPOINT on the hosted agent.
 
+    -AzureRepos opts into the additional read tool ado___repo_file. Existing toolboxes require -NewVersion.
+    This does not grant repository access, extend gateway toolsets/consent or deploy the runtime. Review those
+    separately, and set DOCUMENTATION_ADO_ORGANIZATION on the new runtime to enable its commit-pinned read guard.
+
     -Write creates the separate write toolbox 'documentation-agent-write' instead. It exposes exactly one tool,
     ado___wiki_upsert_page (connection ado-mcp-proxy), and is used only by the exact-call approval runtime
     (src/agents/documentation-agent/TOOL_APPROVAL.md), whose reviewed policy pins its versioned endpoint. The
@@ -37,11 +41,13 @@ param(
     [string]$KnowledgeConnection = 'kb-doc-agent-mcp',
     [string]$GitHubConnection = 'github-mcp',
     [string]$AdoConnection = 'ado-mcp-proxy',
+    [switch]$AzureRepos,
     [switch]$Write,
     [switch]$NewVersion
 )
 
 $ErrorActionPreference = 'Stop'
+if ($AzureRepos -and $Write) { throw '-AzureRepos is for the read toolbox only, not the write toolbox.' }
 if (-not $ToolboxName) { $ToolboxName = $Write ? 'documentation-agent-write' : 'documentation-agent-readonly' }
 $Api = 'v1'
 $ProjectEndpoint = $ProjectEndpoint.TrimEnd('/')
@@ -62,6 +68,7 @@ try {
 }
 
 if ($existing -and -not $NewVersion) {
+    if ($AzureRepos) { throw 'Use -AzureRepos -NewVersion to publish a separately reviewed read-tool version.' }
     $version = $existing.default_version ?? $existing.versions.latest.version ?? '1'
     Write-Host "Toolbox '$ToolboxName' exists (default version $version); use -NewVersion to publish a new one." -ForegroundColor Yellow
 } else {
@@ -74,8 +81,9 @@ if ($existing -and -not $NewVersion) {
                description = 'Documentation standard knowledge base (Foundry IQ). Retrieve rules by query.' }
             @{ label = 'github'; connection = $GitHubConnection; names = @('get_file_contents')
                description = 'GitHub repository files at an exact commit (read-only).' }
-            @{ label = 'ado'; connection = $AdoConnection; names = @('wiki', 'wit_work_item')
-               description = 'Azure DevOps wiki pages and work items (gateway, agent user; read tools only).' }
+            @{ label = 'ado'; connection = $AdoConnection
+               names = @('wiki', 'wit_work_item') + $(if ($AzureRepos) { @('repo_file') } else { @() })
+               description = 'Azure DevOps wiki, work items and optional commit-pinned repository files (read only).' }
         )
     }
     $tools = $sources | ForEach-Object {
@@ -92,7 +100,7 @@ if ($existing -and -not $NewVersion) {
     $description = if ($Write) {
         'Approval-gated wiki write for the hosted documentation-agent: only Azure DevOps wiki_upsert_page.'
     } else {
-        'Read-only sources for the hosted documentation-agent: documentation standard (Foundry IQ), GitHub file at commit, Azure DevOps wiki page and work item.'
+        'Read-only sources for the hosted documentation-agent: documentation standard (Foundry IQ), GitHub file at commit, Azure DevOps wiki page and work item; optional Azure Repos file reads.'
     }
     $body = @{ description = $description; tools = @($tools) } | ConvertTo-Json -Depth 10
     $created = Invoke-RestMethod -Method Post "$ProjectEndpoint/toolboxes/$ToolboxName/versions?api-version=$Api" `

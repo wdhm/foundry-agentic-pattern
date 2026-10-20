@@ -8,6 +8,7 @@ from mcp.types import CallToolResult, TextResourceContents
 from pydantic import BaseModel
 
 from contracts.evaluation import ExecutionRecord
+from contracts.repositories import azure_repository, matches_azure_file
 from contracts.v1 import AgentRequest
 
 from .settings import AssessmentSettings
@@ -20,8 +21,12 @@ READ_TOOLS = (
 )
 
 
+def read_tools(settings: AssessmentSettings) -> tuple[str, ...]:
+    return READ_TOOLS + (("ado___repo_file",) if settings.ado_organization is not None else ())
+
+
 def require_read(name: str, arguments: Mapping[str, Any], request: AgentRequest, settings: AssessmentSettings) -> None:
-    if name not in READ_TOOLS:
+    if name not in read_tools(settings):
         raise MiddlewareFailure(f"Tool is not allowed for documentation assessment: {name}")
     if name == "github___get_file_contents":
         repo = request.subject.repo
@@ -44,7 +49,28 @@ def require_read(name: str, arguments: Mapping[str, Any], request: AgentRequest,
     elif name.startswith("ado___"):
         if arguments.get("project") != settings.ado_project:
             raise MiddlewareFailure("ADO reads must use the configured project.")
-        if name == "ado___wiki":
+        if name == "ado___repo_file":
+            try:
+                azure_repo = azure_repository(request.subject.repo)
+            except ValueError as exc:
+                raise MiddlewareFailure(str(exc)) from exc
+            if azure_repo.organization != settings.ado_organization or azure_repo.project != settings.ado_project:
+                raise MiddlewareFailure("Azure Repos reads must use the configured organization and project.")
+            if arguments.get("repositoryId") != azure_repo.repository:
+                raise MiddlewareFailure("Azure Repos reads must target the requested repository.")
+            if arguments.get("action") != "get_content":
+                raise MiddlewareFailure("Only Azure Repos file get_content is allowed.")
+            if arguments.get("versionType") != "Commit" or arguments.get("version") != request.subject.commit_sha:
+                raise MiddlewareFailure(
+                    "Azure Repos reads must use the exact requested commit, with versionType=Commit."
+                )
+            path = arguments.get("path")
+            if (
+                not isinstance(path, str) or not path.startswith("/") or "\\" in path or "%" in path
+                or any(part in {"", ".", ".."} for part in path[1:].split("/"))
+            ):
+                raise MiddlewareFailure("Azure Repos reads require an explicit absolute repository file path.")
+        elif name == "ado___wiki":
             if arguments.get("action") != "get_page":
                 raise MiddlewareFailure("Only wiki get_page is allowed; writes are blocked.")
             if arguments.get("wikiIdentifier") != settings.ado_wiki:
@@ -78,6 +104,24 @@ def parse_read_result(result: CallToolResult) -> str:
     return "\n".join(text)
 
 
+def require_read_output(name: str, arguments: Mapping[str, Any], output: str, request: AgentRequest) -> None:
+    if name != "ado___repo_file":
+        return
+    try:
+        payload = json.loads(output)
+    except json.JSONDecodeError as exc:
+        raise MiddlewareFailure("Azure Repos returned invalid file resource JSON.") from exc
+    documents = payload.get("documents") if isinstance(payload, dict) else None
+    repo = azure_repository(request.subject.repo)
+    if not isinstance(documents, list) or not documents or any(
+        not isinstance(doc, dict) or not isinstance(doc.get("content"), str)
+        or not isinstance(doc.get("uri"), str)
+        or not matches_azure_file(doc["uri"], repo, arguments["path"], request.subject.commit_sha)
+        for doc in documents
+    ):
+        raise MiddlewareFailure("Azure Repos returned no matching commit-pinned file resource.")
+
+
 class ReadOnlyPolicy(FunctionMiddleware):
     """Enforce actions before dispatch and retain evidence for this invocation only."""
 
@@ -104,6 +148,7 @@ class ReadOnlyPolicy(FunctionMiddleware):
             raise MiddlewareFailure("Unexpected source-tool result shape; assessment stopped.")
         if not output.strip():
             raise MiddlewareFailure("Source tool returned empty output; assessment stopped.")
+        require_read_output(context.function.name, arguments, output, self.request)
         server, tool = context.function.name.split("___", 1)
         self.calls.append(
             {

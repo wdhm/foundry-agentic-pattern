@@ -1,0 +1,21 @@
+{
+  "contract_version": "1.0.0",
+  "request_id": "c05a0be1-4e7b-4732-901f-3252d591b75e",
+  "correlation_id": "b20ab297-4351-466d-bfb9-2f5dcf1d9f18",
+  "trigger": "cli",
+  "requested_by": "order-sync-demo-reviewer",
+  "subject": {
+    "repo": "https://dev.azure.com/foundry-agentic/integration-team/_git/8321c788-67e4-473c-9ad0-9f8847d077e1",
+    "commit_sha": "8c9ad675df1b05ffa77babd1b0e0ba0647f7bcb2",
+    "changed_paths": ["src/order_sync.py", "config/settings.json"]
+  },
+  "context": {
+    "wiki_page_paths": ["/Order Sync/Overview"],
+    "work_item_ids": [1]
+  },
+  "documentation_standard_ref": "https://github.com/wdhm/foundry-agentic-pattern/blob/2dd57c18bb0589e85c556ddbc032bce688d059f5/data/knowledge/documentation-standard.md",
+  "task": {
+    "scope": "change_review",
+    "question": "Read the Order Sync implementation and configuration at the requested Azure Repos commit. Compare their documented behavior with /Order Sync/Overview and propose only evidence-backed documentation corrections. Do not publish changes."
+  }
+}
