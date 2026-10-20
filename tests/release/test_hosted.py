@@ -977,8 +977,9 @@ def test_new_preflight_blocks_before_credentials(problem, evaluation_plan, monke
     credential.assert_not_called()
 
 
+@pytest.mark.parametrize("repair", [False, True])
 @pytest.mark.parametrize("case_index", [0, 2])
-def test_real_p1_framework_capture_consumes_adapter_without_network(case_index, cases, evaluation_plan):
+def test_real_p1_framework_capture_consumes_adapter_without_network(case_index, repair, cases, evaluation_plan):
     import asyncio
 
     from agent_framework import (
@@ -991,7 +992,7 @@ def test_real_p1_framework_capture_consumes_adapter_without_network(case_index, 
         FunctionTool,
         Message,
     )
-    from documentation_agent.assessment import AssessmentAgent
+    from documentation_agent.assessment import AssessmentAgent, run_with_repair
     from documentation_agent.evaluation import EvaluationAgent
     from documentation_agent.execution import CaptureModel
     from documentation_agent.settings import AssessmentSettings
@@ -1005,11 +1006,15 @@ def test_real_p1_framework_capture_consumes_adapter_without_network(case_index, 
     prepared = EvaluationResponse.model_validate_json(fixture["output"][0]["content"][0]["text"])
     settings = AssessmentSettings.from_environment(evaluation_plan.candidate_definition["environment_variables"])
     output = prepared.execution.model_calls[-1]["output"][0]["content"][0]["text"]
+    fabricated = json.loads(output)
+    assert fabricated["evidence"]
+    fabricated["evidence"][0]["excerpt"] = "fabricated passage that no source contains"
 
     class Replay(FunctionInvocationLayer, ChatMiddlewareLayer, BaseChatClient):
         def __init__(self, **kwargs):
             super().__init__(**kwargs)
             self.step = 0
+            self.answers = 0
 
         async def _inner_get_response(self, *, messages, stream, options, **kwargs):
             self.step += 1
@@ -1022,7 +1027,9 @@ def test_real_p1_framework_capture_consumes_adapter_without_network(case_index, 
                 ]
                 finish = "tool_calls"
             else:
-                contents = [Content.from_text(output)]
+                self.answers += 1
+                bad = repair and self.answers == 1
+                contents = [Content.from_text(json.dumps(fabricated) if bad else output)]
                 finish = "stop"
             return ChatResponse(
                 messages=[Message("assistant", contents)], response_id=f"actual-model-{self.step}",
@@ -1030,7 +1037,7 @@ def test_real_p1_framework_capture_consumes_adapter_without_network(case_index, 
             )
 
     class LiveRunner:
-        async def analyze(self, request, instructions, guard):
+        async def analyze(self, request, instructions, guard, check=None):
             record = guard.record
             record.tool_schemas = prepared.execution.tool_schemas
             functions = []
@@ -1061,10 +1068,10 @@ def test_real_p1_framework_capture_consumes_adapter_without_network(case_index, 
                 client=client, instructions=instructions, tools=functions, middleware=[guard],
                 default_options={"store": False},
             )
-            return (await agent.run(request.model_dump_json())).text
+            return (await run_with_repair(agent, request.model_dump_json(), check)).text
 
     class SuppliedRunner:
-        async def analyze(self, envelope, record):
+        async def analyze(self, envelope, record, check=None):
             client = Replay(
                 middleware=[CaptureModel(record, tools_disabled=True)],
                 function_invocation_configuration={"enabled": False},
@@ -1073,7 +1080,7 @@ def test_real_p1_framework_capture_consumes_adapter_without_network(case_index, 
                 client=client, instructions=record.instructions, tools=[],
                 default_options={"store": False, "tool_choice": "none"},
             )
-            return (await agent.run(envelope.model_dump_json())).text
+            return (await run_with_repair(agent, envelope.model_dump_json(), check)).text
 
     runtime = EvaluationAgent(
         settings, live=AssessmentAgent(settings, LiveRunner()), supplied=SuppliedRunner(),
@@ -1087,3 +1094,9 @@ def test_real_p1_framework_capture_consumes_adapter_without_network(case_index, 
     )
     row = evaluator_row(case, payload, checked, evaluation_plan.candidate_definition)
     assert len(row["tool_calls"]) == len(report.execution.tool_calls)
+    repair_inputs = [
+        call for call in report.execution.model_calls
+        if "Verification of your previous AnalysisOutput failed" in json.dumps(call["input"])
+    ]
+    assert len(repair_inputs) == (1 if repair else 0)
+    assert json.loads(report.execution.model_calls[-1]["output"][0]["content"][0]["text"]) == json.loads(output)

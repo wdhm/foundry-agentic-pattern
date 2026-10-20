@@ -39,7 +39,7 @@ def assessment_provenance(definition: dict[str, Any], *, evaluation: bool = Fals
         raise ValueError("Hosted definition must explicitly enable assessment; the v0 stub is not an assessment.")
     if environment.get("DOCUMENTATION_AUTH_MODE") != "managed_identity":
         raise ValueError("Hosted assessment must explicitly use managed identity, not local CLI authentication.")
-    if environment.get("HOST") != "0.0.0.0" or environment.get("PORT") != "8088":
+    if environment.get("HOST") != "0.0.0.0" or environment.get("PORT", "8088") != "8088":
         raise ValueError("Reviewed hosted assessment must listen on 0.0.0.0:8088.")
     settings = AssessmentSettings.from_environment(environment)
     return AssessmentAgent(settings).provenance
@@ -53,7 +53,8 @@ def validate_hosted_definition(
         raise ValueError("Primary target requires a hosted container definition.")
     if definition.get("container_configuration", {}).get("image") != artifact.image:
         raise ValueError("Hosted image must match the reviewed immutable digest.")
-    if "image" in definition or "container_protocol_versions" in definition or definition.get("code_configuration"):
+    # The service echoes an empty legacy container_protocol_versions list; only populated legacy keys are rejected.
+    if "image" in definition or definition.get("container_protocol_versions") or definition.get("code_configuration"):
         raise ValueError(
             "Use the stable SDK container_configuration/protocol_versions definition, not legacy flat YAML."
         )
@@ -104,8 +105,14 @@ def invoke_hosted(
 
 def hosted_response(
     project: Any, request: AgentRequest, name: str, version: str, artifact: HostedArtifact,
-    *, evaluation_input: str | None = None,
+    *, evaluation_input: str | None = None, endpoint_label_version: str | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Invoke one version-bound session.
+
+    The live service labels the outer agent_reference with the endpoint selector's serving version even
+    when the session is bound to another version. Evaluation callers may accept that serving label because
+    the serving version cannot answer an EvaluationRequest; the GET-confirmed session binding stays required.
+    """
     from azure.ai.projects.models import VersionRefIndicator
 
     if name != artifact.runtime_provenance.agent_name or not re.fullmatch(r"[1-9][0-9]*", version):
@@ -154,11 +161,12 @@ def hosted_response(
         "session_version_indicator": {"type": "version_ref", "agent_version": version},
         "outer_agent_reference": outer_reference,
     }), file=sys.stderr)
+    labelled = {version} | ({endpoint_label_version} if endpoint_label_version else set())
     if outer_reference is not None and (
         not isinstance(outer_reference, dict)
         or outer_reference.get("type") != "agent_reference"
         or outer_reference.get("name") != name
-        or outer_reference.get("version") != version
+        or outer_reference.get("version") not in labelled
     ):
         raise ValueError(
             "Hosted response agent_reference disagrees with the GET-confirmed session binding; "
@@ -177,7 +185,11 @@ def hosted_response(
         "agent_session_id": session_id,
         "session_version_indicator": {"type": "version_ref", "agent_version": version},
         "outer_agent_reference": outer_reference,
-        "version_evidence": "session_get_and_matching_outer_reference" if outer_reference else "session_get_only",
+        "version_evidence": (
+            "session_get_only" if not outer_reference
+            else "session_get_and_matching_outer_reference" if outer_reference["version"] == version
+            else "session_get_and_endpoint_serving_label"
+        ),
         "image": artifact.image,
         "source_commit": artifact.source_commit,
         "build_reference": artifact.build_reference,

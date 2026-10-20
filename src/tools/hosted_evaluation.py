@@ -244,9 +244,11 @@ def evaluator_row(
 def invoke_evaluation(
     project: Any, case: dict[str, Any], payload: EvaluationRequest, name: str, version: str,
     artifact: HostedArtifact, definition: dict[str, Any], observed_model: str,
+    serving_version: str | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     raw, lineage = hosted_response(
         project, payload.request, name, version, artifact, evaluation_input=payload.model_dump_json(),
+        endpoint_label_version=serving_version,
     )
     report = validate_report(raw, payload, artifact, definition, lineage, observed_model)
     row = evaluator_row(case, payload, report, definition)

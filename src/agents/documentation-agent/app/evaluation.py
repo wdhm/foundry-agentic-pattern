@@ -14,7 +14,7 @@ from contracts.evaluation import EvaluationRequest, EvaluationResponse, Executio
 from contracts.v1 import AnalysisOutput, assemble_result
 
 from .agent import DocumentationAgent, request_text
-from .assessment import APP_DIR, AssessmentAgent
+from .assessment import APP_DIR, AssessmentAgent, Check, run_with_repair
 from .execution import CaptureModel
 from .settings import AssessmentSettings
 
@@ -46,14 +46,14 @@ def supplied_instructions(settings: AssessmentSettings) -> str:
 
 
 class SuppliedRunner(Protocol):
-    async def analyze(self, payload: EvaluationRequest, record: ExecutionRecord) -> str: ...
+    async def analyze(self, payload: EvaluationRequest, record: ExecutionRecord, check: Check | None = None) -> str: ...
 
 
 class FoundrySuppliedRunner:
     def __init__(self, settings: AssessmentSettings) -> None:
         self.settings = settings
 
-    async def analyze(self, payload: EvaluationRequest, record: ExecutionRecord) -> str:
+    async def analyze(self, payload: EvaluationRequest, record: ExecutionRecord, check: Check | None = None) -> str:
         from agent_framework import Agent
         from agent_framework.foundry import FoundryChatClient
         from azure.ai.projects.aio import AIProjectClient
@@ -79,16 +79,17 @@ class FoundrySuppliedRunner:
                     tools=[],
                     default_options={"store": False, "tool_choice": "none", "response_format": AnalysisOutput},
                 )
-                response = await agent.run(payload.model_dump_json())
+                response = await run_with_repair(agent, payload.model_dump_json(), check)
                 if response.user_input_requests or response.finish_reason in {"length", "content_filter"}:
                     raise ValueError("Model did not return a complete tools-disabled assessment.")
                 return response.text
 
 
-def verify_snapshots(output: AnalysisOutput, payload: EvaluationRequest) -> None:
+def snapshot_problems(output: AnalysisOutput, payload: EvaluationRequest) -> list[str]:
+    problems = []
     if any(source.availability == "unavailable" for source in payload.sources):
         if output.documentation_status != "insufficient_information":
-            raise ValueError("Unavailable supplied sources require an explicitly limited assessment.")
+            problems.append("Unavailable supplied sources require an explicitly limited assessment.")
     available = [source for source in payload.sources if source.availability == "available"]
     for evidence in output.evidence:
         matching = [
@@ -97,10 +98,28 @@ def verify_snapshots(output: AnalysisOutput, payload: EvaluationRequest) -> None
             if source.source == evidence.source and source.uri == evidence.uri and source.version == evidence.version
         ]
         if len(matching) != 1:
-            raise ValueError(f"Evidence {evidence.id} does not match an available supplied source.")
+            problems.append(f"Evidence {evidence.id} does not match an available supplied source.")
+            continue
         content = matching[0].content
         if content is None or " ".join(evidence.excerpt.split()) not in " ".join(html.unescape(content).split()):
-            raise ValueError(f"Evidence {evidence.id} excerpt does not match the supplied content.")
+            problems.append(f"Evidence {evidence.id} excerpt does not match the supplied content.")
+    return problems
+
+
+def verify_snapshots(output: AnalysisOutput, payload: EvaluationRequest) -> None:
+    problems = snapshot_problems(output, payload)
+    if problems:
+        raise ValueError(problems[0])
+
+
+def supplied_check(payload: EvaluationRequest) -> Check:
+    def check(text: str) -> list[str]:
+        try:
+            return snapshot_problems(AnalysisOutput.model_validate_json(text), payload)
+        except ValidationError:
+            return []
+
+    return check
 
 
 class EvaluationAgent(DocumentationAgent):
@@ -142,7 +161,7 @@ class EvaluationAgent(DocumentationAgent):
             platform_session_id=context.session_id,
         )
         async with asyncio.timeout(self.settings.timeout_seconds):
-            text = await self.supplied.analyze(payload, record)
+            text = await self.supplied.analyze(payload, record, supplied_check(payload))
         try:
             output = AnalysisOutput.model_validate_json(text)
         except ValidationError as exc:

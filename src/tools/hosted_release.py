@@ -111,11 +111,12 @@ def prepare_candidate(cloud: FoundryHostedRelease, plan: HostedReleasePlan, depl
             raise ValueError("Hosted base/serving version must match and be active.")
         if version["definition"].get("kind") != "hosted":
             raise ValueError("A hosted release cannot inherit a prompt-agent version.")
+    serving_env = serving["definition"].get("environment_variables", {})
     if (
-        serving["definition"].get("environment_variables", {}).get("DOCUMENTATION_MODE") != "assessment"
-        or serving["definition"].get("environment_variables", {}).get("DOCUMENTATION_ENABLE_EVALUATION") == "true"
+        serving_env.get("DOCUMENTATION_MODE") not in {"assessment", "approval"}
+        or serving_env.get("DOCUMENTATION_ENABLE_EVALUATION") == "true"
     ):
-        raise ValueError("Serving must remain ordinary assessment, never the source-bearing evaluation interface.")
+        raise ValueError("Serving must remain assessment or approval, never the source-bearing evaluation interface.")
     retained = {
         key: value for key, value in base["definition"].items()
         if key not in {"container_configuration", "environment_variables"}
@@ -237,7 +238,7 @@ def execute(
         payload = evaluation_request(case, config.task_scopes[case["id"]])
         report, row = invoke_evaluation(
             cloud.project, case, payload, plan.agent_name, version, plan.artifact,
-            plan.candidate_definition, config.observed_model,
+            plan.candidate_definition, config.observed_model, serving_version=plan.serving_version,
         )
         save(output / (case["id"] + "-evaluation.json"), report)
         actual = {
@@ -279,7 +280,10 @@ def execute(
         "dataset_version": suite["dataset_version"], "thresholds": plan.thresholds,
         "evaluation_config": config.model_dump(mode="json"),
         "tool_call_accuracy_scope": "two observed live cases only; not applicable to three tools-disabled cases",
-        "version_evidence": "GET-confirmed session and matching outer reference; not serving-path proof",
+        "version_evidence": (
+            "GET-confirmed session binding; outer reference is the candidate or the endpoint's serving label, "
+            "which cannot answer an EvaluationRequest; not serving-path proof"
+        ),
         "baseline_comparison": "not performed; no built-in baseline supplied",
     })
 
