@@ -1,10 +1,24 @@
 # infra/
 
-Infrastructure as code for the pattern, deployed with the **Azure Developer CLI** (`azd up`) and **Bicep**.
+Manual setup and inventory scripts for the pattern. Full **Azure Developer CLI**
+(`azd up`) + **Bicep** provisioning remains future work, not a runnable path here.
 
-> Placeholder. Per [ADR 0020](../docs/adr/0020-manual-setup-first.md), the environment is set up **manually** during M0–M3 following [docs/setup.md](../docs/setup.md). That runbook gets codified here as `azd` + Bicep in **M4** ([#52](https://github.com/wdhm/foundry-agentic-pattern/issues/52)).
+> Per [ADR 0020](../docs/adr/0020-manual-setup-first.md) and accepted
+> [ADR 0022](../docs/adr/0022-mvp-scope-platform-first.md), the environment is set
+> up **manually** following [docs/setup.md](../docs/setup.md). Codifying it as
+> full `azd` + Bicep is deferred/optional
+> ([#52](https://github.com/wdhm/foundry-agentic-pattern/issues/52)).
 
-## Planned scope ([ADR 0014](../docs/adr/0014-infrastructure-scope.md))
+Existing scripts cover read-only platform inventory, approved native monitoring
+setup, Foundry IQ/GitHub connections, manual agent onboarding and the read-only
+hosted toolbox. Follow each script's approval and identity boundaries; rerunning
+onboarding can repoint the shared single-agent ADO gateway. No full clean-
+subscription provisioning/teardown or automated RBAC workflow is implemented.
+
+## Future IaC scope ([ADR 0014](../docs/adr/0014-infrastructure-scope.md))
+
+This is the original target backlog, not deployed-resource evidence or a
+restoration of deferred Cosmos DB, custom workbooks or APIM to MVP scope.
 
 | Resource | Purpose |
 |---|---|

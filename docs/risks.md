@@ -5,7 +5,7 @@ Verified risks and open questions for Agentic Pattern v1. Each risk has a status
 | ID | Topic | Status | Owner | ADRs | Spike |
 |---|---|---|---|---|---|
 | [R1](#r1) | Tool approval enforcement and approval UX in Teams | 🟡 Partly verified, spike needed | P1 · John | [0008](adr/0008-human-in-the-loop-approval.md), [0009](adr/0009-hosted-agent-runtime.md), [0016](adr/0016-state-and-audit-cosmos-db.md) | [#1](https://github.com/wdhm/foundry-agentic-pattern/issues/1) |
-| [R2](#r2) | Publish to Teams and roll back a pinned agent version | 🟡 Read-only check done; live routing/channel proof open | P3 · Louise | [0008](adr/0008-human-in-the-loop-approval.md), [0009](adr/0009-hosted-agent-runtime.md), [0013](adr/0013-evaluation-gate-in-ci.md), [0018](adr/0018-region-sweden-central.md) | [#4](https://github.com/wdhm/foundry-agentic-pattern/issues/4) |
+| [R2](#r2) | Publish to Teams and roll back a pinned agent version | 🟡 Serving pin recorded; candidate evidence/channel/rollback proof open | P3 · Louise | [0008](adr/0008-human-in-the-loop-approval.md), [0009](adr/0009-hosted-agent-runtime.md), [0013](adr/0013-evaluation-gate-in-ci.md), [0018](adr/0018-region-sweden-central.md) | [#4](https://github.com/wdhm/foundry-agentic-pattern/issues/4) |
 | [R3](#r3) | Agent identity lifecycle and Azure DevOps access | 🟢 Go: agent user + gateway ([ADR 0021](adr/0021-agent-user-and-ado-mcp-gateway.md)); onboarding scripted, CI open | P2 · Rickard | [0012](adr/0012-agent-identity-and-rbac.md), [0014](adr/0014-infrastructure-scope.md), [0021](adr/0021-agent-user-and-ado-mcp-gateway.md) | [#2](https://github.com/wdhm/foundry-agentic-pattern/issues/2) |
 | [R4](#r4) | AI Gateway token limits and per-agent cost attribution | 🟡 Design adjusted | P3 · Louise | [0014](adr/0014-infrastructure-scope.md) | [#3](https://github.com/wdhm/foundry-agentic-pattern/issues/3) |
 
@@ -14,7 +14,15 @@ Verified risks and open questions for Agentic Pattern v1. Each risk has a status
 <a id="r1"></a>
 ## R1: Tool approval enforcement and approval UX in Teams
 
-**Local spike update (2026-10-16):** the
+**Runtime update (2026-10-20 audit):** P1's merged selected-proposal approval
+implementation covers matching decisions, reject/modify, persistence, replay and
+actual local HTTP MCP/Toolbox integration tests
+([#15](https://github.com/wdhm/foundry-agentic-pattern/issues/15),
+[caller contract](../src/agents/documentation-agent/TOOL_APPROVAL.md)).
+It does not establish a deployed reviewer context, live hosted wiki writes or
+Teams delivery. Assessment versions remain read-only.
+
+**Earlier local spike (2026-10-16):** the
 [hosted native-approval experiment](workshop/hosted-approval-spike.md) exercises
 Approve / Reject and explicit Modify through the Responses protocol. It persists
 the exact pending call and a dummy receipt with SDK state storage, and rejects
@@ -33,7 +41,7 @@ go/no-go decision, real approver identity or external-write guarantee is claimed
 **Impact:** without explicit runtime enforcement, an approval-gated write could run without approval. Evidence links would also be lost in Teams if we relied on native citations.
 
 **Mitigation**
-- The hosted agent implements an explicit approval interrupt. Pending tool calls (tool name, arguments hash, run ID) are persisted in Cosmos DB, and the call executes **only** when an approval matching that exact call is received ([ADR 0016](adr/0016-state-and-audit-cosmos-db.md)).
+- The hosted approval runtime must execute only an exact matching approved call. Its local persistence/decision guarantees are tested; the deployed remote state/reviewer and real write target still require integration proof. Cosmos DB is deferred under [ADR 0022](adr/0022-mvp-scope-platform-first.md), not an implemented MVP dependency.
 - Evidence is rendered inline in the Teams message body as a compact list with exact versions.
 
 **Spike (M0, [#1](https://github.com/wdhm/foundry-agentic-pattern/issues/1)):** demonstrate Approve / Modify / Reject in Teams for a hosted agent, with the wiki-write call executed only after approval.
@@ -43,17 +51,23 @@ go/no-go decision, real approver identity or external-write guarantee is claimed
 <a id="r2"></a>
 ## R2: Publish to Teams and roll back a pinned agent version
 
-**Status:** 🟡 Read-only capability check completed 2026-10-16; selector writes, Teams delivery and timed rollback remain unverified. See the [release/rollback runbook](workshop/release-rollback-guide.md) for exact API contracts, evidence and approval boundaries.
+**Status:** 🟡 Partial. P1 recorded an approved concrete version-6 serving pin,
+fresh named-path baseline and isolated version-7 deployment on 2026-10-19.
+Teams delivery, promotion and timed rollback remain unverified. See the
+[current dated record](setup.md#recorded-hosted-serving-and-candidate-state-2026-10-19)
+and [release/rollback runbook](workshop/release-rollback-guide.md) for contracts,
+historical snapshots and approval boundaries.
 
 **Findings**
 - Current documentation supports publishing the stable agent endpoint via portal or `POST /agents/{name}/microsoft365/publish?api-version=v1`. **Foundry User** plus Bot resource/channel write permissions are required; **Azure Bot Service Contributor Role**, Contributor or Owner covers the Bot side. **"Just you"** maps to REST `Shared` / `BotServiceRbac`, without publication admin approval; tenant policies and caller RBAC still apply.
   Sources: [Portal publishing](https://learn.microsoft.com/azure/foundry/agents/how-to/publish-copilot), [REST publishing](https://learn.microsoft.com/azure/foundry/agents/how-to/publish-copilot-virtual-network).
-- Hosted availability includes **Sweden Central**. Read-only checks found prompt `doc-agent` v3 and separate hosted stub `documentation-agent` v2 active. Both follow `@latest` at 100%, expose Responses/Entra only and report `not_published`; no Bot resources were listed in the workshop resource group.
+- Hosted availability includes **Sweden Central**. The October-16 stub/latest snapshot is historical: the October-19 record has hosted serving `6` at 100%, active unpromoted candidate `7`, and no demonstrated Teams publication.
+- P1 reports candidate session GET `version_ref=7` but outer Responses `agent_reference.version=6`. The CLI preserves both and fails on disagreement. This is not sufficient candidate-version evidence for a release; do not promote to make an evidence check pass.
 - `PATCH /agents/{name}?api-version=v1` selects a concrete version using `agent_endpoint.version_selector.version_selection_rules`, one `FixedRatio` rule and `traffic_percentage: 100`. This is documented rollback without channel republishing, not live proof. The [hosted management guide](https://learn.microsoft.com/azure/foundry/agents/how-to/manage-hosted-agent#configure-agent-endpoint-routing) explicitly disallows traffic splitting, conflicting with the [azd canary example](https://learn.microsoft.com/azure/foundry/agents/how-to/deploy-hosted-agent-production#roll-out-a-production-version-gradually); do not assume 50/50 support.
 
 **Mitigation / design use:** pin and verify the concrete good serving version **before** creating a candidate; default latest routing can otherwise expose a failed-eval version. Evaluate the exact candidate, then promote it at 100% only on pass and approval. A failed gate prevents promotion; rollback restores the retained good selector and verifies a fresh session. Existing hosted sessions do not migrate on selector changes. This refines the routing assumption in [ADR 0013](adr/0013-evaluation-gate-in-ci.md) without claiming its live acceptance criteria are met.
 
-**Remaining spike ([#4](https://github.com/wdhm/foundry-agentic-pattern/issues/4)):** separately approve and prove single-version pin/promotion/rollback, then Bot/channel publication, Teams delivery and identity credential survival. Canary needs Microsoft clarification. [#34](https://github.com/wdhm/foundry-agentic-pattern/issues/34)'s full live rollback in under two minutes is still unverified.
+**Remaining spike ([#4](https://github.com/wdhm/foundry-agentic-pattern/issues/4)):** preserve the recorded serving pin, resolve candidate execution evidence, then separately approve and prove promotion/rollback, Bot/channel publication, Teams delivery and identity credential survival. Canary needs Microsoft clarification. [#34](https://github.com/wdhm/foundry-agentic-pattern/issues/34)'s full live rollback in under two minutes is still unverified.
 
 ---
 
@@ -74,11 +88,11 @@ go/no-go decision, real approver identity or external-write guarantee is claimed
 **Decision:** [ADR 0021](adr/0021-agent-user-and-ado-mcp-gateway.md): agent user + thin gateway to Microsoft's remote Azure DevOps MCP server.
 
 **Remaining risk**
-- Each new agent needs a new agent user, a consent grant, an app role assignment and gateway settings. `onboard-agent.ps1` does all of this and was verified on a second agent. Still to do: run it from CI ([#28](https://github.com/wdhm/foundry-agentic-pattern/issues/28)).
+- Each new agent needs a new agent user, a consent grant, an app role assignment and gateway settings. `onboard-agent.ps1` does this; manual onboarding is the accepted MVP. CI wiring ([#28](https://github.com/wdhm/foundry-agentic-pattern/issues/28)) is deferred, not a current release prerequisite.
 - The gateway serves one agent at a time; onboarding re-points it.
 - Our federated credential on the Foundry-managed blueprint survives new versions. Whether it survives Microsoft 365 / Teams publishing is not verified yet ([#4](https://github.com/wdhm/foundry-agentic-pattern/issues/4)).
 - Security debt:
-  - the agent user has Basic + Contributors (narrow it);
+  - the retained prompt user has Basic + Contributors; the hosted assessment now uses Stakeholder + Readers and read-only consent;
   - public gateway ingress;
   - per-scope enforcement on the remote MCP server is unverified.
 
@@ -89,7 +103,9 @@ go/no-go decision, real approver identity or external-write guarantee is claimed
 <a id="r4"></a>
 ## R4: AI Gateway token limits and per-agent cost attribution
 
-**Status:** 🟡 Design adjusted.
+**Status:** 🟡 Conditional demo or slides under accepted ADR 0022. No live
+token-limit/429 or per-agent cost proof is recorded. Built-in AI Gateway limits
+are optional if simple; full APIM FinOps attribution is future hardening.
 
 **Findings**
 - AI Gateway token limits and quotas apply **per project + model deployment**, **not per agent**.
@@ -101,4 +117,8 @@ go/no-go decision, real approver identity or external-write guarantee is claimed
 - Enforce limits per project/deployment.
 - **Cost per agent/version** is handled by a **FinOps pattern**: model calls are tagged (agent name, agent version, run ID) and token usage is aggregated from APIM logs and Application Insights.
 
-**Spike (M0, [#3](https://github.com/wdhm/foundry-agentic-pattern/issues/3)):** configure a token limit on a deployment through the AI Gateway, emit tagged calls from two agent versions, and produce a cost-per-agent/version query.
+**Next disposition ([#3](https://github.com/wdhm/foundry-agentic-pattern/issues/3),
+[#23](https://github.com/wdhm/foundry-agentic-pattern/issues/23)):** explicitly
+choose a bounded built-in limits demonstration or complete dedicated slide
+coverage. The original tagged-call/cost-query spike is not proof of a built
+capability and does not authorize APIM provisioning or billable test calls.
