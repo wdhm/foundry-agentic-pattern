@@ -17,8 +17,8 @@ We build an MVP that **shows the platform**, with one simple happy path per feat
 
 **Delivery audit, 2026-10-20:** "Built" in the original P1 tables denotes planned
 implementation scope, not completed live acceptance. Hosted read-only assessment
-is proven; Teams/write acceptance, hosted telemetry and full evaluation/rollback
-remain open. Use the [dated setup record](../setup.md#recorded-hosted-serving-and-candidate-state-2026-10-19)
+and native hosted model/tool correlation are proven; Teams/write acceptance and
+full evaluation/rollback remain open. Use the [dated setup record](../setup.md#recorded-hosted-serving-and-candidate-state-2026-10-19)
 and the P3 delivery states below rather than inferring completion from an F-tag.
 
 ## F-tag index
@@ -65,7 +65,7 @@ and the P3 delivery states below rather than inferring completion from an F-tag.
 |---|---|---|---|
 | AI Gateway (FinOps · tokenomics · limits) | – | Conditional built-in demo or slides; no live limits/cost proof, disposition/content still open | [#3](https://github.com/wdhm/foundry-agentic-pattern/issues/3), [#23](https://github.com/wdhm/foundry-agentic-pattern/issues/23) |
 | Model deployments (chat model · eval model) | – | Chat + IQ embeddings documented; evaluator deployment/model pinning/quota review pending | [#5](https://github.com/wdhm/foundry-agentic-pattern/issues/5), [#49](https://github.com/wdhm/foundry-agentic-pattern/issues/49) |
-| Evals & observability (App Insights · eval gate) | F6 | Native prompt tracing and five-case data ready; hosted correlation/full gate open; custom workbook deferred | [#9](https://github.com/wdhm/foundry-agentic-pattern/issues/9), [#24](https://github.com/wdhm/foundry-agentic-pattern/issues/24), [#25](https://github.com/wdhm/foundry-agentic-pattern/issues/25), [#29](https://github.com/wdhm/foundry-agentic-pattern/issues/29), [#33](https://github.com/wdhm/foundry-agentic-pattern/issues/33) |
+| Evals & observability (App Insights · eval gate) | F6 | Native prompt and hosted model/tool correlation proven; five-case data ready; full gate open; custom workbook deferred | [#9](https://github.com/wdhm/foundry-agentic-pattern/issues/9), [#24](https://github.com/wdhm/foundry-agentic-pattern/issues/24), [#25](https://github.com/wdhm/foundry-agentic-pattern/issues/25), [#29](https://github.com/wdhm/foundry-agentic-pattern/issues/29), [#33](https://github.com/wdhm/foundry-agentic-pattern/issues/33) |
 | Versioning & CI/CD (agent · prompt · rollback) | F7 | Hosted CLI/manual preflight built; eval integration and live rollback/Teams proof open; RBAC CI deferred | [#4](https://github.com/wdhm/foundry-agentic-pattern/issues/4), [#10](https://github.com/wdhm/foundry-agentic-pattern/issues/10), [#26](https://github.com/wdhm/foundry-agentic-pattern/issues/26), [#27](https://github.com/wdhm/foundry-agentic-pattern/issues/27), [#28](https://github.com/wdhm/foundry-agentic-pattern/issues/28), [#34](https://github.com/wdhm/foundry-agentic-pattern/issues/34) |
 | Landing zones (subscription vending) | – | Two slide-content pages complete; shared deck assembly pending | [#50](https://github.com/wdhm/foundry-agentic-pattern/issues/50) |
 | Deploy strategy (PTU · spillover · regions) | – | Two slide-content pages complete; shared deck assembly pending | [#51](https://github.com/wdhm/foundry-agentic-pattern/issues/51) |

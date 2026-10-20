@@ -74,7 +74,8 @@ This summarizes the last recorded reads and P1 handoff, not a fresh inventory on
 | Candidate version caveat | Session GET binds version 7, but outer Responses reports version 6. Preserve both observations; the CLI fails explicitly on disagreement instead of claiming candidate success |
 | Tool access | Own hosted identity/user, read-only gateway revision 5, toolbox `documentation-agent-readonly:1`; prompt `doc-agent` ADO access is interrupted by the coordinated cutover |
 | Independent P3 proof | One concrete-version-6 assessment completed with contract/source-version/reviewed-source provenance checks; see the [dated smoke](#hosted-packaging-and-independent-smoke-p3-2026-10-19) |
-| Still unverified | Full hosted evaluation, actual model revision/usage and independently correlated nested tool/model telemetry, live approved wiki writes, Teams delivery and timed rollback |
+| Subsequent telemetry proof | Read-only lookup on 2026-10-20 correlated the same v6 run with native model/tool spans, observed model revision and layer-specific usage; see [evidence below](#hosted-native-trace-evidence-2026-10-20) |
+| Still unverified | Full hosted evaluation/tool-call accuracy, live approved wiki writes, Teams delivery and timed rollback |
 
 P1's [acceptance handoff](https://github.com/wdhm/foundry-agentic-pattern/issues/13#issuecomment-6270385634)
 records candidate 7 and the serving pin. The
@@ -383,9 +384,72 @@ In Foundry, open `proj-agentic > Agents > Traces` and search the response or Tra
 ID above. Ingestion and correlation were checked via the Application Insights
 query API; the Foundry portal UI itself was not visually verified.
 
-**Still open:** full #9's custom dimensions/Cosmos correlation are explicitly
-deferred, not completed. This single no-tools assessment does not prove
-tool-operation tracing, all-owner access, hosted-stub tracing, or release routing.
+This historical no-tools assessment does not itself prove tool-operation
+tracing, all-owner access, hosted tracing or release routing. The later hosted
+evidence below supplies model/tool tracing, not those other acceptance items.
+Custom dimensions/Cosmos joins remain deferred under ADR 0022.
+
+#### Hosted native trace evidence (2026-10-20)
+
+A bounded read-only query of existing `appi-foundry-agentic` telemetry found
+the native spans for the **same single approved October 19 version-6
+assessment**. No new invocation, exporter, instrumentation, deployment, resource
+write, login retry or shared-default change was needed.
+
+| Correlation field | Observed value |
+|---|---|
+| Root request UTC | `2026-10-19T20:26:48.6357167Z` |
+| Root request | `invoke_agent`, success `True`, result code `0`, duration `44405.3458` ms |
+| Response ID | `caresp_07f56b96a4570142006ZLICnpGolpBim8MaVNlt2LHeVEAxsAT` |
+| Session ID | `085a49a276d25fb800zlWraicaL3nXr3Rtpsa1JICOquJV5SV2` |
+| Trace ID / `operation_Id` | `d35d1af1350e3f97df6dd149d69f01ab` |
+| Root span / parent | `0f5fb945b61561b7` / `fa8a8aad35f53858` |
+| Agent | `documentation-agent`, explicit `gen_ai.agent.version=6`; `gen_ai.agent.id` is an identity GUID, not the version |
+| Complete bounded aggregate | 1 request, 25 dependencies, 85 traces; no custom events, exceptions or failed request/dependency spans in the queried operation |
+| Application model layer | Three `chat gpt-6-luna` spans, observed response model `gpt-6-luna-2026-09-22`; 19,002 input / 2,715 output tokens summed only at this layer |
+
+Native `tools/list` succeeded in 2.218 seconds. Five application `execute_tool`
+spans succeeded, each with a same-operation child `tools/call` and matching name:
+
+| Tool | Calls | Observed application duration (seconds) |
+|---|---|---|
+| `knowledge___knowledge_base_retrieve` | 1 | 1.016 |
+| `github___get_file_contents` | 2 | 1.655 / 1.735 |
+| `ado___wiki` | 1 | 3.431 |
+| `ado___wit_work_item` | 1 | 1.238 |
+
+Nested platform model spans and a `multi_tool_use.parallel` wrapper also exist.
+Do not double-count model usage across application/platform layers or count the
+wrapper as an additional backend tool call. These successful spans prove
+observed execution, **not** correct arguments, schemas, outputs or a passing
+`tool_call_accuracy` evaluation.
+
+For a content-free application-scope lookup while the telemetry is retained:
+
+```kusto
+let traceId = "d35d1af1350e3f97df6dd149d69f01ab";
+union withsource=Table requests, dependencies, traces, exceptions
+| where timestamp between (datetime(2026-10-19T20:25:30Z) .. datetime(2026-10-19T20:29:00Z))
+| where operation_Id == traceId
+| project timestamp, Table, operation_Id, operation_ParentId
+| order by timestamp asc
+```
+
+The root response/session/version attributes and `operation_Id` provide the
+verified native join. Caller request/correlation IDs were found only inside
+`gen_ai.input.messages` on nine dependencies, not as dedicated structured
+correlation attributes. The server-side check selected attribute keys and
+presence/counts only, not message content. Native telemetry includes attribute
+keys for instructions, messages and tool content; do not export their values
+or assume the telemetry is content-free. Dedicated non-content caller-ID
+attributes require a separate scoped decision, not a speculative exporter.
+
+Sanitized queries/results are retained in the deployment owner's ignored
+`.azure/hosted-smoke-telemetry-*.json`. The complete aggregate, not the first
+100-row sample, establishes the 111-row count. This supersedes the earlier
+outer-response-only model/usage/trace visibility limit for this run. It does
+not prove candidate-7 execution, all-presenter access, portal UI presentation,
+evaluation correctness or any wiki write.
 
 ### Handoff to eval/release work
 
@@ -399,7 +463,7 @@ Do not mark the cloud setup complete until these outputs are supplied:
 | `EVAL_MODEL_DEPLOYMENT` / model version | **Unset** until model compatibility, quota, cost and deployment approval are resolved |
 | Capacity evidence | Fresh regional quota + deployment rate limits; resolve chat `current=500`, `limit=250` discrepancy |
 | Tracing destination | `appi-foundry-agentic` / workspace `log-foundry-agentic`; project `AppInsights` / `ProjectManagedIdentity` connection and project-MI ingestion role verified |
-| Native trace proof | Historical prompt-agent spans above; hosted correlation remains unverified. A valid hosted result does not supply missing model/tool spans. Portal UI not visually verified |
+| Native trace proof | Prompt-agent spans and correlated hosted-v6 model/tool spans above; hosted model revision and layer-specific usage observed in telemetry. Portal UI not visually verified; candidate-7 proof and evaluation correctness remain separate |
 | Access proof | Each owner's chat invocation and telemetry read result; not verified here |
 
 Eval/release automation must fail explicitly if its evaluator deployment is
@@ -650,7 +714,9 @@ the Windows source archive contained CRLF, while runtime `Path.read_text`
 normalizes line endings before hashing. No retry, source write, runtime fix or
 deployment followed. See the
 [dated outcome and exact hashes](workshop/hosted-deployment-guide.md#single-approved-assessment-2026-10-19).
-This result is not a full evaluation or independently captured nested-tool trace.
+The [subsequent read-only telemetry lookup](#hosted-native-trace-evidence-2026-10-20)
+independently correlated native model/tool spans for this same run. This result
+is not a full evaluation or tool-call correctness certification.
 
 ### Approval spike status (P1, #1)
 

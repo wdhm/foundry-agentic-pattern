@@ -72,7 +72,7 @@ calls return `403`. Historical playground results are reference evidence only.
 |---|---|---|---|---|
 | 11:10–11:18 | AI Gateway (FinOps · tokenomics · limits) | – | Conditional demo or slides; preparation open | Built-in limits only if simple and separately approved; otherwise explain project/deployment limits versus per-agent cost attribution. No live cost/429 proof currently recorded |
 | 11:18–11:23 | Model deployments | – | Inventory walkthrough | Existing chat and IQ embeddings, configured version versus upgrade-policy pinning; evaluator/quota/cost decision remains open ([#49](https://github.com/wdhm/foundry-agentic-pattern/issues/49)) |
-| 11:23–11:33 | Evals & observability | F6 | Available evidence + pending showcase | Five pinned cases, verified hosted result and historical prompt traces. Label full hosted good/bad gate and correlated hosted spans pending until demonstrated |
+| 11:23–11:33 | Evals & observability | F6 | Available evidence + pending showcase | Five pinned cases, verified hosted result and native prompt/hosted model/tool spans. Show the recorded native correlation; label the full hosted good/bad gate pending |
 | 11:33–11:43 | Versioning & CI/CD | F7 | CLI/workflow walkthrough; rollback pending | Manual setup, hosted CLI, offline/manual GitHub Action and serving-pin safeguards. Do not present `azd up`, promotion or timed rollback as completed |
 | 11:43–11:50 | *Landing zones · Deploy strategy* | – | Slides | Subscription vending ([#50](https://github.com/wdhm/foundry-agentic-pattern/issues/50)); PTU, spillover, regions ([#51](https://github.com/wdhm/foundry-agentic-pattern/issues/51)) |
 
@@ -83,10 +83,11 @@ How to fork the repo, swap in your own sources and documentation standard, and p
 ## Demo checklist (pre-workshop)
 - [x] Shared environment and source fixtures documented in the manual runbook; full `azd up` is deferred/optional with [#52](https://github.com/wdhm/foundry-agentic-pattern/issues/52)
 - [x] One read-only hosted version-6 assessment completed with verified contract/source versions/reviewed-source provenance (2026-10-19)
-- [x] Native monitoring configured; historical prompt trace ingestion verified (2026-10-16), not hosted span proof
+- [x] Native monitoring configured; prompt ingestion verified (2026-10-16), hosted-v6 model/tool correlation and observed model usage verified by read-only query (2026-10-20; no new invocation)
 - [ ] Refresh correct tenant/subscription, source pins, model version, retained artifacts and actual three-presenter access before rehearsal
 - [ ] Agree exact demo version/request; resolve candidate-7 session/outer-version discrepancy before treating it as candidate execution proof
-- [ ] Demonstrate hosted trace correlation and the full five-case good/bad evaluation gate, or clearly label the unverified showcase items
+- [ ] Prepare the retained hosted trace lookup for the presentation; portal UI and all-presenter access still need verification
+- [ ] Demonstrate the full five-case good/bad evaluation gate, or clearly label the unverified showcase
 - [ ] Demonstrate real approved wiki write and Teams delivery with P1/P2; keep assessment read-only
 - [ ] Obtain separate routing approval and demonstrate timed rollback with new named-path sessions; two deployed versions or a pin alone do not pass
 - [ ] Finish AI Gateway demo/slides disposition and P3 presentation content; assemble/review shared deck
