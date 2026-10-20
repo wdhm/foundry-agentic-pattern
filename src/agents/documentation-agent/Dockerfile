@@ -11,6 +11,8 @@ COPY pyproject.toml ./
 COPY src/contracts ./src/contracts
 COPY src/tools ./src/tools
 COPY src/agents/documentation-agent/app ./src/agents/documentation-agent/app
+# Reviewed approval target (DOCUMENTATION_APPROVAL_POLICY); used only when approval mode is explicitly enabled.
+COPY src/agents/documentation-agent/approval ./approval
 RUN if [ -n "${PIP_INDEX_URL}" ]; then \
         PIP_INDEX_URL="${PIP_INDEX_URL}" python -m pip install --no-cache-dir ".[agent]"; \
     else \

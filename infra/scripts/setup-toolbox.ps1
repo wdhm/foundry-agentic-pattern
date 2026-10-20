@@ -1,7 +1,7 @@
 #Requires -Version 7
 <#
 .SYNOPSIS
-    Creates the read-only Foundry toolbox the hosted documentation-agent uses. Idempotent.
+    Creates the read-only Foundry toolbox the hosted documentation-agent uses (or, with -Write, its write toolbox). Idempotent.
 
 .DESCRIPTION
     Bundles the three existing project connections into one toolbox, exposing only the four read tools the hosted
@@ -17,22 +17,32 @@
     If the toolbox already has a version, nothing is changed unless -NewVersion is given. Prints the version-pinned
     MCP endpoint to set as TOOLBOX_ENDPOINT on the hosted agent.
 
+    -Write creates the separate write toolbox 'documentation-agent-write' instead. It exposes exactly one tool,
+    ado___wiki_upsert_page (connection ado-mcp-proxy), and is used only by the exact-call approval runtime
+    (src/agents/documentation-agent/TOOL_APPROVAL.md), whose reviewed policy pins its versioned endpoint. The
+    approval runtime, not the toolbox, gates the call, so require_approval is never here as well.
+
     Requires: Azure CLI signed in with Azure AI User (or higher) on the Foundry project.
 
 .EXAMPLE
     ./infra/scripts/setup-toolbox.ps1 -ProjectEndpoint https://<account>.services.ai.azure.com/api/projects/<project>
+
+.EXAMPLE
+    ./infra/scripts/setup-toolbox.ps1 -ProjectEndpoint https://<account>.services.ai.azure.com/api/projects/<project> -Write
 #>
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string]$ProjectEndpoint,
-    [string]$ToolboxName = 'documentation-agent-readonly',
+    [string]$ToolboxName,
     [string]$KnowledgeConnection = 'kb-doc-agent-mcp',
     [string]$GitHubConnection = 'github-mcp',
     [string]$AdoConnection = 'ado-mcp-proxy',
+    [switch]$Write,
     [switch]$NewVersion
 )
 
 $ErrorActionPreference = 'Stop'
+if (-not $ToolboxName) { $ToolboxName = $Write ? 'documentation-agent-write' : 'documentation-agent-readonly' }
 $Api = 'v1'
 $ProjectEndpoint = $ProjectEndpoint.TrimEnd('/')
 
@@ -55,14 +65,20 @@ if ($existing -and -not $NewVersion) {
     $version = $existing.default_version ?? $existing.versions.latest.version ?? '1'
     Write-Host "Toolbox '$ToolboxName' exists (default version $version); use -NewVersion to publish a new one." -ForegroundColor Yellow
 } else {
-    $tools = @(
-        @{ label = 'knowledge'; connection = $KnowledgeConnection; names = @('knowledge_base_retrieve')
-           description = 'Documentation standard knowledge base (Foundry IQ). Retrieve rules by query.' }
-        @{ label = 'github'; connection = $GitHubConnection; names = @('get_file_contents')
-           description = 'GitHub repository files at an exact commit (read-only).' }
-        @{ label = 'ado'; connection = $AdoConnection; names = @('wiki', 'wit_work_item')
-           description = 'Azure DevOps wiki pages and work items (read-only gateway, agent user).' }
-    ) | ForEach-Object {
+    $sources = if ($Write) {
+        @(@{ label = 'ado'; connection = $AdoConnection; names = @('wiki_upsert_page')
+             description = 'Azure DevOps wiki page create/replace (agent user). Called only by the approval runtime.' })
+    } else {
+        @(
+            @{ label = 'knowledge'; connection = $KnowledgeConnection; names = @('knowledge_base_retrieve')
+               description = 'Documentation standard knowledge base (Foundry IQ). Retrieve rules by query.' }
+            @{ label = 'github'; connection = $GitHubConnection; names = @('get_file_contents')
+               description = 'GitHub repository files at an exact commit (read-only).' }
+            @{ label = 'ado'; connection = $AdoConnection; names = @('wiki', 'wit_work_item')
+               description = 'Azure DevOps wiki pages and work items (gateway, agent user; read tools only).' }
+        )
+    }
+    $tools = $sources | ForEach-Object {
         @{
             type                  = 'mcp'
             server_label          = $_.label
@@ -73,10 +89,12 @@ if ($existing -and -not $NewVersion) {
             description           = $_.description
         }
     }
-    $body = @{
-        description = 'Read-only sources for the hosted documentation-agent: documentation standard (Foundry IQ), GitHub file at commit, Azure DevOps wiki page and work item.'
-        tools       = $tools
-    } | ConvertTo-Json -Depth 10
+    $description = if ($Write) {
+        'Approval-gated wiki write for the hosted documentation-agent: only Azure DevOps wiki_upsert_page.'
+    } else {
+        'Read-only sources for the hosted documentation-agent: documentation standard (Foundry IQ), GitHub file at commit, Azure DevOps wiki page and work item.'
+    }
+    $body = @{ description = $description; tools = @($tools) } | ConvertTo-Json -Depth 10
     $created = Invoke-RestMethod -Method Post "$ProjectEndpoint/toolboxes/$ToolboxName/versions?api-version=$Api" `
         -Headers $headers -Body $body -ContentType 'application/json'
     $version = $created.version

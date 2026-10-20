@@ -22,3 +22,5 @@
 !src/agents/documentation-agent/app/prompts/*.txt
 !src/agents/documentation-agent/app/policies/
 !src/agents/documentation-agent/app/policies/*.txt
+!src/agents/documentation-agent/approval/
+!src/agents/documentation-agent/approval/*.json
