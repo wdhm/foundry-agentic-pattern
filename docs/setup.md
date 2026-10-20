@@ -60,6 +60,29 @@ workbooks, APIM and new azd/Bicep provisioning are **not MVP prerequisites**.
 Historical deployment instructions below are retained as dated evidence, not
 instructions to redeploy over the current serving pin.
 
+### Promotion, timed rollback and cleanup (P2, 2026-10-20)
+
+Version 7 is now the serving version. The table below records the promotion, a
+timed rollback drill and the removal of unused resources. Response IDs and raw
+outputs are kept in the operator's evidence folder; nothing secret is recorded.
+
+| Step | Evidence |
+|---|---|
+| Promote 6 → 7 | Selector PATCH + readback in 5.6 s; rest of `agent_endpoint` unchanged. Named-path outer `agent_reference.version` is now `7`, so the 2026-10-19 version caveat no longer applies |
+| `order-sync-information-missing` on serving v7 | `insufficient_information`, recall 3/3, checker pass (`caresp_08d13f17…`) |
+| `order-sync-retry` on serving v7, 5 runs | Recall 3/3 in every completed run, but status `gaps_found` only 2/5: 2 runs returned `insufficient_information`, 1 failed closed on evidence verification. Status stability is a P1 follow-up on [#13](https://github.com/wdhm/foundry-agentic-pattern/issues/13) |
+| Timed rollback 7 → 6 ([#34](https://github.com/wdhm/foundry-agentic-pattern/issues/34)) | **89.7 s** from PATCH to a completed fresh named-path response with outer version `6` (`caresp_01afca10876bc29f001j01WVPAgpJ2dsi0jpe4zHyXi0KGjzNd`); trace `operation_Id` `c03be3c46a2b725b5230e590e8dfe7d8`, `gen_ai.agent.version=6`, 7 `chat` spans, 53,045 input / 7,680 output tokens summed over those spans |
+| Roll forward 6 → 7 | **72.5 s**, outer version `7`, checker pass (`caresp_0e98f4dab11d436f00JtYmy5jqMwYmxezUI57d4S4b3ICpKS8H`); trace `9c4a0846884a17f5bf782382ccc2f0de`, `gen_ai.agent.version=7`, 5 `chat` spans, 46,754 / 5,250 tokens |
+| Rollback caveat | Version 6 rejects the v7 request field `task` (`extra_forbidden`). A rollback across a contract change needs callers that send the older request shape; the drill sent a v6-shaped request. v6 quality on the information-missing scenario was not a pass (it predates `task.scope`) |
+| Cleanup | Deleted `documentation-agent` versions 1–2, the prompt agent `doc-agent` (agent user, ADO entitlement, delegated grant, gateway app-role; its agent identity and blueprint were removed with it), the unused Cosmos DB account, and unreferenced ACR tags/manifests. Remaining images: v6 `1a00ba37`, v7 `a12275d5`, approval v8 `2093e80b`, gateway `ado-mcp:0.2.1` |
+
+Current state: serving `documentation-agent:7` at 100%; v6 retained as the
+rollback target; v8 is the approval-mode version used through version-specific
+sessions. Code paths that target the prompt agent (`--target prompt`, the
+`doc-agent` onboarding examples) now need the agent re-created before use.
+Cosmos-backed approval state is an optional later milestone (see
+[next steps](next-steps.md)).
+
 ### Recorded hosted serving and candidate state (2026-10-19)
 
 This summarizes the last recorded reads and P1 handoff, not a fresh inventory on
