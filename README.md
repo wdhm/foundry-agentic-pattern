@@ -16,10 +16,10 @@ P3's [CLI](docs/workshop/cli-trigger-guide.md) and single manual
 [release workflow](docs/workshop/evaluation-release-guide.md) now target that
 **hosted assessment runtime by default**. The prompt path is explicitly secondary.
 Hosted CLI smoke and full release certification are different.
-[PR #87](https://github.com/wdhm/foundry-agentic-pattern/pull/87) implements the
+Merged [PR #87](https://github.com/wdhm/foundry-agentic-pattern/pull/87) implements the
 five-case evaluation transport/scorer integration offline using P1's separately
-opted-in source-isolation/execution interface; it is awaiting review and merge,
-not deployed. Live acceptance still requires reviewed isolated configuration,
+opted-in source-isolation/execution interface; it is not deployed.
+Live acceptance still requires reviewed isolated configuration,
 an approved evaluator and thresholds, matching candidate-version evidence and
 separate execution approval. No live-evaluation claim follows from offline tests.
 
@@ -125,7 +125,7 @@ Features are grouped into three swimlanes, each with one owner: **P1** Agent arc
 | P3 | – | **AI Gateway / FinOps** | Built-in limits only if simple; otherwise slides. No live limit/cost proof. Full APIM attribution is deferred. | [0014](docs/adr/0014-infrastructure-scope.md), [0022](docs/adr/0022-mvp-scope-platform-first.md) |
 | P3 | – | **Model deployments** | Existing chat and IQ embedding deployments documented; evaluator selection/deployment, chat upgrade-policy pinning and quota review remain open. | [0014](docs/adr/0014-infrastructure-scope.md) |
 | P3 | **F6** | **Evals & observability** | Five pinned cases and native monitoring exist. Prompt and hosted model/tool tracing are proven; the built-in hosted evaluation gate remains open. | [0013](docs/adr/0013-evaluation-gate-in-ci.md), [0022](docs/adr/0022-mvp-scope-platform-first.md) |
-| P3 | **F7** | **Versioning & CI/CD** | Manual-only hosted workflow and release safeguards; offline evaluation integration awaits review/merge in #87, with live acceptance outstanding. Serving pin is recorded; promotion/rollback are manual and unverified end to end. No canary support claimed. | [0003](docs/adr/0003-github-for-code-and-cicd.md), [0013](docs/adr/0013-evaluation-gate-in-ci.md) |
+| P3 | **F7** | **Versioning & CI/CD** | Manual-only hosted workflow, release safeguards and offline evaluation integration are merged; live acceptance remains outstanding. Serving pin is recorded; promotion/rollback are manual and unverified end to end. No canary support claimed. | [0003](docs/adr/0003-github-for-code-and-cicd.md), [0013](docs/adr/0013-evaluation-gate-in-ci.md) |
 | *slides* | – | **Beyond v1** | A2A hand-over (P1). Agent 365, Work IQ and PDF/SharePoint (P2). Landing zones and deploy strategy (P3). | [next-steps](docs/next-steps.md) |
 
 ## Repository layout
