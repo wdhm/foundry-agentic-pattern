@@ -176,10 +176,14 @@ def evaluator_row(
     final_text: list[str] = []
     observed = iter(record.tool_calls)
     for model in record.model_calls:
+        # A completed answer followed by another model call was rejected by self-repair; only the last is scored.
+        superseded = model is not record.model_calls[-1] and model.get("finish_reason") == "stop"
         for message in model["output"]:
             if message.get("role") != "assistant" or not message.get("content"):
                 raise ValueError("Unexpected model output role or empty content.")
             for item in message["content"]:
+                if item.get("type") == "text_reasoning" or (superseded and item.get("type") == "text"):
+                    continue
                 if item.get("type") == "text" and isinstance(item.get("text"), str):
                     response.append({"role": "assistant", "content": [{"type": "text", "text": item["text"]}]})
                     if model is record.model_calls[-1]:

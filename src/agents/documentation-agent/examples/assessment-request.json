@@ -6,7 +6,7 @@
   "requested_by": "demo-reviewer",
   "task": {
     "scope": "change_review",
-    "question": "Pull request 62 in wdhm/foundry-agentic-pattern changes the Order Sync integration. Read the PR diff on GitHub, compare it with the Azure DevOps wiki page /Order Sync/Overview and the documentation standard, and list what the documentation is missing. Cite evidence (source, path, version)."
+    "question": "Pull request 62 in wdhm/foundry-agentic-pattern changes the Order Sync integration. Read the changed files at the requested commit on GitHub, compare what they implement with the Azure DevOps wiki page /Order Sync/Overview and the documentation standard, and list what the documentation is missing. Cite evidence (source, path, version)."
   },
   "subject": {
     "repo": "wdhm/foundry-agentic-pattern",

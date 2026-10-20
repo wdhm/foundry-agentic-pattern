@@ -58,8 +58,12 @@ def validate_hosted_definition(
         raise ValueError(
             "Use the stable SDK container_configuration/protocol_versions definition, not legacy flat YAML."
         )
-    if definition.get("protocol_versions") != [{"protocol": "responses", "version": "2.0.0"}]:
-        raise ValueError("Hosted definition must retain P1's Responses 2.0.0 protocol.")
+    protocols = definition.get("protocol_versions") or []
+    if {"protocol": "responses", "version": "2.0.0"} not in protocols or any(
+        entry not in ({"protocol": "responses", "version": "2.0.0"}, {"protocol": "activity", "version": "2.0.0"})
+        for entry in protocols
+    ):
+        raise ValueError("Hosted definition must retain P1's Responses 2.0.0 protocol (Teams activity optional).")
     if not definition.get("cpu") or not definition.get("memory"):
         raise ValueError("Reviewed hosted CPU/memory are required.")
     provenance = assessment_provenance(definition, evaluation=evaluation)

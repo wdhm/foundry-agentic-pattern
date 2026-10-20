@@ -3,6 +3,7 @@
 import hashlib
 import html
 import json
+import re
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
@@ -15,6 +16,41 @@ from contracts.v1 import AgentRequest, AgentResult
 def blob_id(text: str) -> str:
     data = text.encode()
     return hashlib.sha1(b"blob " + str(len(data)).encode() + b"\0" + data).hexdigest()
+
+
+WORK_ITEM_URI = re.compile(r"^(https://dev\.azure\.com/[^/]+)/[^/]+/(?:_apis/wit/workItems|_workitems/edit)/([0-9]+)$")
+
+
+def request_context_sources(
+    suite: dict[str, Any], sources: dict[str, dict[str, Any]], case: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Pinned suite sources the live request itself names, readable but not required for this case."""
+    context = case["request"].get("context", {})
+    work_items = {str(item) for item in context.get("work_item_ids", [])}
+    wiki_paths = set(context.get("wiki_page_paths", []))
+    extra = []
+    for source in suite["sources"]:
+        if source["id"] in case["source_ids"]:
+            continue
+        match = WORK_ITEM_URI.match(source["uri"])
+        path = parse_qs(urlparse(source["uri"]).query).get("path", [None])[0]
+        if (source["source"] == "work_item" and match and match.group(2) in work_items) or (
+            source["source"] == "wiki" and path in wiki_paths
+        ):
+            extra.append(sources[source["id"]])
+    return extra
+
+
+def alias_work_items(observed: list[dict[str, Any]], readable: list[dict[str, Any]]) -> None:
+    """Live reads return project-GUID URIs; match pinned project-name URIs on organization and ID."""
+    for record in observed:
+        if record["source"] != "work_item":
+            continue
+        keys = {match.groups() for uri in record["uris"] if (match := WORK_ITEM_URI.match(uri))}
+        for source in readable:
+            match = WORK_ITEM_URI.match(source["uri"])
+            if source["source"] == "work_item" and match and match.groups() in keys:
+                record["uris"].append(source["uri"])
 
 
 def load_cases(suite_path: Path, root: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
@@ -88,6 +124,9 @@ def load_cases(suite_path: Path, root: Path) -> tuple[dict[str, Any], list[dict[
                 "mode": case["input_mode"],
                 "request": request,
                 "sources": allowed,
+                "readable": allowed + (
+                    request_context_sources(suite, sources, case) if case["input_mode"] == "live_sources" else []
+                ),
                 "question": scenario["prompt"],
                 "rules": rules,
                 "input": json.dumps(payload),
@@ -103,6 +142,7 @@ def normalized(text: str) -> str:
 
 def verify_sources(case: dict[str, Any], raw: dict[str, Any], result: AgentResult) -> None:
     allowed = case["sources"]
+    readable = case.get("readable", allowed)
     if case["mode"] == "live_sources":
         problems = trace_evidence_problems(raw, result.model_dump(mode="json"))
         if problems:
@@ -112,19 +152,20 @@ def verify_sources(case: dict[str, Any], raw: dict[str, Any], result: AgentResul
             if item.get("type") == "mcp_call" and (item.get("server_label"), item.get("name")) == ("ado", "wiki"):
                 payload, _ = json.JSONDecoder().raw_decode(item["output"].lstrip())
                 page = payload.get("page", {})
-                for source in allowed:
+                for source in readable:
                     path = parse_qs(urlparse(source["uri"]).query).get("path", [None])[0]
                     if source["source"] == "wiki" and path and page.get("path") == path:
                         for record in observed:
                             if record["source"] == "wiki" and page.get("url") in record["uris"]:
                                 record["uris"].append(source["uri"])
+        alias_work_items(observed, readable)
         for record in observed:
             if not any(
                 record["source"] == source["source"]
                 and record["version"] == source["version"]
                 and source["uri"] in record["uris"]
                 and normalized(record["content"]) == normalized(source["content"])
-                for source in allowed
+                for source in readable
             ):
                 raise ValueError("Live evidence drift or source outside case allowlist.")
         if not all(
@@ -142,7 +183,7 @@ def verify_sources(case: dict[str, Any], raw: dict[str, Any], result: AgentResul
     for evidence in result.evidence:
         if not any(
             evidence.source == source["source"]
-            and evidence.version == source["version"]
+            and evidence.version.strip('"') == source["version"]
             and (
                 evidence.uri == source["uri"]
                 or (
@@ -151,7 +192,7 @@ def verify_sources(case: dict[str, Any], raw: dict[str, Any], result: AgentResul
                 )
             )
             and normalized(evidence.excerpt) in normalized(source["content"])
-            for source in allowed
+            for source in readable
         ):
             raise ValueError("Evidence URI/version/excerpt is not grounded in this case's sources.")
     if result.documentation_status != case["expected_status"]:

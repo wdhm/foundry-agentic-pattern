@@ -350,6 +350,49 @@ def test_bad_responses_block_before_scoring(problem, plan, cloud, cases, tmp_pat
     assert all(call.args[2] == "4" for call in cloud.respond.call_args_list)
 
 
+@pytest.mark.parametrize("problem", [None, "drifted_work_item", "other_work_item"])
+def test_live_case_may_read_and_cite_request_named_pinned_sources(problem, plan, cases):
+    from contracts.v1 import assemble_result
+    from tools.cli import analysis_from_response, selected_provenance
+    from tools.release_sources import verify_sources
+
+    case = next(case for case in cases[1] if case["id"] == "order-sync-retry")
+    work_item = next(source for source in case["readable"] if source["source"] == "work_item")
+    assert work_item not in case["sources"]
+    raw = response_for(case)
+    title, description = work_item["content"].split("\n")[:2]
+    item_id = "2" if problem == "other_work_item" else "1"
+    raw["output"].insert(-2, {
+        "type": "mcp_call", "status": "completed", "id": "call-work-item", "server_label": "ado",
+        "name": "wit_work_item", "arguments": json.dumps({"action": "get", "id": int(item_id)}),
+        "output": json.dumps({
+            "rev": 2,
+            # Live reads return the project GUID, while the pinned dataset URI uses the project name.
+            "url": f"https://dev.azure.com/foundry-agentic/00000000-0000-0000-0000-000000000000/_apis/wit/workItems/{item_id}",
+            "fields": {"System.Title": "drift" if problem == "drifted_work_item" else title,
+                       "System.Description": description},
+        }),
+    })
+    analysis = json.loads(raw["output"][-1]["content"][0]["text"])
+    wiki = next(source for source in case["sources"] if source["source"] == "wiki")
+    analysis["evidence"] += [
+        {"id": "e2", "source": "wiki", "uri": wiki["uri"], "version": f'"{wiki["version"]}"',
+         "excerpt": wiki["content"][:20]},
+        {"id": "e3", "source": "work_item", "version": "2", "excerpt": title,
+         "uri": "https://dev.azure.com/foundry-agentic/00000000-0000-0000-0000-000000000000/_workitems/edit/1"},
+    ]
+    raw["output"][-1]["content"][0]["text"] = json.dumps(analysis)
+    provenance = selected_provenance(
+        plan.agent_name, "4", plan.candidate_definition,
+        {"contract_version": "1.0.0", "policy_version": "offline-policy"}, plan.model_version,
+    )
+    result = assemble_result(case["request"], analysis_from_response(raw), provenance)
+    if problem is None:
+        verify_sources(case, raw, result)
+    else:
+        with pytest.raises(ValueError):
+            verify_sources(case, raw, result)
+
 def test_main_defaults_to_blocked_without_cloud(plan, monkeypatch, tmp_path):
     path = tmp_path / "plan.json"
     path.write_text(plan.model_dump_json())

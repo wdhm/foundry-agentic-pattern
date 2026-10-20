@@ -2,7 +2,7 @@
   "scenario": "order-sync-retry",
   "description": "Demo PR #62 changes the Order Sync retry policy and adds an ERP timeout and a dead-letter queue. The wiki page /Order Sync/Overview documents none of it.",
   "agent": "doc-agent",
-  "prompt": "Pull request 62 in wdhm/foundry-agentic-pattern changes the Order Sync integration. Read the PR diff on GitHub, compare it with the Azure DevOps wiki page /Order Sync/Overview and the documentation standard, and list what the documentation is missing. Cite evidence (source, path, version).",
+  "prompt": "Pull request 62 in wdhm/foundry-agentic-pattern changes the Order Sync integration. Read the changed files at the requested commit on GitHub, compare what they implement with the Azure DevOps wiki page /Order Sync/Overview and the documentation standard, and list what the documentation is missing. Cite evidence (source, path, version).",
   "subject": {
     "repo": "wdhm/foundry-agentic-pattern",
     "pr_reference": "https://github.com/wdhm/foundry-agentic-pattern/pull/62",

@@ -11,6 +11,9 @@ The request.task object, when present, carries the caller's assessment intent:
   Do not add a Change log proposal unless task.question explicitly asks for one.
   An unknown change-log/release date is not a blocker to identifying documentation
   drift. Neither are unrelated ownership, security, monitoring or production details.
+  Facts only needed to write a complete page (for example schedule, frequency or
+  whether configured values are defaults) are not material to a change_review;
+  mark them "to be confirmed" in proposed content, not in missing_information.
   If the question explicitly asks for such information, report unsupported facts
   honestly rather than inventing them.
 - information_review: answer the specific information requested by task.question.

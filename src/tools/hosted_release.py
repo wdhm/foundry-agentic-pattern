@@ -18,6 +18,9 @@ from tools.hosted_evaluation import evaluation_request, invoke_evaluation
 from tools.release import FoundryEvaluation, ReleasePlan, gate, require_pin, save
 from tools.release_sources import load_cases
 
+# Foundry derives these from the version's toolbox wiring and drops caller-supplied values on create.
+SERVICE_METADATA = frozenset({"toolbox_name", "toolbox_version", "toolsetid"})
+
 
 class ServingPathProof(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
@@ -148,7 +151,7 @@ def prepare_candidate(cloud: FoundryHostedRelease, plan: HostedReleasePlan, depl
         if key not in runtime_keys
     }:
         raise ValueError("Hosted non-runtime environment settings must stay inherited.")
-    metadata = base.get("metadata") or {}
+    metadata = {key: value for key, value in (base.get("metadata") or {}).items() if key not in SERVICE_METADATA}
     model = plan.artifact.runtime_provenance.model
     if cloud.model_version(model) != plan.model_version or cloud.model_version(deployment) != plan.eval_model_version:
         raise ValueError("Hosted/evaluator model version differs from reviewed deployment evidence.")
@@ -179,7 +182,10 @@ def prepare_candidate(cloud: FoundryHostedRelease, plan: HostedReleasePlan, depl
     ):
         raise ValueError("Hosted create returned an invalid candidate identity.")
     candidate = cloud.await_candidate(plan, version, output)
-    if candidate["definition"] != plan.candidate_definition or (candidate.get("metadata") or {}) != metadata:
+    candidate_metadata = {
+        key: value for key, value in (candidate.get("metadata") or {}).items() if key not in SERVICE_METADATA
+    }
+    if candidate["definition"] != plan.candidate_definition or candidate_metadata != metadata:
         raise ValueError("Hosted candidate definition/metadata differs from reviewed immutable inputs.")
     require_pin(cloud.agent(plan.agent_name), plan)
     return version
