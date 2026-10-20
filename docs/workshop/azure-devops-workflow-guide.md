@@ -50,16 +50,63 @@ Returned resource identity is verified before recording evidence. Git evidence
 uses the returned Azure DevOps file URI and the full commit SHA, not a fabricated
 GitHub link. Both assessment and observed-record evaluation use the same guard.
 
-## Gates before a hosted run
+## Hosted rollout record (2026-10-20)
 
-Read-only live inventory during this change found the shared endpoint already
+The user authorized the coordinated source rollout and exactly one read-only
+assessment, preserving the serving approval endpoint and Teams publication.
+After Rickard's reported admin update, Graph readback verified the existing
+Principal-specific agent-user consent includes `repos.read` while retaining
+`Ado.Mcp.Tools wit.read wiki.read wiki.write`, the same client and linked user.
+
+| Surface | Verified result |
+|---|---|
+| Gateway | Revision `ca-doc-agent-mcp--0000007`, healthy; toolsets `wit,wiki,repos`; existing identity and `ADO_MCP_READONLY=false` preserved for approval consumers |
+| Read toolbox | New immutable `documentation-agent-readonly:2` adds only `repo_file`; original version 1 and default version 1 unchanged |
+| Assessment | Non-serving `documentation-agent:11`, active; managed identity, assessment-only mode, organization opt-in, pinned read toolbox 2; no approval/evaluation enable flags |
+| Source/build | Commit `ad0339aae053a9a31eed00efe8f7be6c63e27fd0`; ACR quick build `dtb` |
+| Image | `acrfoundryagenticr8n3ld.azurecr.io/documentation-agent@sha256:aaf2b91689635c37dc1824f70e1283594da0c0e50ee41e31da88e7380c43a21c` |
+| Serving | Approval version 8 at 100%; Activity/Responses, authorization and publication configuration unchanged; retained evaluation version 10 not modified |
+
+The single fresh-session assessment returned a schema-valid `gaps_found` draft
+with the expected runtime provenance, commit-pinned Azure Repos evidence for
+both source files, and the wiki ETag
+`d897eaf7cd02c4da6bd70df5cae951ba6790df9f`. No operator token was substituted
+for agent-user source access. This is diagnostic evidence, **not a passing
+end-to-end acceptance result**: the GET-confirmed session binding was version
+11, but the outer response identified version 8. The invocation guard rejected
+that disagreement. No second assessment or serving/publishing change was made.
+Test-session compute was stopped afterward; session metadata was retained for
+the routing investigation.
+
+Correlation for P2's routing investigation:
+
+- Session: `033e860e9af9097000nkQp9sRykTYpqD8irejEnOl23kGWOg1T`.
+- Response: `caresp_0fdabeea6d8ae11300V6C440co2CKg2F9Kid4oQkcDOj1OOlMZ`.
+- Request: `644e656c-1d2c-4a23-b23d-b497d5c936d5`;
+  correlation: `79435ea8-a744-4717-83a2-e4037aab4cd5`.
+
+The unpublished draft proposes documenting mapping, configuration and retry
+behavior. Its wording about queue-triggered handling still needs human review:
+the sample declares a queue configuration but does not implement a Service Bus
+listener. Do not treat the draft as proof of a running integration or publish
+it unchanged. No wiki edit, Teams message or automatic event was sent.
+
+P2 must resolve supported version-specific Responses routing before candidate
+certification can proceed. Do not weaken the version guard or move serving v8
+merely to obtain matching metadata; any additional model assessment needs fresh
+authorization. No paid evaluation or generated evaluation suite was run.
+
+## Rollout gates
+
+Initial read-only live inventory during this change found the shared endpoint already
 serving approval version 8 at 100%, with Activity/Responses protocols,
 BotServiceTenant authorization and publication marked approved. This is ahead
 of the dated main-branch v7 record, not proof of successful Teams delivery.
-Gateway revision 6 still restricts upstream toolsets to `wit,wiki`. The
+Gateway revision 6 then restricted upstream toolsets to `wit,wiki`. The
 Microsoft Azure DevOps MCP resource declares the enabled delegated read scope
 `repos.read`; `repos.write` and `repos.manage` are not needed for assessment.
-No shared configuration was changed by this inventory.
+No shared configuration was changed by that initial inventory; the separately
+authorized rollout above records the subsequent changes.
 
 1. Coordinate with P1/P2 before changing the shared gateway or serving agent.
    Inspect the current hosted identity, gateway toolsets and delegated consent.

@@ -103,7 +103,13 @@ exact exposed names:
 | `ado___wiki` | `action=get_page`, configured project/wiki, requested page path |
 | `ado___wit_work_item` | `action=get`, configured project, requested integer work-item ID |
 
-### Azure Repos source support (opt-in, not deployed)
+### Azure Repos source support (opt-in)
+
+On 2026-10-20 this support was deployed as non-serving assessment version 11
+with read toolbox version 2. The single smoke test returned pinned repository
+and wiki evidence, but failed session/outer version agreement (11 versus 8).
+It is **not a certified hosted integration**; the serving approval endpoint
+remains on version 8. See the [rollout record](../../../docs/workshop/azure-devops-workflow-guide.md#hosted-rollout-record-2026-10-20).
 
 Set `DOCUMENTATION_ADO_ORGANIZATION` only after reviewing a new read-toolbox
 version that adds `ado___repo_file`. Existing configurations retain exactly the
