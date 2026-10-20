@@ -556,10 +556,11 @@ The step-by-step guide with Microsoft Learn references is [docs/workshop/agent-i
 |---|---|---|
 | Chat model deployment | `gpt-6-luna` | In `foundry-agentic-R8N3LD` |
 | Prompt agent | `doc-agent` (tools `knowledge`, `github`, `ado`) | Agent identity: `foundry-agentic-R8N3LD-proj-agentic-doc-agent-AgentIdentity` |
-| Hosted agent | `documentation-agent` (serving 6; unpromoted candidate 7; assessment mode) | Last recorded 2026-10-19. Agent identity: `foundry-agentic-R8N3LD-proj-agentic-documentation-agent-AgentIdentity`. **The gateway points at this agent** (read-only). Foundry User on the project, Monitoring Metrics Publisher on App Insights |
+| Hosted agent | `documentation-agent` (assessment versions 6/7; approval candidate 8, never served) | Serving recorded in [Recorded hosted serving](#recorded-hosted-serving-and-candidate-state-2026-10-19); v8 added 2026-10-20 ([approval write path](#approval-write-path-p2-2026-10-20)). Agent identity: `foundry-agentic-R8N3LD-proj-agentic-documentation-agent-AgentIdentity`. **The gateway points at this agent** (read + write since 2026-10-20). Foundry User on the project, Monitoring Metrics Publisher on App Insights |
 | Toolbox | `documentation-agent-readonly` (version 1) | Four read tools over `kb-doc-agent-mcp`, `github-mcp`, `ado-mcp-proxy` ([`setup-toolbox.ps1`](../infra/scripts/setup-toolbox.ps1)) |
-| Agent user (hosted) | `documentation-agent@M365CPI54615665.onmicrosoft.com` | Linked to the hosted agent identity. Azure DevOps **Stakeholder** + `[integration-team]\Readers` |
-| Consent grant (hosted) | Hosted agent identity → **Azure DevOps MCP**, consentType `Principal` | Scopes `Ado.Mcp.Tools wit.read wiki.read` (no `wiki.write`) |
+| Toolbox (write) | `documentation-agent-write` (version 1) | Only `ado___wiki_upsert_page` over `ado-mcp-proxy` (`setup-toolbox.ps1 -Write`). Used only by the approval runtime |
+| Agent user (hosted) | `documentation-agent@M365CPI54615665.onmicrosoft.com` | Linked to the hosted agent identity. Azure DevOps **Basic** + `[integration-team]\Contributors` (Readers membership kept). Stakeholder + Readers until 2026-10-20 |
+| Consent grant (hosted) | Hosted agent identity → **Azure DevOps MCP**, consentType `Principal` | Scopes `Ado.Mcp.Tools wit.read wiki.read wiki.write` (`wiki.write` added 2026-10-20) |
 | Agent user | `doc-agent@M365CPI54615665.onmicrosoft.com` | Linked to the agent identity. Azure DevOps **Basic** + `[integration-team]\Contributors`. Kept for rollback |
 | Consent grant | Agent identity → **Azure DevOps MCP** (`2a72489c-…`), consentType `Principal` (agent user) | Scopes `Ado.Mcp.Tools wit.read wiki.read wiki.write`. We created the Azure DevOps MCP service principal in the tenant. |
 | User-assigned MI | `id-doc-agent-mcp` | Federated credential on both agents' **blueprints** (`mcp-server-uami` on `doc-agent`, `ado-mcp-gateway` on `documentation-agent`); AcrPull on the ACR |
@@ -573,8 +574,11 @@ To onboard another agent, use the reviewed procedure in
 [`onboard-agent.ps1`](../infra/scripts/onboard-agent.ps1)
 ([guide](workshop/agent-identity-guide.md#onboard-another-agent-automated)).
 The gateway serves one agent at a time. It points at hosted `documentation-agent`
-with read-only access (`MCP_REQUIRED_ROLE=Mcp.Tools.Read.All`,
-`ADO_MCP_READONLY=true`), so `doc-agent`'s `ado` tool returns `403`.
+(`MCP_REQUIRED_ROLE=Mcp.Tools.Read.All`), so `doc-agent`'s `ado` tool returns `403`.
+Since 2026-10-20 (revision `--0000006`) the gateway runs with
+`ADO_MCP_READONLY=false`: it is **no longer read-only**. Which tools an agent can
+call is limited by the toolbox allowlist, and writes go only through the approval
+runtime (see [Approval write path](#approval-write-path-p2-2026-10-20)).
 Repointing it to the prompt agent is a separate identity/gateway migration,
 **not agent-version rollback**; do not rerun onboarding as a release step.
 
@@ -639,7 +643,7 @@ runtime allows:
 |---|---|
 | `knowledge___knowledge_base_retrieve` | `kb-doc-agent-mcp` (Foundry IQ) |
 | `github___get_file_contents` | `github-mcp` (GitHub read-only MCP) |
-| `ado___wiki`, `ado___wit_work_item` | `ado-mcp-proxy` (gateway, read-only, agent user `documentation-agent@…`) |
+| `ado___wiki`, `ado___wit_work_item` | `ado-mcp-proxy` (gateway, agent user `documentation-agent@…`; read tools only in this toolbox) |
 
 Endpoint (pinned to the version):
 `{project-endpoint}/toolboxes/documentation-agent-readonly/versions/1/mcp?api-version=v1`.
@@ -727,6 +731,42 @@ See the [walkthrough](workshop/hosted-approval-spike.md). No Azure resource,
 toolbox, connection, gateway, deployed agent or Teams application was changed.
 Live Toolbox integration and Teams publishing/channel verification remain pending.
 
+### Approval write path (P2; 2026-10-20)
+
+To keep it simple, the room chose (Rickard, Louise P3) to use the **same** hosted agent,
+agent identity, agent user, gateway and connection for writes. No new agent,
+gateway or connection was created.
+
+| Step | Before | After |
+|---|---|---|
+| Agent user `documentation-agent@…` | Stakeholder + Readers | **Basic** + `[integration-team]\Contributors` (`onboard-agent.ps1 -AgentName documentation-agent -GatewayRole Mcp.Tools.Read.All`; the script now upgrades an existing user) |
+| Delegated grant | `Ado.Mcp.Tools wit.read wiki.read` | + `wiki.write` |
+| Gateway `ca-doc-agent-mcp` | `--0000005`, `ADO_MCP_READONLY=true` | `--0000006`, `ADO_MCP_READONLY=false`; role `Mcp.Tools.Read.All` and toolsets `wit,wiki` unchanged |
+| Toolbox | `documentation-agent-readonly:1` (4 read tools, unchanged) | + `documentation-agent-write:1` with only `ado___wiki_upsert_page` (`setup-toolbox.ps1 -Write`) |
+| Wiki | — | Operator-created parent page `/Workshop` (ADO rejects child pages without an ancestor: `WikiAncestorPageNotFoundException`) |
+| Hosted agent | v7 serving (assessment) | + **v8** = v7 definition, image `documentation-agent@sha256:2093e80bea3bf6a4222b9e9982aabaefdc0b4986ae15181ec2edcbd58c9ebe65` (tag `approval-p2-sandbox`), `DOCUMENTATION_MODE=approval`, `DOCUMENTATION_ENABLE_APPROVAL=true`, `DOCUMENTATION_APPROVAL_POLICY=/app/approval/sandbox-policy.json`. **Not served**; the version selector was not changed |
+
+The policy ([`sandbox-policy.json`](../src/agents/documentation-agent/approval/sandbox-policy.json))
+is packaged in the image. It fixes the target `integration-team.wiki` `/Workshop/Approval-Sandbox`
+(`wikiMaster`) and lets callers supply only `content`. The tool replaces the whole page;
+`etag` is not set, so the server fetches the current one (last writer wins; see #21).
+
+**Hosted E2E (2026-10-20, version-specific sessions on v8):**
+
+| Step | Response ID | Result |
+|---|---|---|
+| Propose (session `045c4db1…`) | `caresp_03c6c09aee19557100Lf5qYj5Q4ZR1JezjoN3qGcB5MpbhkHD5` | `mcp_approval_request`; page still 404 |
+| Reject | `caresp_03c6c09aee19557100oDOnUJnTuIJVlKJ0ROREfOmOO6q7aKsD` | `rejected`; page still 404, no `tools/call` |
+| Propose (session `020c3517…`) | `caresp_08c13add1e3aaa9400YaFnA5v1C9lI1tUZ3Hmf1xGkdmbdTf0F` | `mcp_approval_request`; page still 404 |
+| Approve | `caresp_08c13add1e3aaa9400iiJ2YkvBaRCEPRy1FOf6Gs9wZkVA7kaa` | `succeeded`; exactly one gateway `tools/call tool=wiki_upsert_page` (08:10:35Z) |
+
+Page readback: 404 before, then ETag `b0cf2b88b8fbc7bc9803da5d08b495ece77d8832` with the
+approved content. The wiki commit `ca622ad0cf` is authored by
+`documentation-agent@M365CPI54615665.onmicrosoft.com`. One earlier approval
+(`caresp_01e6a6a8d2846b5400vI3tQ5mRLFXzL816Wj0svlNP676E5wp0`, before `/Workshop`
+existed) ended `outcome_unknown` as designed. Reconciliation showed no write; the
+runtime logs do not include the tool's error text, which made the cause harder to find.
+
 ## Outputs (environment values)
 
 Store these in a local `.env` (git-ignored). Never commit secrets; prefer Entra ID auth over keys.
@@ -765,3 +805,4 @@ Store these in a local `.env` (git-ignored). Never commit secrets; prefer Entra 
 | 2026-10-14 | Rickard | Offboarded `doc-agent-spike`: Azure DevOps entitlement removed, agent user deleted, agent deleted (its identity and blueprint go with it). Agents in `proj-agentic`: `doc-agent`, `documentation-agent` |
 | 2026-10-16 | Rickard | Read-only gateway cutover to the hosted `documentation-agent` (P3 request, ADR 0024) with `onboard-agent.ps1 -ReadOnly`: agent user `documentation-agent@…` (Stakeholder + Readers), grant `Ado.Mcp.Tools wit.read wiki.read`, new app role `Mcp.Tools.Read.All`, gateway revision `--0000005` with `ADO_MCP_READONLY=true`. `doc-agent`'s grants are kept for rollback; its `ado` tool now gets `403`. Hosted runtime proof pending |
 | 2026-10-16 | Rickard | Read-only toolbox `documentation-agent-readonly:1` (`setup-toolbox.ps1`); hosted identity granted Foundry User and Monitoring Metrics Publisher, project MI granted AcrPull. Deployed `documentation-agent:6` in assessment mode; end-to-end assessment passed through the toolbox and gateway. Fixed the Dockerfile, the ADO `project` instruction and GitHub resource parsing. Deleted versions 3–5 |
+| 2026-10-20 | Rickard | [Approval write path](#approval-write-path-p2-2026-10-20) (room decision, P3 approved): `documentation-agent@…` → Basic + Contributors, grant + `wiki.write`, gateway `--0000005` → `--0000006` with `ADO_MCP_READONLY=false`, toolbox `documentation-agent-write:1` (`wiki_upsert_page` only), parent page `/Workshop`, unserved approval version `documentation-agent:8`. Hosted propose/reject/approve proven against `/Workshop/Approval-Sandbox`; selector untouched (v7) |

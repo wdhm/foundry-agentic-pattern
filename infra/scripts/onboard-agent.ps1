@@ -135,10 +135,33 @@ $adoToken = Get-Token $AdoResource
 $entitlementsUri = "https://vsaex.dev.azure.com/$AdoOrg/_apis/userentitlements"
 $existing = (Invoke-Api GET "${entitlementsUri}?`$filter=name eq '$upn'&api-version=7.1-preview.3" $adoToken).members |
     Where-Object { $_.user.principalName -eq $upn }
+$project = Invoke-Api GET "https://dev.azure.com/$AdoOrg/_apis/projects/${AdoProject}?api-version=7.1" $adoToken
 if ($existing) {
-    Done "exists: access level $($existing.accessLevel.accountLicenseType)"
+    # Upgrade an existing agent user (e.g. read-only -> write); never downgrade or remove groups here.
+    $entitlement = Invoke-Api GET "${entitlementsUri}/$($existing.id)?api-version=7.1-preview.3" $adoToken
+    if (-not $ReadOnly -and $existing.accessLevel.accountLicenseType -ne $AdoAccess.License) {
+        $patch = @(@{ op = 'replace'; path = '/accessLevel'
+                      value = @{ accountLicenseType = $AdoAccess.License; licensingSource = 'account' } })
+        $result = Invoke-RestMethod -Method Patch "${entitlementsUri}/$($existing.id)?api-version=7.1-preview.3" `
+            -Headers @{ Authorization = "Bearer $adoToken" } -ContentType 'application/json-patch+json' `
+            -Body (ConvertTo-Json -InputObject $patch -Depth 10)
+        if (-not $result.isSuccess) { throw "Azure DevOps: $($result.operationResults.errors | ConvertTo-Json -Compress)" }
+        Done "access level $($AdoAccess.License)"
+    }
+    if (-not ($entitlement.projectEntitlements | Where-Object {
+            $_.projectRef.id -eq $project.id -and $_.group.groupType -eq $AdoAccess.Group })) {
+        # userentitlements cannot add project groups to an existing user; use a Graph membership instead.
+        $vssps = "https://vssps.dev.azure.com/$AdoOrg/_apis/graph"
+        $scope = (Invoke-Api GET "$vssps/descriptors/$($project.id)?api-version=7.1-preview.1" $adoToken).value
+        $groupName = @{ projectContributor = 'Contributors'; projectReader = 'Readers' }[$AdoAccess.Group]
+        $group = (Invoke-Api GET "$vssps/groups?scopeDescriptor=$scope&api-version=7.1-preview.1" $adoToken).value |
+            Where-Object displayName -eq $groupName
+        $subject = (Invoke-Api GET "$vssps/descriptors/$($existing.id)?api-version=7.1-preview.1" $adoToken).value
+        Invoke-Api PUT "$vssps/memberships/$subject/$($group.descriptor)?api-version=7.1-preview.1" $adoToken | Out-Null
+        Done "added to [$AdoProject]\$groupName"
+    }
+    Done "access level $($AdoAccess.Label) in $AdoProject"
 } else {
-    $project = Invoke-Api GET "https://dev.azure.com/$AdoOrg/_apis/projects/${AdoProject}?api-version=7.1" $adoToken
     Invoke-WithRetry {
         $result = Invoke-Api POST "${entitlementsUri}?api-version=7.1-preview.3" $adoToken @{
             accessLevel         = @{ accountLicenseType = $AdoAccess.License }
