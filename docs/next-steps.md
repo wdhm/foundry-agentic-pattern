@@ -17,7 +17,7 @@ In the workshop, each topic is presented **on slides only**, at the end of its o
 
 ## 1. Agent-to-Agent (A2A): separate Publisher agent
 
-**MVP design:** one agent analyses the change and, after approval, writes to the wiki through an approval-gated tool ([ADR 0007](adr/0007-single-agent-in-v1.md)). The deployed hosted assessment is read-only. Selected-proposal approval is implemented and tested locally; live hosted wiki writes and Teams acceptance remain open.
+**MVP design:** one agent analyses the change and, after approval, writes to the wiki through an approval-gated tool ([ADR 0007](adr/0007-single-agent-in-v1.md)). The deployed hosted assessment is read-only. Selected-proposal approval is implemented and tested locally. A live hosted wiki write after explicit approval was proven on an unserved version against a disposable page ([setup](setup.md#approval-write-path-p2-2026-10-20)). Teams acceptance remains open.
 
 **Next:** split the work into
 - an **Analyst agent** (read-only identity) that produces the `AgentResult`, and
@@ -86,8 +86,8 @@ The workshop builds an MVP that shows the platform ([ADR 0022](adr/0022-mvp-scop
 
 | Item | Why it matters | Lane |
 |---|---|---|
-| Least-privilege publisher access and a role-based access matrix per source | The deployed assessment already uses Stakeholder + Readers and read-only consent; any future publisher needs separately reviewed write access | P2 ([#22](https://github.com/wdhm/foundry-agentic-pattern/issues/22)) |
-| Run id + approver in the wiki commit message, and ETag optimistic concurrency on wiki writes | Stronger audit trail, no lost updates | P2 ([#21](https://github.com/wdhm/foundry-agentic-pattern/issues/21)) |
+| Least-privilege publisher access and a role-based access matrix per source | **Security debt (2026-10-20):** for simplicity, the approval write path reuses the hosted agent user (now Basic + Contributors, grant with `wiki.write`). The gateway `ca-doc-agent-mcp` is **no longer read-only** (`ADO_MCP_READONLY=false`). Protection now relies on the toolbox allowlist (`documentation-agent-readonly` for assessment, `documentation-agent-write` with only `wiki_upsert_page`) plus the approval runtime, not on identity. Restore separation with a separate write identity/agent user/gateway or a second app role, restrict Contributors to the wiki repo, and remove `doc-agent`'s unused ReadWrite grants ([setup](setup.md#approval-write-path-p2-2026-10-20)) | P2 ([#22](https://github.com/wdhm/foundry-agentic-pattern/issues/22)) |
+| Run id + approver in the wiki commit message, and ETag optimistic concurrency on wiki writes | Stronger audit trail, no lost updates. `wiki_upsert_page` has an optional `etag` (not set today, so last writer wins) and no commit-message parameter, so the run id/approver must come from the gateway or a different tool | P2 ([#21](https://github.com/wdhm/foundry-agentic-pattern/issues/21)) |
 | Azure Repos as an additional code source | Same pattern as GitHub, via the Azure DevOps MCP server | P2 ([#44](https://github.com/wdhm/foundry-agentic-pattern/issues/44)) |
 | Multi-agent identity gateway (agent identity → agent user map), private ingress, logs in Log Analytics | Serve many agents from one gateway; no public endpoint | P2 ([ADR 0021](adr/0021-agent-user-and-ado-mcp-gateway.md)) |
 | Foundry IQ at scale: ADRs and wiki discovery in the knowledge base, a Blob or SharePoint knowledge source with scheduled ingestion, query planning (`low`/`medium` effort), private networking and query-time permissions | More sources and harder questions; the MVP indexes only the documentation standard ([guide](workshop/foundry-iq-guide.md#production-notes-slides)) | P2 ([#19](https://github.com/wdhm/foundry-agentic-pattern/issues/19)) |

@@ -3,6 +3,7 @@ import json
 from contextlib import asynccontextmanager
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
@@ -854,3 +855,32 @@ def test_result_to_native_approval_through_real_local_mcp_transport(policy, resu
                     raise
 
     asyncio.run(run())
+
+
+SANDBOX_POLICY = Path(__file__).resolve().parents[2] / "src/agents/documentation-agent/approval/sandbox-policy.json"
+
+# Live schema of the remote ADO MCP wiki write tool (AzureDevOps.Mcp 1.0.0.0, tools/list, X-MCP-Toolsets: wiki).
+WIKI_UPSERT_PAGE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "wikiIdentifier": {"type": "string"},
+        "path": {"type": "string"},
+        "content": {"type": "string"},
+        "project": {"type": "string"},
+        "etag": {"type": ["string", "null"], "default": None},
+        "branch": {"type": "string", "default": "wikiMaster"},
+    },
+    "required": ["wikiIdentifier", "path", "content", "project"],
+}
+
+
+def test_packaged_sandbox_policy_targets_only_the_disposable_page(monkeypatch):
+    monkeypatch.setenv("DOCUMENTATION_APPROVAL_POLICY", str(SANDBOX_POLICY))
+    loaded = ToolApprovalPolicy.from_environment()
+
+    assert loaded.tool_name == "ado___wiki_upsert_page"
+    assert "/toolboxes/documentation-agent-write/versions/1/mcp" in loaded.toolbox_endpoint
+    assert loaded.fixed_arguments["path"] == "/Workshop/Approval-Sandbox"
+    assert loaded.auth_mode == "managed_identity"
+    assert "etag" not in loaded.fixed_arguments
+    Draft202012Validator(WIKI_UPSERT_PAGE_SCHEMA).validate(loaded.arguments("Sandbox text."))

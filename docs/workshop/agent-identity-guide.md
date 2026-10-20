@@ -243,6 +243,8 @@ How we verified it (2026-10-08):
 
 Each layer denies writes on its own. Don't fix a read failure by upgrading the license or adding Contributors: that defeats the read-only design.
 
+**Current state (2026-10-20):** for the approval write path, the hosted `documentation-agent` was re-onboarded **without** `-ReadOnly` but with `-GatewayRole Mcp.Tools.Read.All`. The script now upgrades an existing user to Basic + Contributors. The gateway therefore allows writes; the toolbox allowlist and the approval runtime now limit them ([setup](../setup.md#approval-write-path-p2-2026-10-20)).
+
 **Roll back** to the prompt agent: run `onboard-agent.ps1 -AgentName doc-agent` (without `-ReadOnly`). Every step reports "exists" and step 7 restores the prompt agent's identity, the ReadWrite role and `ADO_MCP_READONLY=false`. The hosted agent's grants stay in place, so you can switch back the same way.
 
 ## Agent identity lifecycle

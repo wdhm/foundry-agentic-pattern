@@ -237,10 +237,34 @@ decisions. Unit tests additionally cover tampering, expiry, schema/policy drift,
 storage failures, cancellation and uncertain outcomes. This is runtime integration
 evidence, not proof of Azure identity, the P2 wiki tool or Teams publication.
 
-**P2:** agree a separate write-capable identity/Toolbox path and disposable page;
-provide the exact tool name, input schema, fixed target arguments, any ETag
-requirement and approval configuration. Earlier prompt-agent write permissions
-are not proof of hosted access. Preserve the existing read-only gateway path.
+**P2 (delivered 2026-10-20):** the room chose the simplest path rather than a separate
+write identity. Writes reuse the hosted agent identity, the agent user
+`documentation-agent@…` (now Basic + Contributors, grant + `wiki.write`) and the
+gateway `ca-doc-agent-mcp` (revision `--0000006`, `ADO_MCP_READONLY=false`). The
+assessment path still sees only the read tools of `documentation-agent-readonly:1`.
+Writes are limited by a dedicated toolbox allowlist plus this runtime:
+
+- Toolbox: `documentation-agent-write`, version 1, exposing only `ado___wiki_upsert_page`
+  (`infra/scripts/setup-toolbox.ps1 -Write`).
+- Tool: remote ADO MCP `wiki_upsert_page` (`AzureDevOps.Mcp` 1.0.0.0, `X-MCP-Toolsets: wiki`).
+  Required `wikiIdentifier`, `path`, `content`, `project`; optional `etag`
+  (`string|null`, default `null`) and `branch` (default `wikiMaster`).
+  It creates or replaces the **whole page**; it has no section or commit-message parameter.
+  With no `etag`, the server reads the current one, so concurrent edits are last-writer-wins (#21).
+  Use `propose`, not `propose_result` (the tool is not section-aware).
+- Policy: [`approval/sandbox-policy.json`](approval/sandbox-policy.json), packaged at
+  `/app/approval/sandbox-policy.json`. Fixed `project=integration-team`,
+  `wikiIdentifier=integration-team.wiki`, `path=/Workshop/Approval-Sandbox`,
+  `branch=wikiMaster`; `content_parameter=content`; `managed_identity`.
+- The parent page must already exist (`/Workshop` was created by an operator). Otherwise
+  ADO returns `WikiAncestorPageNotFoundException`, the tool returns `isError`, and the
+  record becomes `outcome_unknown`. The runtime logs do not include the tool's error
+  text; P1 follow-up.
+- Live proof on unserved version `documentation-agent:8`: propose and reject made no
+  `tools/call`; approve made exactly one, and the page read back with the approved content.
+  Response IDs and ETag are in [setup.md](../../../docs/setup.md#approval-write-path-p2-2026-10-20).
+
+Earlier prompt-agent write permissions are not proof of hosted access.
 
 **P3:** coordinate candidate deployment without changing assessment serving;
 verify platform user/session context and remote Foundry state access and durability.
