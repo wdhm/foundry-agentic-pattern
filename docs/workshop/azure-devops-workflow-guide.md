@@ -114,6 +114,14 @@ not a serving promotion or Teams-delivery proof. No further deployment or
 model request was made during this investigation. Coordinate with the current
 P1/P2 writers before any maintenance-window test; do not overwrite their work.
 
+A further read-only attempt to correlate the original response in
+`appi-foundry-agentic` was denied with `InsufficientAccessError` for the P3
+project account. The version-specific session-log endpoint responded, but did
+not yield independently certified execution evidence. Neither diagnostic
+restarted the stopped session or invoked a model. A telemetry-authorized owner
+can investigate the original IDs above; do not grant new roles or change the
+serving route merely to bypass this boundary.
+
 ## Rollout gates
 
 Initial read-only live inventory during this change found the shared endpoint already
