@@ -103,10 +103,12 @@ application provenance. No cloud reproduction or platform resolution is claimed.
 
 This is a valid assessment smoke path when real P2 access is ready, not release
 certification: P1's nested tool traces are not in outer Responses. The full
-five-case gate remains blocked on **P3 adapter integration** of P1's separately
-opted-in evaluation interface, isolated configuration/evaluator mappings and
-trustworthy version evidence. Main's `contracts.evaluation` now supports supplied
-sources and observed execution records, but ordinary assessment remains unchanged.
+five-case gate uses the separately reviewed `tools.release` path, whose offline
+adapter now consumes canonical `contracts.evaluation` envelopes and observed
+execution records. Live evaluation still requires isolated configuration, a
+compatible reviewed evaluator and trustworthy matching session/outer version evidence.
+Missing outer reference blocks that evaluation path even though ordinary smoke
+can report weaker `session_get_only` evidence. Ordinary assessment remains unchanged.
 This CLI rejects evaluation/approval modes rather than silently enabling or
 interpreting their envelopes as AgentResult. No live evaluator result is claimed here.
 
