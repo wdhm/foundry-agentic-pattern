@@ -18,7 +18,7 @@ from contracts.v1 import assemble_result
 from tools.cli import analysis_from_response, selected_provenance
 from tools.release_sources import evaluator_item, load_cases, verify_sources
 
-METRICS = {"groundedness": (1, 5), "task_adherence": (0, 1), "tool_call_accuracy": (1, 5)}
+METRICS = {"groundedness": (1, 5), "task_adherence": (1, 5), "tool_call_accuracy": (1, 5)}
 
 
 class ReleasePlan(BaseModel):
