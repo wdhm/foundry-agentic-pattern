@@ -68,9 +68,13 @@ calls return `403`. Historical playground results are reference evidence only.
 
 ## 11:10–11:50 · P3 · AgentOps & platform · Louise
 
+Use the [40-minute P3 presenter guide](p3-presenter-guide.md) for slide order,
+recorded evidence, timing and hard stops. The chosen gateway delivery is the
+prepared explanatory fallback, not an unapproved live configuration/demo.
+
 | Time | Feature | F | Type | Content |
 |---|---|---|---|---|
-| 11:10–11:18 | AI Gateway (FinOps · tokenomics · limits) | – | Conditional demo or slides; preparation open | Built-in limits only if simple and separately approved; otherwise explain project/deployment limits versus per-agent cost attribution. No live cost/429 proof currently recorded |
+| 11:10–11:18 | AI Gateway (FinOps · tokenomics · limits) | – | [Prepared explanatory slides](slides/ai-gateway.md) | Distinguish service quota, project/deployment limits and per-agent cost attribution. No live cost/429 proof or configuration change |
 | 11:18–11:23 | Model deployments | – | Inventory walkthrough | Existing chat and IQ embeddings, configured version versus upgrade-policy pinning; evaluator/quota/cost decision remains open ([#49](https://github.com/wdhm/foundry-agentic-pattern/issues/49)) |
 | 11:23–11:33 | Evals & observability | F6 | Available evidence + pending showcase | Five pinned cases, verified hosted result and native prompt/hosted model/tool spans. Show the recorded native correlation; label the full hosted good/bad gate pending |
 | 11:33–11:43 | Versioning & CI/CD | F7 | CLI/workflow walkthrough; rollback pending | Manual setup, hosted CLI, offline/manual GitHub Action and serving-pin safeguards. Do not present `azd up`, promotion or timed rollback as completed |
@@ -90,6 +94,7 @@ How to fork the repo, swap in your own sources and documentation standard, and p
 - [ ] Demonstrate the full five-case good/bad evaluation gate, or clearly label the unverified showcase
 - [ ] Demonstrate real approved wiki write and Teams delivery with P1/P2; keep assessment read-only
 - [ ] Obtain separate routing approval and demonstrate timed rollback with new named-path sessions; two deployed versions or a pin alone do not pass
-- [ ] Finish AI Gateway demo/slides disposition and P3 presentation content; assemble/review shared deck
+- [x] P3 primary evidence content, AI Gateway explanatory fallback and 40-minute presenter run order prepared; four existing next-step slides retained
+- [ ] Assemble the source slides into the shared deck and review story, visual layout, evidence dates and captures with all presenters
 - [ ] Run the 09:00-12:00 agenda with all presenters, record timings and fix issues found ([#40](https://github.com/wdhm/foundry-agentic-pattern/issues/40))
 - [ ] Record a reviewed fictional-data backup and its location; no credentials or unrestricted source-bearing responses

@@ -23,6 +23,10 @@ Live acceptance still requires reviewed isolated configuration,
 an approved evaluator and thresholds, matching candidate-version evidence and
 separate execution approval. No live-evaluation claim follows from offline tests.
 
+P3's [40-minute presenter guide](docs/workshop/p3-presenter-guide.md) links the
+prepared evidence slides and AI Gateway explanatory fallback. Shared-deck
+assembly, presenter review, rehearsal and backup recording remain outstanding.
+
 ---
 
 ## What and why
@@ -122,7 +126,7 @@ Features are grouped into three swimlanes, each with one owner: **P1** Agent arc
 | P2 | **F1** | **Toolbox** | MCP / REST tools for GitHub and Azure DevOps (wiki, work items, Azure Repos), for versioned/volatile data | [0011](docs/adr/0011-knowledge-foundry-iq-and-toolbox.md) |
 | P2 | – | **Identities & resource org** | Entra Agent ID with least privilege per source. The approver is recorded. | [0012](docs/adr/0012-agent-identity-and-rbac.md) |
 | P2 | **F8** | **Mock data** | Fictional sample integration, wiki, work items, ADRs and doc standard, with planted gaps and ground truth | [0005](docs/adr/0005-generic-repo-with-fictional-data.md) |
-| P3 | – | **AI Gateway / FinOps** | Built-in limits only if simple; otherwise slides. No live limit/cost proof. Full APIM attribution is deferred. | [0014](docs/adr/0014-infrastructure-scope.md), [0022](docs/adr/0022-mvp-scope-platform-first.md) |
+| P3 | – | **AI Gateway / FinOps** | [Explanatory slides](docs/workshop/slides/ai-gateway.md) prepared as the accepted fallback. No live limit/cost proof. Full APIM attribution is deferred. | [0014](docs/adr/0014-infrastructure-scope.md), [0022](docs/adr/0022-mvp-scope-platform-first.md) |
 | P3 | – | **Model deployments** | Existing chat and IQ embedding deployments documented; evaluator selection/deployment, chat upgrade-policy pinning and quota review remain open. | [0014](docs/adr/0014-infrastructure-scope.md) |
 | P3 | **F6** | **Evals & observability** | Five pinned cases and native monitoring exist. Prompt and hosted model/tool tracing are proven; the built-in hosted evaluation gate remains open. | [0013](docs/adr/0013-evaluation-gate-in-ci.md), [0022](docs/adr/0022-mvp-scope-platform-first.md) |
 | P3 | **F7** | **Versioning & CI/CD** | Manual-only hosted workflow, release safeguards and offline evaluation integration are merged; live acceptance remains outstanding. Serving pin is recorded; promotion/rollback are manual and unverified end to end. No canary support claimed. | [0003](docs/adr/0003-github-for-code-and-cicd.md), [0013](docs/adr/0013-evaluation-gate-in-ci.md) |

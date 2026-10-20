@@ -103,9 +103,11 @@ historical snapshots and approval boundaries.
 <a id="r4"></a>
 ## R4: AI Gateway token limits and per-agent cost attribution
 
-**Status:** 🟡 Conditional demo or slides under accepted ADR 0022. No live
-token-limit/429 or per-agent cost proof is recorded. Built-in AI Gateway limits
-are optional if simple; full APIM FinOps attribution is future hardening.
+**Status:** 🟡 Explanatory slides chosen under accepted ADR 0022. The
+[two-slide fallback](workshop/slides/ai-gateway.md) and
+[presenter run order](workshop/p3-presenter-guide.md) are prepared. No live
+token-limit/429 or per-agent cost proof is recorded; full APIM FinOps
+attribution remains future hardening.
 
 **Findings**
 - AI Gateway token limits and quotas apply **per project + model deployment**, **not per agent**.
@@ -114,11 +116,12 @@ are optional if simple; full APIM FinOps attribution is future hardening.
 **Impact:** "budget per agent" cannot be enforced natively at the gateway.
 
 **Mitigation / design use**
-- Enforce limits per project/deployment.
-- **Cost per agent/version** is handled by a **FinOps pattern**: model calls are tagged (agent name, agent version, run ID) and token usage is aggregated from APIM logs and Application Insights.
+- Proposed enforcement is per project/deployment, not a demonstrated per-agent budget.
+- Proposed **cost per agent/version** uses a **FinOps pattern**: trusted agent/version/run correlation, layer-specific model usage and billing reconciliation. Native token observations are not a validated cost ledger or proof that calls traversed APIM.
 
-**Next disposition ([#3](https://github.com/wdhm/foundry-agentic-pattern/issues/3),
-[#23](https://github.com/wdhm/foundry-agentic-pattern/issues/23)):** explicitly
-choose a bounded built-in limits demonstration or complete dedicated slide
-coverage. The original tagged-call/cost-query spike is not proof of a built
-capability and does not authorize APIM provisioning or billable test calls.
+**Disposition ([#3](https://github.com/wdhm/foundry-agentic-pattern/issues/3),
+[#23](https://github.com/wdhm/foundry-agentic-pattern/issues/23)):** the accepted
+MVP uses dedicated slide coverage; the live limits/tagged-call/cost-query spike
+is deferred. Shared-deck assembly and presenter review remain open. Slide
+preparation is not proof of a built gateway capability and does not authorize
+APIM provisioning or billable test calls.
