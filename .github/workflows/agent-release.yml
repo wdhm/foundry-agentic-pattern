@@ -83,6 +83,32 @@ jobs:
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       - name: Guarded isolated hosted candidate evaluation; never promote
         run: python -m tools.release --plan "$PLAN_PATH" --output evals/results/release --execute-approved-cloud
+      - name: Publish gate decision and scores (no source content) to the job summary
+        if: always()
+        shell: python
+        run: |
+          import glob, json, os
+          from pathlib import Path
+          out = ["## Eval gate"]
+          d = Path("evals/results/release/decision.json")
+          if d.exists():
+              dec = json.loads(d.read_text(encoding="utf-8"))
+              out.append(f"**{dec.get('status')}** — candidate v{dec.get('candidate_version')}, "
+                         f"serving v{dec.get('serving_version')}, promoted={dec.get('promoted')}, "
+                         f"thresholds={dec.get('thresholds')}")
+          else:
+              out.append("No decision was written; see the step logs.")
+          rows = []
+          for f in sorted(glob.glob("evals/results/release/*-scores.json")):
+              for item in json.loads(Path(f).read_text(encoding="utf-8")):
+                  case = (item.get("datasource_item") or {}).get("case_id")
+                  res = {r.get("name"): r for r in item.get("results", [])}
+                  cell = lambda n: (f"{res[n].get('score')} {'✅' if res[n].get('passed') else '❌'}" if n in res else "–")
+                  rows.append(f"| {case} | {cell('groundedness')} | {cell('task_adherence')} | {cell('tool_call_accuracy')} |")
+          if rows:
+              out += ["", "| Case | Groundedness | Task adherence | Tool-call accuracy |", "|---|---|---|---|", *rows]
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as s:
+              s.write("\n".join(out) + "\n")
       - name: Retain restricted diagnostic artifacts, including blocked decisions
         if: always() && vars.P3_ARTIFACT_PUBLICATION_APPROVED == 'true'
         uses: actions/upload-artifact@v4
