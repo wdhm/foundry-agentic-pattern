@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "foundry-agentic-pattern"
-version = "0.5.0"
+version = "0.6.0"
 description = "Shared contracts for the Foundry agentic reference pattern"
 requires-python = ">=3.11"
 dependencies = ["pydantic>=2.12,<3"]
@@ -19,6 +19,7 @@ agent = [
   "agent-framework-core==1.19.0",
   "agent-framework-foundry==1.13.1",
   "agent-framework-foundry-hosting==1.0.0b260918",
+  "azure-ai-agentserver-activity==1.0.0b4",
 ]
 dev = [
   "httpx>=0.28,<1",
