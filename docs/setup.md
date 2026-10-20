@@ -107,7 +107,7 @@ separates that handoff from P3's own version-6 smoke.
 
 - [x] Resource group `rg-foundry-agentic-pattern` in Sweden Central
 - [x] **Foundry resource** `foundry-agentic-R8N3LD` + **Foundry project** `proj-agentic`
-- [ ] **Model deployments**: one **chat** model (agent) and one **eval** model (evaluators). Chat exists but is not pinned; separate eval deployment is absent. See the dated inventory and approval gates below.
+- [x] **Model deployments**: one **chat** model (agent) and one **eval** model (evaluators). On 2026-10-20 the chat deployment `gpt-6-luna` was pinned to `NoAutoUpgrade`, and the evaluator deployment `eval-gpt-5.4-mini` (`gpt-5.4-mini` `2026-03-17`, `GlobalStandard` 50K TPM, `NoAutoUpgrade`) was created. See the dated inventory below.
 - [x] **Log Analytics** + **Application Insights**, connected to the Foundry project; native prompt-agent trace ingestion verified 2026-10-16 (evidence below)
 - Deferred: **Cosmos DB** and containers ([ADR 0016](adr/0016-state-and-audit-cosmos-db.md)); target architecture, not the approved MVP
 - [x] Team access: tenant accounts for John, Rickard and Louise are Owner on the subscription (see the team accounts table)
@@ -143,6 +143,16 @@ are recorded in the native tracing section below.
 
 The embedding deployment serves Foundry IQ; it is **not** an evaluator chat
 model. Preserve it. A version value alone does not mean a deployment is pinned.
+
+**Update 2026-10-20 (P2, approved in the team session):**
+
+| Deployment | Model version | Type / capacity | Upgrade policy | Evidence |
+|---|---|---|---|---|
+| `gpt-6-luna` | `2026-09-22` | `GlobalStandard` / `500` (unchanged) | **`NoAutoUpgrade`** | ARM PUT `Succeeded` |
+| `eval-gpt-5.4-mini` | `2026-03-17` | `GlobalStandard` / `50` (50K TPM) | **`NoAutoUpgrade`** | ARM PUT `Succeeded`; a one-prompt smoke test returned model `gpt-5.4-mini-2026-03-17` |
+
+Use `EVAL_MODEL_DEPLOYMENT=eval-gpt-5.4-mini` for the evaluation gate. Cost is
+pay-per-token only; there is no reserved capacity.
 
 Regional subscription quota returned by `az cognitiveservices usage list`:
 
@@ -483,7 +493,7 @@ Do not mark the cloud setup complete until these outputs are supplied:
 | `FOUNDRY_PROJECT_ENDPOINT` | Existing endpoint in Outputs below |
 | Agent selector | Hosted `documentation-agent`; last recorded serving `6`, candidate `7`. Choose a reviewed concrete target with verified execution evidence; do not follow latest or substitute prompt-agent evidence |
 | `CHAT_MODEL_DEPLOYMENT` / model version | `gpt-6-luna` / `2026-09-22`; currently auto-upgrades, so record the observed version per eval run |
-| `EVAL_MODEL_DEPLOYMENT` / model version | **Unset** until model compatibility, quota, cost and deployment approval are resolved |
+| `EVAL_MODEL_DEPLOYMENT` / model version | `eval-gpt-5.4-mini` / `2026-03-17` (deployed 2026-10-20). Thresholds still need calibration (#25) |
 | Capacity evidence | Fresh regional quota + deployment rate limits; resolve chat `current=500`, `limit=250` discrepancy |
 | Tracing destination | `appi-foundry-agentic` / workspace `log-foundry-agentic`; project `AppInsights` / `ProjectManagedIdentity` connection and project-MI ingestion role verified |
 | Native trace proof | Prompt-agent spans and correlated hosted-v6 model/tool spans above; hosted model revision and layer-specific usage observed in telemetry. Portal UI not visually verified; candidate-7 proof and evaluation correctness remain separate |
@@ -802,7 +812,7 @@ Store these in a local `.env` (git-ignored). Never commit secrets; prefer Entra 
 | `AZURE_LOCATION` | `swedencentral` |
 | `FOUNDRY_PROJECT_ENDPOINT` | `https://foundry-agentic-r8n3ld.services.ai.azure.com/api/projects/proj-agentic` |
 | `CHAT_MODEL_DEPLOYMENT` | `gpt-6-luna` |
-| `EVAL_MODEL_DEPLOYMENT` | **Unset**: no separate eval deployment observed 2026-10-16; approval/quota decision pending |
+| `EVAL_MODEL_DEPLOYMENT` | `eval-gpt-5.4-mini` (deployed 2026-10-20, `NoAutoUpgrade`) |
 | `APPLICATIONINSIGHTS_CONNECTION_STRING` | **Not required for MVP native server-side tracing**; do not retrieve or commit it |
 | `COSMOS_ENDPOINT` | **Not required for MVP**; Cosmos DB deferred |
 | `AZURE_DEVOPS_ORG_URL` | `https://dev.azure.com/foundry-agentic` |
