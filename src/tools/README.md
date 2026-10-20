@@ -9,9 +9,13 @@ The primary P3 consumer is `documentation-trigger invoke` for hosted
 compatibility path. [`hosted.py`](hosted.py) validates the reviewed container
 digest/settings and actual P1 `AgentResult`, preserving application provenance
 separately from Foundry deployment/session versions.
-[`hosted_release.py`](hosted_release.py) provides offline preflight and mocked
-candidate/readiness primitives; the full hosted gate blocks on unintegrated P1
-opt-in evaluation transport/scorer and version evidence before any cloud action.
+[`hosted_evaluation.py`](hosted_evaluation.py) consumes P1's opt-in evaluation
+transport and correlates real model call IDs with guarded policy results and
+discovered schemas for built-in scoring. [`hosted_release.py`](hosted_release.py)
+provides local-only preflight and guarded candidate/evaluation execution, tested
+offline only. Evaluation requires reviewed isolated config, evaluator/task scopes,
+fresh pin/proof/writer hold and matching outer/session version evidence. An
+evaluation-mode version is never eligible for ordinary serving or auto-promotion.
 The task-aware assessment CLI preserves `request.task`, and GET-confirmed
 session/outer-reference discrepancies fail closed without overwriting provenance. See the
 [CLI](../../docs/workshop/cli-trigger-guide.md) and

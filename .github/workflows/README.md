@@ -13,18 +13,19 @@ included `py.typed` marker; no type-error suppression is added.
 
 Dispatch defaults to **offline regression tests only**, without Azure login or
 OIDC permission. This implementation has not been dispatched against Azure.
-The reserved cloud job requires all of: trusted `main`, successful offline checks,
+The optional cloud job requires all of: trusted `main`, successful offline checks,
 explicit execution input, `P3_RELEASE_ENABLED=true`, and the separately configured
 `p3-agent-release` environment approval. Opening this PR cannot start a cloud run.
-Even with those switches, **current P3 evaluation-integration limits block before Azure
-login**. `DOCUMENTATION_MODE=assessment` supports valid real-source smoke via
-the CLI, but not three source-bundle cases or exported nested tool-call evidence.
-The preflight never skips these requirements or certifies only two cases.
-P1 now provides a separate opt-in evaluation mode with isolated supplied sources
-and observed execution records. The login/evaluation steps are reserved for a
-reviewed P3 transport/scorer integration and version-evidence validation, not
-a working hosted release claim. Session GET/outer response disagreement is
-explicitly surfaced and blocks candidate-version success.
+Before login, local `--preflight-only` validates a reviewed evaluation plan and all
+five canonical case envelopes. Missing isolated evaluation configuration or an
+unreviewed evaluator/scope blocks. Local success is `local_preflight_passed` with
+`cloud_readiness=not_checked`, never a live readiness certificate.
+After separately approved execution, the runner verifies actual cloud/model/
+serving state and creates an isolated evaluation candidate, using P1's opt-in
+interface and observed-record scorer adapter. No live run was performed for this
+implementation. Session GET/outer response disagreement or a missing outer
+reference blocks evaluation; no candidate-execution proof is fabricated.
+Ordinary assessment remains bare AgentRequest and is not silently switched.
 
 Before an operator enables that job, configure environment required reviewers,
 prevent self-review, restrict deployment branches to protected `main`, establish
@@ -39,7 +40,9 @@ No credential secrets are used.
 
 The runner requires a reviewed, expiring release plan, writer hold, exact live
 serving-pin GET, model-version checks and explicit evaluator thresholds before
-candidate creation. Passing means **eligible for manual review**, never promoted.
+candidate creation. Passing means **eligible for manual evidence review**, never
+promoted. The source-bearing evaluation version has `promotion_eligible=false`;
+ordinary assessment rollout requires separate configuration/review.
 Failed, missing, skipped and incomplete required evaluations block release.
 Raw diagnostic artifacts may contain source content; upload additionally requires
 `P3_ARTIFACT_PUBLICATION_APPROVED=true` after publication/access review. Access follows repository

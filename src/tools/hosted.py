@@ -23,13 +23,19 @@ class HostedArtifact(BaseModel):
     runtime_provenance: Provenance
 
 
-def assessment_provenance(definition: dict[str, Any]) -> Provenance:
+def assessment_provenance(definition: dict[str, Any], *, evaluation: bool = False) -> Provenance:
     # Use P1's settings and instruction/policy assembly, never a second contract.
     from documentation_agent.assessment import AssessmentAgent
     from documentation_agent.settings import AssessmentSettings
 
     environment = definition.get("environment_variables", {})
-    if environment.get("DOCUMENTATION_MODE") != "assessment":
+    if evaluation:
+        if (
+            environment.get("DOCUMENTATION_MODE") != "evaluation"
+            or environment.get("DOCUMENTATION_ENABLE_EVALUATION") != "true"
+        ):
+            raise ValueError("Evaluation requires its explicit mode and DOCUMENTATION_ENABLE_EVALUATION=true.")
+    elif environment.get("DOCUMENTATION_MODE") != "assessment":
         raise ValueError("Hosted definition must explicitly enable assessment; the v0 stub is not an assessment.")
     if environment.get("DOCUMENTATION_AUTH_MODE") != "managed_identity":
         raise ValueError("Hosted assessment must explicitly use managed identity, not local CLI authentication.")
@@ -40,7 +46,8 @@ def assessment_provenance(definition: dict[str, Any]) -> Provenance:
 
 
 def validate_hosted_definition(
-    definition: dict[str, Any], artifact: HostedArtifact, endpoint: str, model_version: str
+    definition: dict[str, Any], artifact: HostedArtifact, endpoint: str, model_version: str,
+    *, evaluation: bool = False,
 ) -> None:
     if definition.get("kind") != "hosted":
         raise ValueError("Primary target requires a hosted container definition.")
@@ -54,7 +61,7 @@ def validate_hosted_definition(
         raise ValueError("Hosted definition must retain P1's Responses 2.0.0 protocol.")
     if not definition.get("cpu") or not definition.get("memory"):
         raise ValueError("Reviewed hosted CPU/memory are required.")
-    provenance = assessment_provenance(definition)
+    provenance = assessment_provenance(definition, evaluation=evaluation)
     if provenance != artifact.runtime_provenance:
         raise ValueError("Artifact provenance differs from P1's actual packaged settings/instructions/policy.")
     environment = definition["environment_variables"]
@@ -90,6 +97,15 @@ def result_from_response(raw: dict[str, Any], request: AgentRequest, artifact: H
 def invoke_hosted(
     project: Any, request: AgentRequest, name: str, version: str, artifact: HostedArtifact
 ) -> dict[str, Any]:
+    raw, report = hosted_response(project, request, name, version, artifact)
+    report["result"] = result_from_response(raw, request, artifact).model_dump(mode="json")
+    return report
+
+
+def hosted_response(
+    project: Any, request: AgentRequest, name: str, version: str, artifact: HostedArtifact,
+    *, evaluation_input: str | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
     from azure.ai.projects.models import VersionRefIndicator
 
     if name != artifact.runtime_provenance.agent_name or not re.fullmatch(r"[1-9][0-9]*", version):
@@ -125,9 +141,10 @@ def invoke_hosted(
         raise ValueError("Hosted session GET does not confirm the ready created session.")
     require_binding()
     with project.get_openai_client(agent_name=name) as client:
+        options = {"store": False, "stream": False} if evaluation_input is not None else {}
         raw = client.responses.create(
-            input=request.model_dump_json(),
-            extra_body={"agent_session_id": session_id},
+            input=evaluation_input if evaluation_input is not None else request.model_dump_json(),
+            extra_body={"agent_session_id": session_id}, **options,
         ).model_dump()
     if not isinstance(raw.get("id"), str) or not raw["id"].strip():
         raise ValueError("Hosted response ID is missing.")
@@ -139,6 +156,7 @@ def invoke_hosted(
     }), file=sys.stderr)
     if outer_reference is not None and (
         not isinstance(outer_reference, dict)
+        or outer_reference.get("type") != "agent_reference"
         or outer_reference.get("name") != name
         or outer_reference.get("version") != version
     ):
@@ -146,8 +164,12 @@ def invoke_hosted(
             "Hosted response agent_reference disagrees with the GET-confirmed session binding; "
             "no candidate-version success is certified. See retained session/response identifiers on stderr."
         )
-    result = result_from_response(raw, request, artifact)
-    return {
+    if evaluation_input is not None and outer_reference is None:
+        raise ValueError(
+            "Evaluation requires matching outer agent_reference and GET-confirmed session evidence; "
+            "session-only metadata cannot certify candidate execution."
+        )
+    return raw, {
         "run_id": raw["id"],
         "response_ids": [raw["id"]],
         "agent_name": name,
@@ -162,25 +184,7 @@ def invoke_hosted(
         "request_id": str(request.request_id),
         "correlation_id": str(request.correlation_id),
         "routing": "version_specific_session_not_serving_path_proof",
-        "result": result.model_dump(mode="json"),
     }
-
-
-def suite_blockers(cases: list[dict[str, Any]]) -> list[str]:
-    blockers = []
-    supplied = [case["id"] for case in cases if case["mode"] == "supplied_sources"]
-    if supplied:
-        blockers.append(
-            "Selected assessment mode accepts bare AgentRequest only; supplied-source evaluation requires "
-            "P1's separately opted-in EvaluationRequest/Response and a reviewed P3 adapter: "
-            + ", ".join(supplied)
-        )
-    blockers.append(
-        "Ordinary assessment does not export nested execution records. P1's opt-in evaluation interface now "
-        "captures model/tool records, but this P3 release path has not integrated or verified its evaluator mappings, "
-        "isolated deployment and session/outer-version evidence; builtin.tool_call_accuracy remains blocked."
-    )
-    return blockers
 
 
 def evaluator_item(case: dict[str, Any], report: dict[str, Any], instructions: str) -> dict[str, Any]:

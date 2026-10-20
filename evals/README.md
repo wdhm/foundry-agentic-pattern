@@ -7,19 +7,26 @@ not proof of hosted runtime compatibility. Ordinary assessment accepts bare
 **Main update, 2026-10-19:** P1's separate disabled-by-default evaluation interface
 supports isolated supplied sources and observed execution records; see
 [the canonical interface](../src/agents/documentation-agent/EVALUATION_INTERFACE.md).
-The P3 release runner has not integrated that envelope/evaluator mapping or
-certified an isolated evaluation deployment. The [release preflight](../docs/workshop/evaluation-release-guide.md)
-blocks those integration and version-evidence limits before creation/evaluation;
-it never sends gold answers to the model
+**Adapter update, 2026-10-20:** the P3 hosted runner now integrates that canonical
+envelope and maps observed model calls, policy results and discovered schemas to
+built-in evaluators. All five cases are exercised offline, including real P1
+framework capture with deterministic model/tool doubles. No isolated evaluation
+deployment, live evaluator scores or tracing ingestion is certified.
+The [release preflight](../docs/workshop/evaluation-release-guide.md)
+requires explicit isolated config, reviewed task scopes, evaluator identity/version/
+thresholds and fresh serving pin/proof/writer hold. Evaluation blocks conflicting
+or absent outer/session version evidence; no override is available.
+It never sends gold answers to the model
 or drops required cases. The checker's existing `--invoke` path below remains
 **prompt compatibility/diagnostics**, not hosted release certification.
 
-**MVP: five hand-made cases, existing checker, Foundry built-in evaluators later.**
+**MVP: five hand-made cases, existing checker and built-in evaluator adapter; live gate outstanding.**
 P3 approved the platform-first scope on 2026-10-16
 ([ADR 0022](../docs/adr/0022-mvp-scope-platform-first.md)).
 This package prepares data for [#24](https://github.com/wdhm/foundry-agentic-pattern/issues/24);
 the evaluator/release workflow in #25/#27 is separate. No custom metric framework,
-live agent configuration, tool writes or workflow is added here.
+live agent configuration or tool writes are added by the adapter. A passing
+evaluation version is evidence-review-only, never eligible for ordinary serving.
 
 ## Dataset entrypoint
 

@@ -128,32 +128,7 @@ class FoundryProject:
         return version
 
 
-class FoundryRelease(FoundryProject):
-    def create(self, plan: ReleasePlan, metadata: dict[str, str]) -> dict[str, Any]:
-        from azure.ai.projects.models import PromptAgentDefinition
-
-        return dict(
-            self.project.agents.create_version(
-                agent_name=plan.agent_name,
-                definition=PromptAgentDefinition(plan.candidate_definition),
-                metadata=metadata,
-            ).as_dict()
-        )
-
-    def respond(self, case: dict[str, Any], name: str, version: str) -> dict[str, Any]:
-        options = {"tool_choice": "none"} if case["mode"] == "supplied_sources" else {}
-        return dict(
-            self.client.responses.create(
-                input=case["input"],
-                metadata={
-                    "request_id": str(case["request"].request_id),
-                    "correlation_id": str(case["request"].correlation_id),
-                },
-                extra_body={"agent_reference": {"type": "agent_reference", "name": name, "version": version}},
-                **options,
-            ).model_dump()
-        )
-
+class FoundryEvaluation(FoundryProject):
     def evaluate(
         self, rows: list[dict[str, Any]], thresholds: dict[str, float], deployment: str, output: Path, group: str
     ) -> list[dict[str, Any]]:
@@ -164,8 +139,7 @@ class FoundryRelease(FoundryProject):
             fields = ["query", "response"]
             if metric == "groundedness":
                 fields.append("context")
-            if metric in {"task_adherence", "tool_call_accuracy"}:
-                fields.append("tool_definitions")
+            fields.append("tool_definitions")
             if metric == "tool_call_accuracy":
                 fields.append("tool_calls")
             criteria.append(
@@ -219,6 +193,33 @@ class FoundryRelease(FoundryProject):
         ]
         save(output / f"{group}-scores.json", items)
         return items
+
+
+class FoundryRelease(FoundryEvaluation):
+    def create(self, plan: ReleasePlan, metadata: dict[str, str]) -> dict[str, Any]:
+        from azure.ai.projects.models import PromptAgentDefinition
+
+        return dict(
+            self.project.agents.create_version(
+                agent_name=plan.agent_name,
+                definition=PromptAgentDefinition(plan.candidate_definition),
+                metadata=metadata,
+            ).as_dict()
+        )
+
+    def respond(self, case: dict[str, Any], name: str, version: str) -> dict[str, Any]:
+        options = {"tool_choice": "none"} if case["mode"] == "supplied_sources" else {}
+        return dict(
+            self.client.responses.create(
+                input=case["input"],
+                metadata={
+                    "request_id": str(case["request"].request_id),
+                    "correlation_id": str(case["request"].correlation_id),
+                },
+                extra_body={"agent_reference": {"type": "agent_reference", "name": name, "version": version}},
+                **options,
+            ).model_dump()
+        )
 
 
 def execute(
