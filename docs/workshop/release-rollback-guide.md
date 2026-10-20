@@ -16,6 +16,13 @@ snapshot below; re-read it rather than treating historical values as current.
 Hosted assessment smoke can be valid with real P2 access even while the full
 five-case release gate is blocked.
 
+**Evaluation adapter update (2026-10-20, offline):** a source-bearing opted-in
+evaluation candidate is evidence-review-only, with `promotion_eligible=false`.
+Never select it for ordinary serving or as an assessment rollback target, even
+after all evaluators pass. Ordinary assessment rollout requires separate reviewed
+configuration and runtime proof. The adapter does not resolve the reported
+session/outer-version discrepancy or authorize any routing action.
+
 WSL Ubuntu Azure CLI **2.80.0**, using its existing authentication, successfully read the shared Sweden Central account and project on 2026-10-16. Windows Azure credentials were not used. IDs and tokens are intentionally omitted.
 
 | Surface | Observed result |

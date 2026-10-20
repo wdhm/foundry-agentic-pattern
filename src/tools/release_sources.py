@@ -88,6 +88,8 @@ def load_cases(suite_path: Path, root: Path) -> tuple[dict[str, Any], list[dict[
                 "mode": case["input_mode"],
                 "request": request,
                 "sources": allowed,
+                "question": scenario["prompt"],
+                "rules": rules,
                 "input": json.dumps(payload),
                 "expected_status": scenario["expected_status"],
             }

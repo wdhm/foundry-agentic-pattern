@@ -32,7 +32,7 @@ jobs:
       - run: python -m pip install '.[agent,prompt,dev]'
       - run: python -m pytest tests/release tests/evals tests/tools tests/contracts tests/agents -q
       - run: python -m ruff check src/tools tests/release tests/tools
-      - run: python -m mypy src/tools/cli.py src/tools/hosted.py src/tools/hosted_release.py src/tools/release.py src/tools/release_sources.py
+      - run: python -m mypy src/tools/cli.py src/tools/hosted.py src/tools/hosted_evaluation.py src/tools/hosted_release.py src/tools/release.py src/tools/release_sources.py
       - run: python -m contracts.generate_schema --check
       - name: Build Python runtime artifact without a container build or publication
         run: python -m pip wheel --no-deps --wheel-dir dist .
@@ -73,16 +73,15 @@ jobs:
           test -n "$AZURE_TENANT_ID"
           test -n "$AZURE_SUBSCRIPTION_ID"
           python -c 'import os; from pathlib import Path; from tools.hosted_release import HostedReleasePlan; p=Path(os.environ["PLAN_PATH"]).resolve(); assert p.is_relative_to(Path.cwd()), "Plan must be in trusted checkout"; HostedReleasePlan.model_validate_json(p.read_text())'
-      - name: Fail closed on unintegrated hosted evaluation before Azure login
-        # P1's separate opt-in eval interface exists; P3 has not integrated its
-        # transport/scorer/version evidence. Enable flags do not certify it.
-        run: python -m tools.release --plan "$PLAN_PATH" --output evals/results/preflight --execute-approved-cloud
+      - name: Validate reviewed isolated evaluation plan locally before Azure login
+        # Local success never certifies cloud/version/identity/evaluator readiness.
+        run: python -m tools.release --plan "$PLAN_PATH" --output evals/results/preflight --preflight-only
       - uses: azure/login@v2
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-      - name: Reserved hosted candidate evaluation; never promote
+      - name: Guarded isolated hosted candidate evaluation; never promote
         run: python -m tools.release --plan "$PLAN_PATH" --output evals/results/release --execute-approved-cloud
       - name: Retain restricted diagnostic artifacts, including blocked decisions
         if: always() && vars.P3_ARTIFACT_PUBLICATION_APPROVED == 'true'

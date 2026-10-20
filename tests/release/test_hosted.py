@@ -18,7 +18,6 @@ from tools.hosted import (
     evaluator_item,
     invoke_hosted,
     result_from_response,
-    suite_blockers,
     validate_hosted_version,
 )
 from tools.hosted_release import FoundryHostedRelease, HostedReleasePlan, prepare_candidate
@@ -223,7 +222,6 @@ def test_hosted_eval_uses_actual_request_result_no_gold_or_tool_claims(cases, ra
     assert returned["provenance"] == artifact.runtime_provenance.model_dump()
     with pytest.raises(ValueError, match="supplied-source"):
         evaluator_item(cases[2], {}, "P1 instructions")
-    assert len(suite_blockers(cases)) == 2
 
 
 @pytest.fixture
@@ -327,8 +325,8 @@ def test_hosted_default_release_blocks_before_credentials_even_with_execution_fl
     assert main(["--plan", str(path), "--output", str(tmp_path / "run"), "--execute-approved-cloud"]) == 1
     decision = json.loads((tmp_path / "run/decision.json").read_text())
     assert decision["status"] == "blocked" and decision["promoted"] is False
-    assert len(decision["blockers"]) == 2
-    assert "supplied-source" in decision["error"] and "tool_call_accuracy" in decision["error"]
+    assert len(decision["blockers"]) == 1
+    assert "isolated evaluation candidate" in decision["error"]
     credential.assert_not_called()
 
 
@@ -423,6 +421,7 @@ def test_real_sdk_hosted_session_and_named_responses_wire_contract(cases, raw, a
     {"type": "agent_reference", "name": "documentation-agent", "version": "6"},
     {"type": "agent_reference", "name": "another-agent", "version": "7"},
     {"type": "agent_reference", "name": "documentation-agent"},
+    {"type": "invalid", "name": "documentation-agent", "version": "7"},
     "invalid",
 ])
 def test_session_get_v7_outer_v6_discrepancy_is_preserved_and_blocks(reference, cases, raw, artifact, capsys):
@@ -554,3 +553,537 @@ def test_hosted_trigger_validates_before_invocation(plan, version, artifact, raw
     report = json.loads(capsys.readouterr().out)
     assert report["agent_version"] == "4" and report["result"]["provenance"] == artifact.runtime_provenance.model_dump()
     project.agents.create_version.assert_not_called()
+
+
+@pytest.fixture
+def evaluation_plan(plan):
+    from tools.hosted_release import HostedEvaluationConfig
+
+    plan.evaluation = HostedEvaluationConfig(
+        isolation_review_reference="offline-only-review",
+        evaluator_deployment="judge", observed_model="offline-model",
+        task_scopes={
+            "order-sync-retry": "change_review",
+            "order-sync-information-missing": "information_review",
+            "order-sync-version-isolation": "information_review",
+            "order-sync-dead-letter-stub": "information_review",
+            "order-sync-wiki-unavailable": "information_review",
+        },
+    )
+    plan.candidate_definition["environment_variables"].update(
+        DOCUMENTATION_MODE="evaluation", DOCUMENTATION_ENABLE_EVALUATION="true",
+    )
+    return HostedReleasePlan.model_validate(plan.model_dump())
+
+
+def evaluation_raw(case, payload, plan):
+    import hashlib
+    from uuid import uuid4
+
+    from documentation_agent.read_policy import READ_TOOLS
+    from test_release import response_for
+
+    from contracts.evaluation import EvaluationResponse, ExecutionRecord
+    from contracts.v1 import AnalysisOutput, assemble_result
+    from tools.hosted_evaluation import expected_instructions
+
+    fixture = response_for(case)
+    analysis = AnalysisOutput.model_validate_json(fixture["output"][-1]["content"][0]["text"])
+    instructions = expected_instructions(plan.candidate_definition, case["mode"])
+    provenance = plan.artifact.runtime_provenance.model_copy(update={
+        "prompt_version": "sha256:" + hashlib.sha256(instructions.encode()).hexdigest(),
+    })
+    tools = [item for item in fixture["output"] if item["type"] == "mcp_call"]
+    for call in tools:
+        if call["server_label"] == "ado":
+            args = json.loads(call["arguments"])
+            args.update(project="test")
+            if call["name"] == "wiki":
+                args.update(wikiIdentifier="test.wiki", path="/Order Sync/Overview", includeContent=True)
+            else:
+                args.update(id=1)
+            call["arguments"] = json.dumps(args)
+    output = [{
+        "type": "function_call", "call_id": call["id"],
+        "name": call["server_label"] + "___" + call["name"], "arguments": call["arguments"],
+    } for call in tools]
+    model_calls = []
+    if tools:
+        model_calls.append({
+            "index": 0, "status": "completed", "response_id": "model-tools-" + case["id"],
+            "model": "offline-model", "finish_reason": "tool_calls",
+            "input": [{"role": "user", "content": [{"type": "text", "text": payload.request.model_dump_json()}]}],
+            "output": [{"role": "assistant", "content": output}],
+        })
+    model_calls.append({
+        "index": len(model_calls), "status": "completed", "response_id": "model-answer-" + case["id"],
+        "model": "offline-model", "finish_reason": "stop",
+        "input": [{"role": "user", "content": [{"type": "text", "text": payload.model_dump_json()}]}],
+        "output": [{"role": "assistant", "content": [{"type": "text", "text": analysis.model_dump_json()}]}],
+    })
+    if tools:
+        model_calls[-1]["input"] = [
+            *deepcopy(model_calls[0]["input"]), {"role": "assistant", "content": output},
+            *[{"role": "tool", "content": [{
+                "type": "function_result", "call_id": call["id"], "result": call["output"],
+            }]} for call in tools],
+        ]
+    report = EvaluationResponse(
+        result=assemble_result(payload.request, analysis, provenance),
+        execution=ExecutionRecord(
+            execution_id=uuid4(), request_id=payload.request.request_id,
+            correlation_id=payload.request.correlation_id, source_mode=case["mode"],
+            status="completed", instructions=instructions, sources=payload.sources, standard=payload.standard,
+            tool_calls=[{key: value for key, value in call.items() if key != "id"} for call in tools],
+            tool_schemas=[{"name": name, "description": "Observed offline schema",
+                           "parameters": {"type": "object"}} for name in READ_TOOLS] if tools else [],
+            model_calls=model_calls,
+        ),
+    )
+    return {
+        "id": "outer-" + case["id"], "status": "completed",
+        "agent_reference": {"name": plan.agent_name, "version": "4", "type": "agent_reference"},
+        "output": [{"type": "message", "role": "assistant", "status": "completed",
+                    "content": [{"type": "output_text", "text": report.model_dump_json()}]}],
+    }
+
+
+def test_all_five_hosted_envelopes_and_observed_scorer_rows(cases, evaluation_plan):
+    from tools.hosted_evaluation import evaluation_request, invoke_evaluation
+
+    for case in cases:
+        payload = evaluation_request(case, evaluation_plan.evaluation.task_scopes[case["id"]])
+        raw = evaluation_raw(case, payload, evaluation_plan)
+        project, client = project_for(raw)
+        report, row = invoke_evaluation(
+            project, case, payload, evaluation_plan.agent_name, "4", evaluation_plan.artifact,
+            evaluation_plan.candidate_definition, "offline-model",
+        )
+        assert row["case_id"] == case["id"]
+        sent = client.responses.create.call_args.kwargs
+        assert sent["stream"] is False and sent["store"] is False
+        assert json.loads(sent["input"]) == payload.model_dump(mode="json")
+        assert "reference_answer" not in sent["input"] and "expected_status" not in sent["input"]
+        assert payload.request.task.question == case["question"]
+        assert report["evaluation"]["result"]["provenance"]["agent_version"] == "0.4.0"
+        if case["mode"] == "supplied_sources":
+            assert payload.standard.content == case["rules"]
+            assert len(payload.sources) == len(case["sources"])
+            assert row["tool_calls"] == row["tool_definitions"] == []
+        else:
+            assert not payload.sources and payload.standard is None and payload.task is None
+            assert row["tool_calls"][0]["tool_call_id"] == "call-0"
+            assert row["tool_calls"][0]["name"] == "github___get_file_contents"
+            # Runtime policy records have no IDs: IDs must come from actual model observations.
+            assert "id" not in report["evaluation"]["execution"]["tool_calls"][0]
+            assert len(row["tool_definitions"]) == 4
+
+
+def test_editorial_answers_and_expected_labels_cannot_change_hosted_input(cases):
+    from tools.hosted_evaluation import evaluation_request
+
+    for case in cases:
+        before = evaluation_request(case, "information_review").model_dump()
+        case.update(
+            expected_status="arbitrary label", reference_answer="hidden gold",
+            input="old prompt bundle containing a reference_answer must never be reused",
+        )
+        assert evaluation_request(case, "information_review").model_dump() == before
+
+
+@pytest.mark.parametrize("problem", ["sources", "standard", "tools", "schemas", "attempted_call"])
+def test_supplied_evaluation_never_accepts_tool_or_bundle_drift(problem, cases, evaluation_plan):
+    import hashlib
+
+    from tools.hosted_evaluation import evaluation_request, invoke_evaluation
+
+    case = cases[2]
+    payload = evaluation_request(case, "information_review")
+    raw = evaluation_raw(case, payload, evaluation_plan)
+    report = json.loads(raw["output"][0]["content"][0]["text"])
+    record = report["execution"]
+    if problem == "sources":
+        record["sources"][0].update(content="drift", sha256=hashlib.sha256(b"drift").hexdigest())
+    elif problem == "standard":
+        record["standard"].update(content="drift", sha256=hashlib.sha256(b"drift").hexdigest())
+    elif problem == "tools":
+        record["tool_calls"] = [{"type": "mcp_call"}]
+    elif problem == "schemas":
+        record["tool_schemas"] = [{"name": "ado___wiki"}]
+    else:
+        record["model_calls"][0]["output"][0]["content"].insert(
+            0, {"type": "function_call", "call_id": "unexpected", "name": "ado___wiki", "arguments": "{}"},
+        )
+    raw["output"][0]["content"][0]["text"] = json.dumps(report)
+    project, _ = project_for(raw)
+    with pytest.raises(ValueError):
+        invoke_evaluation(
+            project, case, payload, evaluation_plan.agent_name, "4", evaluation_plan.artifact,
+            evaluation_plan.candidate_definition, "offline-model",
+        )
+
+
+@pytest.mark.parametrize("problem", [
+    "correlation", "instructions", "provenance", "incomplete", "no_models", "model_error",
+    "model_name", "duplicate_model", "no_schemas", "unknown_schema", "no_calls", "arguments",
+    "unknown_call", "missing_id", "duplicate_call_id", "unmatched_result", "refusal", "answer",
+    "input_leak", "source_drift", "outer_version", "outer_missing", "platform_session", "wrong_status",
+    "model_tool_result", "unsafe_args", "schema", "schema_args",
+])
+def test_bad_hosted_evidence_never_produces_scorer_row(problem, cases, evaluation_plan):
+    from uuid import uuid4
+
+    from tools.hosted_evaluation import evaluation_request, invoke_evaluation
+
+    case = cases[0]
+    payload = evaluation_request(case, "change_review")
+    raw = evaluation_raw(case, payload, evaluation_plan)
+    report = json.loads(raw["output"][0]["content"][0]["text"])
+    record = report["execution"]
+    if problem == "correlation":
+        record["correlation_id"] = str(uuid4())
+    elif problem == "instructions":
+        record["instructions"] = "unreviewed instructions"
+    elif problem == "provenance":
+        report["result"]["provenance"]["agent_version"] = "4"
+    elif problem == "incomplete":
+        record["status"] = "running"
+    elif problem == "no_models":
+        record["model_calls"] = []
+    elif problem == "model_error":
+        record["model_calls"][0]["status"] = "failed"
+    elif problem == "model_name":
+        record["model_calls"][0]["model"] = "unreviewed-model"
+    elif problem == "duplicate_model":
+        record["model_calls"][1]["response_id"] = record["model_calls"][0]["response_id"]
+    elif problem == "no_schemas":
+        record["tool_schemas"] = []
+    elif problem == "unknown_schema":
+        record["tool_schemas"][0]["name"] = "ado___wiki_upsert_page"
+    elif problem == "no_calls":
+        record["tool_calls"] = []
+    elif problem == "arguments":
+        record["tool_calls"][0]["arguments"] = "{}"
+    elif problem == "unknown_call":
+        record["model_calls"][0]["output"][0]["content"][0]["name"] = "ado___wiki_upsert_page"
+    elif problem == "missing_id":
+        del record["model_calls"][0]["output"][0]["content"][0]["call_id"]
+    elif problem == "duplicate_call_id":
+        record["model_calls"][0]["output"][0]["content"][1]["call_id"] = "call-0"
+    elif problem == "unmatched_result":
+        record["tool_calls"].append(deepcopy(record["tool_calls"][0]))
+    elif problem == "refusal":
+        record["model_calls"][-1]["output"][0]["content"][0]["type"] = "refusal"
+    elif problem == "answer":
+        answer = json.loads(record["model_calls"][-1]["output"][0]["content"][0]["text"])
+        answer["confidence"] = 0.1
+        record["model_calls"][-1]["output"][0]["content"][0]["text"] = json.dumps(answer)
+    elif problem == "input_leak":
+        record["model_calls"][0]["input"][0]["content"][0]["text"] = '{"expected_status":"gaps_found"}'
+    elif problem == "source_drift":
+        call = record["tool_calls"][0]
+        call["output"] = call["output"].replace(case["sources"][0]["content"], "drifted")
+        # JSON escaping prevents literal replacement in a serialized source payload.
+        call["output"] = '{"documents":[{"content":"drifted"}]}'
+        record["model_calls"][-1]["input"][2]["content"][0]["result"] = call["output"]
+    elif problem == "model_tool_result":
+        record["model_calls"][-1]["input"][2]["content"][0]["result"] = "different from policy output"
+    elif problem == "unsafe_args":
+        args = json.loads(record["tool_calls"][0]["arguments"])
+        args["ref"] = "f" * 40
+        record["tool_calls"][0]["arguments"] = json.dumps(args)
+        record["model_calls"][0]["output"][0]["content"][0]["arguments"] = json.dumps(args)
+    elif problem == "schema":
+        record["tool_schemas"][0]["parameters"] = {"type": 2}
+    elif problem == "schema_args":
+        record["tool_schemas"][1]["parameters"] = {
+            "type": "object", "properties": {"owner": {"enum": ["different-owner"]}},
+        }
+    elif problem == "outer_version":
+        raw["agent_reference"]["version"] = "2"
+    elif problem == "outer_missing":
+        del raw["agent_reference"]
+    elif problem == "platform_session":
+        record["platform_session_id"] = "another-session"
+    else:
+        report["result"]["documentation_status"] = "insufficient_information"
+        report["result"]["missing_information"] = [{"description": "unknown", "expected_source": "wiki"}]
+    raw["output"][0]["content"][0]["text"] = json.dumps(report)
+    project, _ = project_for(raw)
+    with pytest.raises(ValueError):
+        invoke_evaluation(
+            project, case, payload, evaluation_plan.agent_name, "4", evaluation_plan.artifact,
+            evaluation_plan.candidate_definition, "offline-model",
+        )
+
+
+def evaluation_cloud(cloud, plan):
+    from tools.hosted_evaluation import evaluation_request
+
+    original = cloud.version.side_effect
+    def version(name, selected):
+        result = original(name, selected)
+        if selected == plan.serving_version:
+            result["definition"]["environment_variables"].update(
+                DOCUMENTATION_MODE="assessment", DOCUMENTATION_ENABLE_EVALUATION="false",
+            )
+        return result
+    cloud.version.side_effect = version
+    project = MagicMock()
+    counter = [0]
+    def create_session(**kwargs):
+        counter[0] += 1
+        return session(session_id=f"session-{counter[0]}")
+    project.agents.create_session.side_effect = create_session
+    project.agents.get_session.side_effect = lambda **kwargs: session(session_id=kwargs["session_id"])
+    def respond(**kwargs):
+        sent = json.loads(kwargs["input"])
+        case = next(case for case in load_cases(ROOT / "evals/datasets/suite.json", ROOT)[1]
+                    if case["request"].subject.commit_sha == sent["request"]["subject"]["commit_sha"]
+                    and case["question"] == sent["request"]["task"]["question"])
+        # Keep the invocation's fresh request identity, never the separately loaded IDs.
+        from contracts.v1 import AgentRequest
+        case["request"] = AgentRequest.model_validate(sent["request"])
+        payload = evaluation_request(case, plan.evaluation.task_scopes[case["id"]])
+        return SimpleNamespace(model_dump=lambda: evaluation_raw(case, payload, plan))
+    project.get_openai_client.return_value.__enter__.return_value.responses.create.side_effect = respond
+    cloud.project = project
+    from test_release import scored_rows
+    cloud.evaluate.side_effect = lambda rows, thresholds, *_: scored_rows(len(rows), thresholds)
+    return cloud
+
+
+def test_complete_mocked_hosted_gate_never_promotes(evaluation_plan, cases, cloud, tmp_path):
+    from tools.hosted_release import execute
+
+    cloud = evaluation_cloud(cloud, evaluation_plan)
+    suite = load_cases(ROOT / "evals/datasets/suite.json", ROOT)[0]
+    execute(cloud, evaluation_plan, suite, cases, "judge", tmp_path)
+    decision = json.loads((tmp_path / "decision.json").read_text())
+    assert decision["status"] == "eligible_for_manual_review" and decision["promoted"] is False
+    assert cloud.project.agents.create_session.call_count == 5
+    assert cloud.evaluate.call_count == 2
+    for call in cloud.evaluate.call_args_list:
+        rows, thresholds, _, _, mode = call.args
+        assert len(rows) == (2 if mode == "live_sources" else 3)
+        assert ("tool_call_accuracy" in thresholds) == (mode == "live_sources")
+    cloud.project.agents.update_details.assert_not_called()
+
+
+@pytest.mark.parametrize("problem", ["eval_error", "missing_score", "bad_score", "serving_eval", "model_drift"])
+def test_hosted_gate_blocks_runtime_or_evaluator_failure(problem, evaluation_plan, cases, cloud, tmp_path):
+    from test_release import scored_rows
+
+    from tools.hosted_release import execute
+
+    cloud = evaluation_cloud(cloud, evaluation_plan)
+    if problem == "eval_error":
+        cloud.evaluate.side_effect = ValueError("Evaluator run failed.")
+    elif problem in {"missing_score", "bad_score"}:
+        def scores(rows, thresholds, *_):
+            values = scored_rows(len(rows), thresholds)
+            if problem == "missing_score":
+                values[0]["results"].pop()
+            else:
+                values[0]["results"][0]["passed"] = False
+            return values
+        cloud.evaluate.side_effect = scores
+    elif problem == "serving_eval":
+        original = cloud.version.side_effect
+        def version(name, selected):
+            result = original(name, selected)
+            result["definition"]["environment_variables"]["DOCUMENTATION_MODE"] = "evaluation"
+            return result
+        cloud.version.side_effect = version
+    else:
+        cloud.model_version.side_effect = ["2026-09-22", "judge-version", "changed", "judge-version"]
+    suite = load_cases(ROOT / "evals/datasets/suite.json", ROOT)[0]
+    with pytest.raises(ValueError):
+        execute(cloud, evaluation_plan, suite, cases, "judge", tmp_path)
+    assert not (tmp_path / "decision.json").exists()
+
+
+def test_reviewed_local_preflight_pass_is_not_cloud_certification(evaluation_plan, monkeypatch, tmp_path):
+    import azure.identity
+
+    credential = MagicMock()
+    monkeypatch.setattr(azure.identity, "DefaultAzureCredential", credential)
+    monkeypatch.setenv("EVAL_MODEL_DEPLOYMENT", "judge")
+    monkeypatch.chdir(ROOT)
+    path = tmp_path / "plan.json"
+    path.write_text(evaluation_plan.model_dump_json())
+    assert main(["--plan", str(path), "--output", str(tmp_path / "run"), "--preflight-only"]) == 0
+    decision = json.loads((tmp_path / "run/decision.json").read_text())
+    assert decision["status"] == "local_preflight_passed" and decision["cloud_readiness"] == "not_checked"
+    credential.assert_not_called()
+
+
+@pytest.mark.parametrize("failure", [None, "evaluator", "sdk"])
+def test_hosted_main_runs_mocked_full_gate_or_persists_blocker(
+    failure, evaluation_plan, cloud, monkeypatch, tmp_path,
+):
+    import azure.ai.projects
+    import azure.identity
+    from openai import APIConnectionError
+
+    cloud = evaluation_cloud(cloud, evaluation_plan)
+    if failure == "evaluator":
+        cloud.evaluate.side_effect = ValueError("No completed evaluator results.")
+    elif failure == "sdk":
+        import httpx
+        cloud.evaluate.side_effect = APIConnectionError(request=httpx.Request("POST", "https://offline.example"))
+    monkeypatch.setattr("tools.hosted_release.FoundryHostedRelease", MagicMock(return_value=cloud))
+    monkeypatch.setattr(azure.ai.projects, "AIProjectClient", MagicMock())
+    monkeypatch.setattr(azure.identity, "DefaultAzureCredential", MagicMock())
+    monkeypatch.setenv("EVAL_MODEL_DEPLOYMENT", "judge")
+    monkeypatch.chdir(ROOT)
+    path = tmp_path / "plan.json"
+    path.write_text(evaluation_plan.model_dump_json())
+    code = main(["--plan", str(path), "--output", str(tmp_path / "run"), "--execute-approved-cloud"])
+    decision = json.loads((tmp_path / "run/decision.json").read_text())
+    assert code == (1 if failure else 0)
+    assert decision["status"] == ("blocked" if failure else "eligible_for_manual_review")
+    assert decision["promoted"] is False
+    if not failure:
+        assert decision["promotion_eligible"] is False
+    else:
+        assert "error" in decision
+
+
+@pytest.mark.parametrize("problem", ["evaluator_mismatch", "missing_scope", "disabled", "assessment_mode", "no_flag"])
+def test_new_preflight_blocks_before_credentials(problem, evaluation_plan, monkeypatch, tmp_path):
+    import azure.identity
+
+    credential = MagicMock()
+    monkeypatch.setattr(azure.identity, "DefaultAzureCredential", credential)
+    monkeypatch.setenv("EVAL_MODEL_DEPLOYMENT", "judge")
+    monkeypatch.chdir(ROOT)
+    if problem == "evaluator_mismatch":
+        monkeypatch.setenv("EVAL_MODEL_DEPLOYMENT", "another-judge")
+    elif problem == "missing_scope":
+        evaluation_plan.evaluation.task_scopes.pop("order-sync-retry")
+    elif problem == "disabled":
+        evaluation_plan.candidate_definition["environment_variables"]["DOCUMENTATION_ENABLE_EVALUATION"] = "false"
+    elif problem == "assessment_mode":
+        evaluation_plan.candidate_definition["environment_variables"]["DOCUMENTATION_MODE"] = "assessment"
+    path = tmp_path / "plan.json"
+    path.write_text(evaluation_plan.model_dump_json())
+    argv = ["--plan", str(path), "--output", str(tmp_path / "run")]
+    if problem != "no_flag":
+        argv.append("--execute-approved-cloud")
+    assert main(argv) == 1
+    decision = json.loads((tmp_path / "run/decision.json").read_text())
+    assert decision["status"] == "blocked" and decision["promoted"] is False
+    credential.assert_not_called()
+
+
+@pytest.mark.parametrize("case_index", [0, 2])
+def test_real_p1_framework_capture_consumes_adapter_without_network(case_index, cases, evaluation_plan):
+    import asyncio
+
+    from agent_framework import (
+        Agent,
+        BaseChatClient,
+        ChatMiddlewareLayer,
+        ChatResponse,
+        Content,
+        FunctionInvocationLayer,
+        FunctionTool,
+        Message,
+    )
+    from documentation_agent.assessment import AssessmentAgent
+    from documentation_agent.evaluation import EvaluationAgent
+    from documentation_agent.execution import CaptureModel
+    from documentation_agent.settings import AssessmentSettings
+
+    from contracts.evaluation import EvaluationResponse
+    from tools.hosted_evaluation import evaluation_request, evaluator_row, validate_report
+
+    case = cases[case_index]
+    payload = evaluation_request(case, evaluation_plan.evaluation.task_scopes[case["id"]])
+    fixture = evaluation_raw(case, payload, evaluation_plan)
+    prepared = EvaluationResponse.model_validate_json(fixture["output"][0]["content"][0]["text"])
+    settings = AssessmentSettings.from_environment(evaluation_plan.candidate_definition["environment_variables"])
+    output = prepared.execution.model_calls[-1]["output"][0]["content"][0]["text"]
+
+    class Replay(FunctionInvocationLayer, ChatMiddlewareLayer, BaseChatClient):
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs)
+            self.step = 0
+
+        async def _inner_get_response(self, *, messages, stream, options, **kwargs):
+            self.step += 1
+            if self.step == 1 and prepared.execution.tool_calls:
+                contents = [
+                    Content.from_function_call(
+                        f"actual-{index}", call["server_label"] + "___" + call["name"],
+                        arguments=json.loads(call["arguments"]),
+                    ) for index, call in enumerate(prepared.execution.tool_calls)
+                ]
+                finish = "tool_calls"
+            else:
+                contents = [Content.from_text(output)]
+                finish = "stop"
+            return ChatResponse(
+                messages=[Message("assistant", contents)], response_id=f"actual-model-{self.step}",
+                model="offline-model", finish_reason=finish,
+            )
+
+    class LiveRunner:
+        async def analyze(self, request, instructions, guard):
+            record = guard.record
+            record.tool_schemas = prepared.execution.tool_schemas
+            functions = []
+            for call in record.tool_calls if record.tool_calls else prepared.execution.tool_calls:
+                def make_function(tool_call):
+                    async def tool(**kwargs):
+                        return tool_call["output"]
+                    return tool
+                name = call["server_label"] + "___" + call["name"]
+                if not any(function.name == name for function in functions):
+                    functions.append(FunctionTool(
+                        name=name, func=make_function(call), input_model={"type": "object"},
+                    ))
+            # Repeated Git calls need distinct source payloads without changing the policy/loop.
+            positions = {}
+            for function in functions:
+                matching = [call for call in prepared.execution.tool_calls
+                            if call["server_label"] + "___" + call["name"] == function.name]
+                def make_dispatch(name, matches):
+                    async def dispatch(**kwargs):
+                        index = positions.get(name, 0)
+                        positions[name] = index + 1
+                        return matches[index]["output"]
+                    return dispatch
+                function.func = make_dispatch(function.name, matching)
+            client = Replay(middleware=[CaptureModel(record)])
+            agent = Agent(
+                client=client, instructions=instructions, tools=functions, middleware=[guard],
+                default_options={"store": False},
+            )
+            return (await agent.run(request.model_dump_json())).text
+
+    class SuppliedRunner:
+        async def analyze(self, envelope, record):
+            client = Replay(
+                middleware=[CaptureModel(record, tools_disabled=True)],
+                function_invocation_configuration={"enabled": False},
+            )
+            agent = Agent(
+                client=client, instructions=record.instructions, tools=[],
+                default_options={"store": False, "tool_choice": "none"},
+            )
+            return (await agent.run(envelope.model_dump_json())).text
+
+    runtime = EvaluationAgent(
+        settings, live=AssessmentAgent(settings, LiveRunner()), supplied=SuppliedRunner(),
+    )
+    report = asyncio.run(runtime.evaluate(payload.model_dump_json()))
+    raw = deepcopy(fixture)
+    raw["output"][0]["content"][0]["text"] = report.model_dump_json()
+    checked = validate_report(
+        raw, payload, evaluation_plan.artifact, evaluation_plan.candidate_definition,
+        {"agent_session_id": "offline-session"}, "offline-model",
+    )
+    row = evaluator_row(case, payload, checked, evaluation_plan.candidate_definition)
+    assert len(row["tool_calls"]) == len(report.execution.tool_calls)
