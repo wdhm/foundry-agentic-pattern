@@ -74,7 +74,9 @@ No shared configuration was changed by this inventory.
    repository toolset; do not repoint identity or broaden assessment writes.
 4. Review and deploy a new immutable assessment artifact with the organization
    setting and new version-pinned toolbox endpoint. Existing deployed versions
-   do not acquire this support from a Git commit.
+   do not acquire this support from a Git commit. Omit `PORT` from the Foundry
+   environment variables: it is platform-reserved; the reviewed Dockerfile
+   already supplies port 8088.
 5. Authorize one read-only assessment with fresh request/correlation IDs. Verify
    session/outer version agreement, provenance, actual repository/wiki reads and
    result evidence before claiming hosted integration.

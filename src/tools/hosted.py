@@ -39,7 +39,8 @@ def assessment_provenance(definition: dict[str, Any], *, evaluation: bool = Fals
         raise ValueError("Hosted definition must explicitly enable assessment; the v0 stub is not an assessment.")
     if environment.get("DOCUMENTATION_AUTH_MODE") != "managed_identity":
         raise ValueError("Hosted assessment must explicitly use managed identity, not local CLI authentication.")
-    if environment.get("HOST") != "0.0.0.0" or environment.get("PORT") != "8088":
+    # Foundry reserves PORT; omission retains the reviewed Dockerfile's 8088 default.
+    if environment.get("HOST") != "0.0.0.0" or environment.get("PORT", "8088") != "8088":
         raise ValueError("Reviewed hosted assessment must listen on 0.0.0.0:8088.")
     settings = AssessmentSettings.from_environment(environment)
     return AssessmentAgent(settings).provenance
