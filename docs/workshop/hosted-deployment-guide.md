@@ -32,7 +32,12 @@ No second assessment, runtime fix, deployment, routing or source change occurred
 
 This is a completed transport/contract/provenance smoke, **not** a full
 evaluation. Actual model revision, usage and nested tool/schema traces
-were not exposed by the outer response. Sanitized request, concrete-version
+were not exposed by the outer response. A [subsequent read-only native telemetry
+lookup on October 20](../setup.md#hosted-native-trace-evidence-2026-10-20) correlated
+this same run with model/tool spans, observed response model revision and
+layer-specific token usage, without another invocation. That supersedes the
+outer-response-only visibility limit, not the full-evaluation/tool-correctness
+limit. Sanitized request, concrete-version
 session, response, result and verification records remain in the deployment
 owner's ignored `.azure/approved-hosted-assessment/`; no credentials are stored.
 
@@ -57,8 +62,9 @@ P1 also reports a version-7 session/outer-response discrepancy: session GET
 binds `version_ref=7`, while outer Responses `agent_reference.version` says `6`
 (the serving version). Preserve both identifiers; do not treat that outer field
 alone as candidate-version binding proof. The version-6 smoke above had matching
-session and outer version 6. Neither observation certifies evaluation mode,
-actual model revision or nested tool accuracy.
+session and outer version 6. Version binding alone does not certify evaluation
+mode, actual model revision or nested tool accuracy; the later native telemetry
+lookup supplies observed model revision only for the recorded version-6 run.
 
 ## Historical configuration observations
 

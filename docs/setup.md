@@ -1,6 +1,6 @@
 # Manual setup runbook
 
-> **Why manual?** [ADR 0020](adr/0020-manual-setup-first.md): during M0–M3 we set up Azure by hand. This runbook is the **single source of truth** for the environment, and it gets codified as `azd` + Bicep in M4 ([#52](https://github.com/wdhm/foundry-agentic-pattern/issues/52)).
+> **Why manual?** [ADR 0020](adr/0020-manual-setup-first.md): the shared environment is set up manually. This runbook is the **single source of truth** for recorded environment changes. Full `azd` + Bicep provisioning is deferred/optional under accepted ADR 0022 ([#52](https://github.com/wdhm/foundry-agentic-pattern/issues/52)), not a workshop prerequisite.
 >
 > **Owner:** P3: Louise ([@llandinl](https://github.com/llandinl)), [#5](https://github.com/wdhm/foundry-agentic-pattern/issues/5). **Rule:** if you change anything in Azure, update this file in the same PR.
 
@@ -57,7 +57,30 @@ Foundry project, model versions/quota and native server-side tracing
 The P3 approval supersedes the older "proposed" wording in ADR 0022.
 Cosmos DB and its RBAC, custom OpenTelemetry exporters/dimensions, custom
 workbooks, APIM and new azd/Bicep provisioning are **not MVP prerequisites**.
-Historical hosted-agent deployment instructions below are unchanged.
+Historical deployment instructions below are retained as dated evidence, not
+instructions to redeploy over the current serving pin.
+
+### Recorded hosted serving and candidate state (2026-10-19)
+
+This summarizes the last recorded reads and P1 handoff, not a fresh inventory on
+2026-10-20. Refresh the exact target before any new approved cloud operation.
+
+| Surface | Recorded state / evidence |
+|---|---|
+| Named serving | Concrete `documentation-agent:6` at 100%; P1 pinned it before creating candidate 7 and recorded a fresh named-path version-6 baseline |
+| Serving artifact | Digest `sha256:1a00ba37c7923b171fc13b36f16dde2592aead1e02cd5fc4fdd9ef7f75c5f863`, application provenance `0.3.0`, source `2b77527` |
+| Candidate | `documentation-agent:7`, active but **not promoted**, digest `sha256:a12275d5a2176b722e6a65de23355d44ed7a327edf024f00451ac7872649dcf0`, source `89e8593`, assessment provenance `0.4.0` |
+| Candidate acceptance | P1 reports both original task-aware scenarios passing the unchanged checker, 3/3 expected items each; this is not the full five-case built-in evaluator gate |
+| Candidate version caveat | Session GET binds version 7, but outer Responses reports version 6. Preserve both observations; the CLI fails explicitly on disagreement instead of claiming candidate success |
+| Tool access | Own hosted identity/user, read-only gateway revision 5, toolbox `documentation-agent-readonly:1`; prompt `doc-agent` ADO access is interrupted by the coordinated cutover |
+| Independent P3 proof | One concrete-version-6 assessment completed with contract/source-version/reviewed-source provenance checks; see the [dated smoke](#hosted-packaging-and-independent-smoke-p3-2026-10-19) |
+| Subsequent telemetry proof | Read-only lookup on 2026-10-20 correlated the same v6 run with native model/tool spans, observed model revision and layer-specific usage; see [evidence below](#hosted-native-trace-evidence-2026-10-20) |
+| Still unverified | Full hosted evaluation/tool-call accuracy, live approved wiki writes, Teams delivery and timed rollback |
+
+P1's [acceptance handoff](https://github.com/wdhm/foundry-agentic-pattern/issues/13#issuecomment-6270385634)
+records candidate 7 and the serving pin. The
+[deployment guide](workshop/hosted-deployment-guide.md#version-selection-and-later-p1-handoff)
+separates that handoff from P3's own version-6 smoke.
 
 - [x] Resource group `rg-foundry-agentic-pattern` in Sweden Central
 - [x] **Foundry resource** `foundry-agentic-R8N3LD` + **Foundry project** `proj-agentic`
@@ -361,9 +384,72 @@ In Foundry, open `proj-agentic > Agents > Traces` and search the response or Tra
 ID above. Ingestion and correlation were checked via the Application Insights
 query API; the Foundry portal UI itself was not visually verified.
 
-**Still open:** full #9's custom dimensions/Cosmos correlation are explicitly
-deferred, not completed. This single no-tools assessment does not prove
-tool-operation tracing, all-owner access, hosted-stub tracing, or release routing.
+This historical no-tools assessment does not itself prove tool-operation
+tracing, all-owner access, hosted tracing or release routing. The later hosted
+evidence below supplies model/tool tracing, not those other acceptance items.
+Custom dimensions/Cosmos joins remain deferred under ADR 0022.
+
+#### Hosted native trace evidence (2026-10-20)
+
+A bounded read-only query of existing `appi-foundry-agentic` telemetry found
+the native spans for the **same single approved October 19 version-6
+assessment**. No new invocation, exporter, instrumentation, deployment, resource
+write, login retry or shared-default change was needed.
+
+| Correlation field | Observed value |
+|---|---|
+| Root request UTC | `2026-10-19T20:26:48.6357167Z` |
+| Root request | `invoke_agent`, success `True`, result code `0`, duration `44405.3458` ms |
+| Response ID | `caresp_07f56b96a4570142006ZLICnpGolpBim8MaVNlt2LHeVEAxsAT` |
+| Session ID | `085a49a276d25fb800zlWraicaL3nXr3Rtpsa1JICOquJV5SV2` |
+| Trace ID / `operation_Id` | `d35d1af1350e3f97df6dd149d69f01ab` |
+| Root span / parent | `0f5fb945b61561b7` / `fa8a8aad35f53858` |
+| Agent | `documentation-agent`, explicit `gen_ai.agent.version=6`; `gen_ai.agent.id` is an identity GUID, not the version |
+| Complete bounded aggregate | 1 request, 25 dependencies, 85 traces; no custom events, exceptions or failed request/dependency spans in the queried operation |
+| Application model layer | Three `chat gpt-6-luna` spans, observed response model `gpt-6-luna-2026-09-22`; 19,002 input / 2,715 output tokens summed only at this layer |
+
+Native `tools/list` succeeded in 2.218 seconds. Five application `execute_tool`
+spans succeeded, each with a same-operation child `tools/call` and matching name:
+
+| Tool | Calls | Observed application duration (seconds) |
+|---|---|---|
+| `knowledge___knowledge_base_retrieve` | 1 | 1.016 |
+| `github___get_file_contents` | 2 | 1.655 / 1.735 |
+| `ado___wiki` | 1 | 3.431 |
+| `ado___wit_work_item` | 1 | 1.238 |
+
+Nested platform model spans and a `multi_tool_use.parallel` wrapper also exist.
+Do not double-count model usage across application/platform layers or count the
+wrapper as an additional backend tool call. These successful spans prove
+observed execution, **not** correct arguments, schemas, outputs or a passing
+`tool_call_accuracy` evaluation.
+
+For a content-free application-scope lookup while the telemetry is retained:
+
+```kusto
+let traceId = "d35d1af1350e3f97df6dd149d69f01ab";
+union withsource=Table requests, dependencies, traces, exceptions
+| where timestamp between (datetime(2026-10-19T20:25:30Z) .. datetime(2026-10-19T20:29:00Z))
+| where operation_Id == traceId
+| project timestamp, Table, operation_Id, operation_ParentId
+| order by timestamp asc
+```
+
+The root response/session/version attributes and `operation_Id` provide the
+verified native join. Caller request/correlation IDs were found only inside
+`gen_ai.input.messages` on nine dependencies, not as dedicated structured
+correlation attributes. The server-side check selected attribute keys and
+presence/counts only, not message content. Native telemetry includes attribute
+keys for instructions, messages and tool content; do not export their values
+or assume the telemetry is content-free. Dedicated non-content caller-ID
+attributes require a separate scoped decision, not a speculative exporter.
+
+Sanitized queries/results are retained in the deployment owner's ignored
+`.azure/hosted-smoke-telemetry-*.json`. The complete aggregate, not the first
+100-row sample, establishes the 111-row count. This supersedes the earlier
+outer-response-only model/usage/trace visibility limit for this run. It does
+not prove candidate-7 execution, all-presenter access, portal UI presentation,
+evaluation correctness or any wiki write.
 
 ### Handoff to eval/release work
 
@@ -372,12 +458,12 @@ Do not mark the cloud setup complete until these outputs are supplied:
 | Output | Current value / required evidence |
 |---|---|
 | `FOUNDRY_PROJECT_ENDPOINT` | Existing endpoint in Outputs below |
-| Agent selector | `doc-agent`; observed latest version `3` on 2026-10-16. Re-read latest; choose an explicit tested version, not the hosted stub or retired spike |
+| Agent selector | Hosted `documentation-agent`; last recorded serving `6`, candidate `7`. Choose a reviewed concrete target with verified execution evidence; do not follow latest or substitute prompt-agent evidence |
 | `CHAT_MODEL_DEPLOYMENT` / model version | `gpt-6-luna` / `2026-09-22`; currently auto-upgrades, so record the observed version per eval run |
 | `EVAL_MODEL_DEPLOYMENT` / model version | **Unset** until model compatibility, quota, cost and deployment approval are resolved |
 | Capacity evidence | Fresh regional quota + deployment rate limits; resolve chat `current=500`, `limit=250` discrepancy |
 | Tracing destination | `appi-foundry-agentic` / workspace `log-foundry-agentic`; project `AppInsights` / `ProjectManagedIdentity` connection and project-MI ingestion role verified |
-| Native trace proof | Successful correlated agent/model spans above; exact UTC, agent/model versions, Response ID, Conversation ID, Trace ID and query result recorded. Portal UI not visually verified |
+| Native trace proof | Prompt-agent spans and correlated hosted-v6 model/tool spans above; hosted model revision and layer-specific usage observed in telemetry. Portal UI not visually verified; candidate-7 proof and evaluation correctness remain separate |
 | Access proof | Each owner's chat invocation and telemetry read result; not verified here |
 
 Eval/release automation must fail explicitly if its evaluator deployment is
@@ -400,6 +486,10 @@ mechanics belong to the subsequent work package.
 Document each step here when you do it: portal path or CLI command, settings chosen, and any gotchas.
 
 ### Hosted contract stub (P1, #7)
+
+**Historical version-2 deployment record.** The current primary path is the
+version-6 assessment with unpromoted candidate 7 described above. These original
+stub deployment commands must not be rerun over that state without a new plan.
 
 `documentation-agent` version **2** is the
 Agent Framework contract stub, separately from the prompt agent `doc-agent`: no model calls,
@@ -466,7 +556,7 @@ The step-by-step guide with Microsoft Learn references is [docs/workshop/agent-i
 |---|---|---|
 | Chat model deployment | `gpt-6-luna` | In `foundry-agentic-R8N3LD` |
 | Prompt agent | `doc-agent` (tools `knowledge`, `github`, `ado`) | Agent identity: `foundry-agentic-R8N3LD-proj-agentic-doc-agent-AgentIdentity` |
-| Hosted agent | `documentation-agent` (version 6, assessment mode) | Agent identity: `foundry-agentic-R8N3LD-proj-agentic-documentation-agent-AgentIdentity`. **The gateway points at this agent** (read-only). Foundry User on the project, Monitoring Metrics Publisher on App Insights |
+| Hosted agent | `documentation-agent` (serving 6; unpromoted candidate 7; assessment mode) | Last recorded 2026-10-19. Agent identity: `foundry-agentic-R8N3LD-proj-agentic-documentation-agent-AgentIdentity`. **The gateway points at this agent** (read-only). Foundry User on the project, Monitoring Metrics Publisher on App Insights |
 | Toolbox | `documentation-agent-readonly` (version 1) | Four read tools over `kb-doc-agent-mcp`, `github-mcp`, `ado-mcp-proxy` ([`setup-toolbox.ps1`](../infra/scripts/setup-toolbox.ps1)) |
 | Agent user (hosted) | `documentation-agent@M365CPI54615665.onmicrosoft.com` | Linked to the hosted agent identity. Azure DevOps **Stakeholder** + `[integration-team]\Readers` |
 | Consent grant (hosted) | Hosted agent identity → **Azure DevOps MCP**, consentType `Principal` | Scopes `Ado.Mcp.Tools wit.read wiki.read` (no `wiki.write`) |
@@ -479,16 +569,22 @@ The step-by-step guide with Microsoft Learn references is [docs/workshop/agent-i
 | Container app (gateway) | `ca-doc-agent-mcp` | `https://ca-doc-agent-mcp.gentlemushroom-65b5f1ef.northeurope.azurecontainerapps.io/mcp` |
 | Foundry connection | `ado-mcp-proxy` | `RemoteTool`, `AgenticIdentityToken`, audience `api://<gateway appId>` |
 
-To onboard another agent, run [`infra/scripts/onboard-agent.ps1`](../infra/scripts/onboard-agent.ps1) ([guide](workshop/agent-identity-guide.md#onboard-another-agent-automated)). The gateway serves one agent at a time. It currently points at the hosted `documentation-agent` with read-only access (`MCP_REQUIRED_ROLE=Mcp.Tools.Read.All`, `ADO_MCP_READONLY=true`), so `doc-agent`'s `ado` tool returns `403`. Roll back with `onboard-agent.ps1 -AgentName doc-agent`.
+To onboard another agent, use the reviewed procedure in
+[`onboard-agent.ps1`](../infra/scripts/onboard-agent.ps1)
+([guide](workshop/agent-identity-guide.md#onboard-another-agent-automated)).
+The gateway serves one agent at a time. It points at hosted `documentation-agent`
+with read-only access (`MCP_REQUIRED_ROLE=Mcp.Tools.Read.All`,
+`ADO_MCP_READONLY=true`), so `doc-agent`'s `ado` tool returns `403`.
+Repointing it to the prompt agent is a separate identity/gateway migration,
+**not agent-version rollback**; do not rerun onboarding as a release step.
 
 ### Structured-output contract demo (P1, #12)
 
-**Current target:** use the prompt agent `doc-agent` (version 1 in the
-2026-10-14 inventory), not `doc-agent-spike`, which was offboarded and deleted.
-The current agent was copied from spike version 7 and includes the structured
-output schema plus P2's `knowledge`, `github` and `ado` tools. Inspect its latest
-version before any configuration change; do not recreate the retired spike.
-The version 4 result below is historical verification, not a current endpoint.
+**Historical prompt-only contract demo:** `doc-agent` (version 1 in the
+2026-10-14 inventory) replaced retired `doc-agent-spike`. This is not the current
+hosted workshop target or proof of its source access. Since the coordinated
+hosted cutover, the prompt agent's ADO tool returns `403`. Do not recreate the
+retired spike. The version-4 result below is historical verification.
 
 On 2026-10-13, `doc-agent-spike` **version 4** was created from version 3,
 preserving the `gpt-6-luna` model, low reasoning effort and existing MCP tool
@@ -618,7 +714,9 @@ the Windows source archive contained CRLF, while runtime `Path.read_text`
 normalizes line endings before hashing. No retry, source write, runtime fix or
 deployment followed. See the
 [dated outcome and exact hashes](workshop/hosted-deployment-guide.md#single-approved-assessment-2026-10-19).
-This result is not a full evaluation or independently captured nested-tool trace.
+The [subsequent read-only telemetry lookup](#hosted-native-trace-evidence-2026-10-20)
+independently correlated native model/tool spans for this same run. This result
+is not a full evaluation or tool-call correctness certification.
 
 ### Approval spike status (P1, #1)
 
