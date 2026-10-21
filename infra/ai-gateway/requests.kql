@@ -1,8 +1,11 @@
 // Requires separately approved Azure Monitor resource-specific gateway diagnostics.
 // Counts are route observations, not tokens, money, agent versions or release evidence.
+let GatewayResourceId = "/subscriptions/<subscription-id>/resourceGroups/<resource-group>/providers/Microsoft.ApiManagement/service/<apim-name>";
 ApiManagementGatewayLogs
 | where TimeGenerated > ago(1h)
+| where _ResourceId =~ GatewayResourceId
 | where ApiId in ("documentation-model", "documentation-tools", "documentation-agent")
 | summarize Requests=count(), Throttled=countif(ResponseCode == 429),
-    Forbidden=countif(ResponseCode == 403), Failed=countif(ResponseCode >= 500)
+    Unauthorized=countif(ResponseCode == 401), Forbidden=countif(ResponseCode == 403),
+    Failed=countif(ResponseCode >= 500)
     by ApiId, bin(TimeGenerated, 5m)

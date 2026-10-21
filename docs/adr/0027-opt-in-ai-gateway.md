@@ -29,11 +29,17 @@ not enabled. Publisher contact and operational limits remain explicit inputs.
 
 Provide a separately invoked public Developer bootstrap for an environment
 without APIM. It creates only the service and its system-assigned identity, no
-API routes, logger or role assignments. A separate, explicitly authorized
-telemetry module grants only Monitoring Metrics Publisher on the existing
-`appi-foundry-agentic` component to that identity. Permission for this new grant
-is pending independently of the approved paid service; model routes/traffic
-wait for approved working telemetry. The logger uses documented managed-identity
+API routes, logger or role assignments. Initially use APIM's supported built-in
+`azuremonitor` logger with zero-body/empty-header global and API diagnostics
+and GatewayLogs-only export to existing `log-foundry-agentic`. No new
+APIM-identity role or App Insights local-auth change is required.
+
+Preserve the existing Application Insights path. A separate optional,
+explicitly authorized module grants only Monitoring Metrics Publisher on the
+existing `appi-foundry-agentic` component to the APIM identity. Permission for
+this new grant is pending independently of the paid service, but it no longer
+blocks the explicit Azure Monitor option. Traffic waits for verified working
+telemetry in either case. The Insights logger uses documented managed-identity
 credentials and ARM-read connection metadata; it does not enable local auth,
 create another workspace, grant model/tool permissions or output logging values.
 The route module independently omits tools and their configuration/dependencies

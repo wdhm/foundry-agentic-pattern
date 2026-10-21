@@ -27,7 +27,9 @@ def gateway_build(tmp_path_factory):
 def templates(gateway_build):
     cli, directory = gateway_build
     result = {}
-    for name in ("main", "bootstrap-public-developer", "managed-insights-logger", "agent-ingress"):
+    for name in (
+        "main", "bootstrap-public-developer", "managed-insights-logger", "azure-monitor-diagnostics", "agent-ingress",
+    ):
         output = directory / (name + ".json")
         subprocess.run(
             [cli, "build", str(directory / (name + ".bicep")), "--outfile", str(output)],
@@ -40,6 +42,7 @@ def templates(gateway_build):
 @pytest.mark.parametrize("tool_parameters", [
     "",
     "param enableToolRouting = false",
+    "param diagnosticType = 'azuremonitor'\nparam enableToolRouting = false",
     "param readToolboxBaseUrl = 'https://offline.invalid/toolboxes/read/versions/1'\n"
     "param toolRequestsPerMinute = 1",
 ])
@@ -115,13 +118,22 @@ def test_model_only_has_no_tool_configuration_or_required_tool_parameters(templa
 
 def test_body_free_diagnostics_cover_only_deployed_apis(templates):
     template = templates["main"]
-    settings = template["variables"]["diagnosticsProperties"]
+    settings = template["variables"]["baseDiagnosticsProperties"]
     assert settings["logClientIp"] is False
     for side in ("frontend", "backend"):
         for direction in ("request", "response"):
             assert settings[side][direction] == {"headers": [], "body": {"bytes": 0}}
     for name in ("modelDiagnostics", "toolDiagnostics"):
         assert template["resources"][name]["properties"] == "[variables('diagnosticsProperties')]"
+        assert "parameters('diagnosticType')" in template["resources"][name]["name"]
+    assert template["parameters"]["diagnosticType"]["allowedValues"] == ["applicationinsights", "azuremonitor"]
+    assert template["parameters"]["diagnosticType"]["defaultValue"] == "applicationinsights"
+    assert "httpCorrelationProtocol" not in settings
+    assert template["variables"]["diagnosticsProperties"] == (
+        "[union(variables('baseDiagnosticsProperties'), "
+        "if(equals(parameters('diagnosticType'), 'applicationinsights'), "
+        "createObject('httpCorrelationProtocol', 'W3C'), createObject()))]"
+    )
 
 
 def test_public_developer_bootstrap_creates_only_service_without_routes_or_grants(templates):
@@ -169,3 +181,32 @@ def test_separate_managed_logger_has_only_component_scoped_telemetry_grant(templ
     )
     assert set(template["outputs"]) == {"loggerResourceId"}
     assert not any("ConnectionString" in str(output) for output in template["outputs"].values())
+
+
+def test_azure_monitor_uses_existing_workspace_without_roles_or_payload_categories(templates):
+    template = templates["azure-monitor-diagnostics"]
+    resources = {resource["type"]: resource for resource in template["resources"]}
+    assert set(resources) == {
+        "Microsoft.Insights/diagnosticSettings",
+        "Microsoft.ApiManagement/service/diagnostics",
+    }
+    sink = resources["Microsoft.Insights/diagnosticSettings"]
+    assert sink["scope"] == "[format('Microsoft.ApiManagement/service/{0}', parameters('apimName'))]"
+    assert sink["properties"] == {
+        "workspaceId": (
+            "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName'))]"
+        ),
+        "logAnalyticsDestinationType": "Dedicated",
+        "logs": [{"category": "GatewayLogs", "enabled": True}],
+        "metrics": [],
+    }
+    defaults = resources["Microsoft.ApiManagement/service/diagnostics"]["properties"]
+    assert defaults["loggerId"] == "[variables('monitorLoggerId')]"
+    assert "'azuremonitor'" in template["variables"]["monitorLoggerId"]
+    assert defaults["logClientIp"] is False
+    for side in ("frontend", "backend"):
+        for direction in ("request", "response"):
+            assert defaults[side][direction] == {"headers": [], "body": {"bytes": 0}}
+    assert set(template["outputs"]) == {"loggerResourceId"}
+    assert "ConnectionString" not in json.dumps(template)
+    assert "listKeys" not in json.dumps(template)

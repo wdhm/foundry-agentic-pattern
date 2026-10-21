@@ -29,11 +29,15 @@ The approved first deployment is **public/model-only**. `main.bicep` with
 `enableToolRouting=false` and omitted toolbox inputs creates no tool routes or
 tool configuration. The separate [public Developer bootstrap](ai-gateway/bootstrap-public-developer.bicep)
 creates only a paid single-unit demo service with explicit publisher/location
-inputs, no APIs, logger or grants. The separate
+inputs, no APIs, logger or grants. Initial telemetry uses
+[Azure Monitor diagnostics](ai-gateway/azure-monitor-diagnostics.bicep) with
+the built-in logger and GatewayLogs-only export to existing `log-foundry-agentic`,
+zero bodies/empty headers and no new identity grants. Set
+`diagnosticType=azuremonitor` in `main.bicep`. The alternative
 [managed-identity logger module](ai-gateway/managed-insights-logger.bicep) requires
 explicit permission for its telemetry-only role on the existing Insights
-component; that permission is still pending. Do not configure model routes or
-enable traffic without approved working telemetry. Follow the
+component; that permission is still pending, but does not block Azure Monitor.
+Do not enable traffic without verified working telemetry. Follow the
 [model-only runbook](../docs/ai-gateway.md#initial-demo-public-https-model-routing-only)
 for cost/context, publisher contact, positive limits and coordinator-owned
 deployment/validation; Developer has no production SLA.

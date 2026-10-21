@@ -17,7 +17,11 @@ param enableToolRouting bool = readToolboxBaseUrl != null
 param tenantId string
 param callerObjectId string
 
-@description('Resource ID of an existing, reviewed APIM Application Insights logger. No instrumentation key is accepted here.')
+@allowed(['applicationinsights', 'azuremonitor'])
+@description('Explicit diagnostic destination type; existing Application Insights callers keep their default.')
+param diagnosticType string = 'applicationinsights'
+
+@description('Resource ID of the reviewed logger matching diagnosticType; Azure Monitor uses the built-in azuremonitor logger. No key is accepted.')
 param loggerResourceId string
 
 @description('Existing deployment name. Its concrete model version remains pinned in the reviewed runtime artifact.')
@@ -146,11 +150,10 @@ resource toolPolicy 'Microsoft.ApiManagement/service/apis/policies@2024-05-01' =
   dependsOn: [namedValues, toolOperations]
 }
 
-var diagnosticsProperties = {
+var baseDiagnosticsProperties = {
   loggerId: loggerResourceId
   alwaysLog: 'allErrors'
   logClientIp: false
-  httpCorrelationProtocol: 'W3C'
   verbosity: 'error'
   sampling: { samplingType: 'fixed', percentage: 100 }
   frontend: {
@@ -163,15 +166,19 @@ var diagnosticsProperties = {
   }
 }
 
+var diagnosticsProperties = union(baseDiagnosticsProperties, diagnosticType == 'applicationinsights' ? {
+  httpCorrelationProtocol: 'W3C'
+} : {})
+
 resource modelDiagnostics 'Microsoft.ApiManagement/service/apis/diagnostics@2024-05-01' = {
   parent: modelApi
-  name: 'applicationinsights'
+  name: diagnosticType
   properties: diagnosticsProperties
 }
 
 resource toolDiagnostics 'Microsoft.ApiManagement/service/apis/diagnostics@2024-05-01' = if (enableToolRouting) {
   parent: toolApi
-  name: 'applicationinsights'
+  name: diagnosticType
   properties: diagnosticsProperties
 }
 

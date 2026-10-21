@@ -30,19 +30,21 @@ organization/contact, exact caller object ID, deployment pin and positive
 `tokensPerMinute`/`dailyTokenQuota` values must be explicitly reviewed before
 execution; this repo invents neither personal contact details nor usage budgets.
 
-Three separate templates keep paid service creation, telemetry permission and
+Three separate templates keep paid service creation, telemetry destination and
 route configuration independently reviewable:
 
 | Step | Template and inputs | Scope |
 |---|---|---|
 | Public demo bootstrap | [`bootstrap-public-developer.bicep`](../infra/ai-gateway/bootstrap-public-developer.bicep): required `apimName`, `location`, `publisherName`, `publisherEmail` | Creates only one public Developer unit with a system-assigned identity. No API routes, logger, role assignments or runtime opt-ins. |
-| Separately authorized telemetry setup | [`managed-insights-logger.bicep`](../infra/ai-gateway/managed-insights-logger.bicep): required `apimName`, `applicationInsightsName` | References existing APIM/Insights and adds its managed-identity logger plus one **Monitoring Metrics Publisher** assignment scoped to that Insights component. This new RBAC grant is **pending separate permission**; paid service approval does not authorize it. |
-| Model-only configuration | [`main.bicep`](../infra/ai-gateway/main.bicep): required `apimName`, `projectEndpoint`, `tenantId`, `callerObjectId`, `loggerResourceId`, `modelDeployment`, `tokensPerMinute`, `dailyTokenQuota`; set `enableToolRouting=false`, omit both toolbox inputs | Creates only the model API/policy, model/common named values and model diagnostics. No tool API/operations/policy/diagnostics/counter/rate values; no agent ingress deployment or runtime change. |
+| Existing-workspace telemetry | [`azure-monitor-diagnostics.bicep`](../infra/ai-gateway/azure-monitor-diagnostics.bicep): required `apimName`, `logAnalyticsWorkspaceName` | Uses the built-in `azuremonitor` logger, global zero-body/empty-header defaults and **GatewayLogs only** to the existing workspace's resource-specific table. No role assignment, connection string, new workspace or generative-AI payload log category. |
+| Model-only configuration | [`main.bicep`](../infra/ai-gateway/main.bicep): required `apimName`, `projectEndpoint`, `tenantId`, `callerObjectId`, `loggerResourceId`, `modelDeployment`, `tokensPerMinute`, `dailyTokenQuota`; explicitly set `diagnosticType=azuremonitor` and `enableToolRouting=false`, omit both toolbox inputs | Creates only the model API/policy, model/common named values and zero-body/empty-header Azure Monitor API diagnostics. No tool API/operations/policy/diagnostics/counter/rate values; no agent ingress deployment or runtime change. |
 
-`loggerResourceId` comes from the telemetry module output, not the bootstrap.
-Service creation can proceed while logging permission is pending, but **do not
-deploy model routes or enable traffic without the reviewed working logger**.
-There is no silent unlogged/key-auth fallback. The nullable
+`loggerResourceId` comes from the Azure Monitor module output, not the bootstrap.
+This is an explicitly selected supported sink, **not** an unlogged/key-auth
+fallback; no new APIM-identity RBAC grant is needed. The alternative Application
+Insights managed-identity logger remains available but its new telemetry grant
+is still pending permission and is **not needed for this initial path**.
+Do not enable traffic without verified working diagnostics. The nullable
 `toolboxGatewayEndpoint` output is **null** for model-only configuration.
 Omitting the toolbox URL also defaults to model-only; old callers supplying the
 original toolbox URL and positive request limit still get their two-route
@@ -66,18 +68,17 @@ az deployment group create --subscription ac021984-29ca-42e6-9c21-36e599814543 `
 Use `apimName=apim-foundry-agentic-r8n3ld`, `location=swedencentral` and the
 operator-confirmed publisher organization/contact in that ignored parameter
 file; no public-repo personal contact is provided. Wait for successful service
-provisioning. **Only after explicit permission for the component-scoped
-telemetry grant**, prepare the logger parameters with that APIM name and
-`applicationInsightsName=appi-foundry-agentic`, then run:
+provisioning. Prepare the monitor parameters with that APIM name and
+`logAnalyticsWorkspaceName=log-foundry-agentic`, then run:
 
 ```powershell
 az deployment group create --subscription ac021984-29ca-42e6-9c21-36e599814543 `
-  --resource-group rg-foundry-agentic-pattern --name apim-managed-telemetry `
-  --template-file .\infra\ai-gateway\managed-insights-logger.bicep `
-  --parameters '@.azure/apim-logger.parameters.json'
+  --resource-group rg-foundry-agentic-pattern --name apim-gateway-telemetry `
+  --template-file .\infra\ai-gateway\azure-monitor-diagnostics.bicep `
+  --parameters '@.azure/apim-monitor.parameters.json'
 ```
 
-After telemetry permission, provisioning and ingestion have been verified,
+After telemetry configuration and built-in logger availability have been verified,
 configure the model-only route with the exact inputs above:
 
 ```powershell
@@ -89,10 +90,10 @@ az deployment group create --subscription ac021984-29ca-42e6-9c21-36e599814543 `
 
 Before bootstrap, verify/register `Microsoft.ApiManagement` in that exact
 subscription through the approved operator workflow; do not change CLI defaults.
-The service-only deployer needs APIM creation permission, not role-assignment
-permission. The separately authorized telemetry step requires role-assignment
-permission at the existing Insights resource, not broad model/tool roles.
-Verify provisioning, managed-identity ingestion and body-free diagnostics, then
+The deployer needs APIM/diagnostic configuration and existing-workspace
+destination permissions, not role-assignment permission for this Azure Monitor
+path. Verify provisioning, built-in logger availability, ingestion and
+body-free diagnostics, then
 test admission/model/limit behavior using an explicitly reviewed client identity.
 Only after that validation should a separately reviewed runtime candidate add
 **`DOCUMENTATION_MODEL_GATEWAY_ENDPOINT` alone**. Keep the Toolbox setting and
@@ -202,13 +203,13 @@ tenant-wide rule to make a local test pass.
 
 [`infra/ai-gateway/main.bicep`](../infra/ai-gateway/main.bicep) configures a model
 API and an optional tools API on an **existing, separately approved APIM instance**, plus named values,
-policies and body-free Application Insights diagnostics using an existing logger.
+policies and body-free diagnostics using the explicitly selected existing logger.
 It does not create an APIM service, logger, Foundry resource, identity or RBAC
 assignment; it is not wired into CI or the existing release/deployment scripts.
 
 | Configuration | Review requirement |
 |---|---|
-| `apimName`, `loggerResourceId` | Existing instance and its APIM Application Insights logger resource ID. Fixed API/named-value names mean one reviewed project/caller per instance for this module; do not overwrite another installation. |
+| `apimName`, `diagnosticType`, `loggerResourceId` | Existing instance, selected diagnostic type and matching logger resource ID. `diagnosticType` defaults to `applicationinsights` for compatibility; initial demo explicitly uses `azuremonitor`. Fixed API/named-value names mean one reviewed project/caller per instance; do not overwrite another installation. |
 | `projectEndpoint` | Exact HTTPS Foundry project endpoint, no trailing slash; must equal the candidate's `DOCUMENTATION_PROJECT_ENDPOINT`. |
 | `enableToolRouting`, `readToolboxBaseUrl` | Initially `false` and omitted, respectively. Future tools opt-in: exact HTTPS versioned **read-only** Foundry Toolbox URL ending `/toolboxes/<name>/versions/<number>`, no `/mcp`, query or trailing slash. Must correspond to the candidate's direct `TOOLBOX_ENDPOINT`. Never target the write toolbox or the ADO gateway directly. |
 | `tenantId`, `callerObjectId` | Reviewed tenant and calling managed identity's **object** ID, not its client ID or a caller-supplied agent-name header. |
@@ -267,14 +268,39 @@ reviewed architecture change, not something to enable quietly in this module.
 ## Observability and privacy
 
 Every deployed API diagnostic sets request/response body bytes to **zero**, logs no headers and
-disable client-IP logging. Do not log prompts, source text, tool arguments,
+sets `logClientIp=false`. Do not log prompts, source text, tool arguments,
 replacement text, tokens or authorization headers. Audit existing **global,
-Azure Monitor and logger** settings too: per-API Application Insights settings
+Azure Monitor and logger** settings too: per-API settings
 do not prove that every other diagnostic sink is body-free. Review retention
 and access before enabling traffic. No diagnostic settings or log export are
 changed by this PR on Azure.
 
-The separate managed-identity logger module reuses **`appi-foundry-agentic`**, already backed by
+### Initial path: built-in Azure Monitor to existing Log Analytics
+
+The [official Azure Monitor tutorial](https://learn.microsoft.com/azure/api-management/api-management-howto-use-azure-monitor)
+supports Developer resource logs, resource-specific `ApiManagementGatewayLogs`,
+and individual API diagnostic overrides. The
+[official API-scope PowerShell example](https://learn.microsoft.com/powershell/module/az.apimanagement/new-azapimanagementdiagnostic?view=azps-16.4.0#example-2-create-a-diagnostic-at-api-scope)
+uses the existing **`azuremonitor`** logger and diagnostic ID. Our templates
+explicitly set **zero** body bytes and **empty** header lists, rather than copying
+that example's payload logging. The resource setting selects only `GatewayLogs`
+and `logAnalyticsDestinationType=Dedicated` for **`log-foundry-agentic`**.
+No category group, metrics export, `GatewayLlmLogs`, prompt/completion logging,
+new identity role or App Insights authentication change is requested.
+
+Verify the built-in logger and supported diagnostic settings on the actual
+service before traffic. Operational logs still include request/service metadata
+such as URLs, timing, status and error information; restrict workspace access and
+retention and inspect live privacy behavior. Never put source text or credentials
+in URLs. The default global settings are deliberately body/header-free too;
+review all existing diagnostics before applying them to a reused instance.
+Changing `diagnosticType` in incremental deployments does not delete a former
+diagnostic sink. Inventory existing sinks rather than assuming only one remains.
+
+### Optional alternative: managed-identity Application Insights
+
+The separate [`managed-insights-logger.bicep`](../infra/ai-gateway/managed-insights-logger.bicep)
+references **`appi-foundry-agentic`**, already backed by
 **`log-foundry-agentic`** with local authentication disabled. The supported
 [APIM managed-identity logger contract](https://learn.microsoft.com/azure/api-management/api-management-howto-app-insights#logger-with-connection-string-and-managed-identity-credentials-recommended)
 uses `credentials.identityClientId=SystemAssigned` **plus** the existing
@@ -292,7 +318,9 @@ if it fails, stop rather than silently disabling diagnostics or using key auth.
 `X-Gateway-Request-Id` is generated by APIM, not trusted from the caller.
 [`requests.kql`](../infra/ai-gateway/requests.kql) is a body-free route-count
 query for separately approved resource-specific gateway logs. It is not a
-per-agent/version cost ledger. Token observations (including `X-Gateway-Tokens`
+per-agent/version cost ledger; replace its `GatewayResourceId` placeholder with
+the exact APIM resource ID before running it in the existing workspace.
+Token observations (including `X-Gateway-Tokens`
 when available), identity and native run correlation need independent validation
 and reconciliation against billing. User-supplied agent/version headers must
 never become authorization, budget or chargeback authority.
@@ -312,7 +340,8 @@ never become authorization, budget or chargeback authority.
 3. Review concrete backend URLs, toolbox version/allowlist, caller ID and
    deployment/version mapping against an immutable candidate and this module's
    exact commit. The public Developer service has recorded user authorization;
-   the telemetry grant still needs explicit permission. Keep publishing and
+   an optional new Application Insights telemetry grant still needs explicit
+   permission (not needed by the initial Azure Monitor path). Keep publishing and
    live/model calls within their separately authorized scope. The coordinator
    owns Azure validation/deployment; do not change serving selectors or the
    Teams application as part of gateway setup.
@@ -347,7 +376,8 @@ Bicep compilation are local checks, **not APIM policy execution**.
 with `BICEP_CLI` (or `bicep` on PATH), checking conditional tool resources/config/
 outputs, explicit limits, model diagnostic dependencies, model-only/legacy
 parameter shapes, public single-unit service-only bootstrap,
-existing-Insights managed-identity logger and separately scoped telemetry role.
+existing-workspace GatewayLogs-only Azure Monitor settings without roles or
+payload categories, plus the alternative Insights logger's scoped telemetry role.
 
 No Azure provisioning, ARM validation, paid model call, policy enforcement,
 runtime Toolbox/APIM compatibility, live streaming/session or cost attribution
@@ -363,3 +393,4 @@ and agents are already centrally governed.
 - [AI gateway capabilities](https://learn.microsoft.com/azure/api-management/genai-gateway-capabilities)
 - [API Management pricing](https://azure.microsoft.com/pricing/details/api-management/)
 - [APIM Application Insights managed-identity integration](https://learn.microsoft.com/azure/api-management/api-management-howto-app-insights)
+- [APIM Azure Monitor logging and per-API overrides](https://learn.microsoft.com/azure/api-management/api-management-howto-use-azure-monitor)
