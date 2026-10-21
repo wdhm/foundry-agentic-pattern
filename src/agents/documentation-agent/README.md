@@ -56,6 +56,9 @@ permission changes are not included.
 
 The opt-in [Teams approval card adapter](TEAMS_APPROVAL.md) adds a native Activity
 handler alongside Responses, with server-bound Approve/Modify/Reject controls.
+The opt-in [Azure Repos push flow](PUSH_FLOW.md) prepares main-snapshot assessment,
+proactive notification and reviewer-owned approval handoff. It is a separate
+integration increment, not live-enabled by the existing Teams deployment.
 It was deployed as v13 and selected on 2026-10-20. The user verified real Teams
 cards, Reject, Modify, old-decision rejection and Approve; independent ADO readback
 confirmed the approved sandbox content. See the guide for the recorded image,

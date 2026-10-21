@@ -11,6 +11,10 @@ def create_server() -> ResponsesHostServer:
     mode = os.environ.get("DOCUMENTATION_MODE", "stub")
     if os.environ.get("DOCUMENTATION_ENABLE_TEAMS") == "true" and mode != "approval":
         raise ValueError("Teams cards require approval mode; assessment/evaluation remain unchanged.")
+    if os.environ.get("DOCUMENTATION_ENABLE_PUSH_FLOW") == "true" and (
+        mode != "approval" or os.environ.get("DOCUMENTATION_ENABLE_TEAMS") != "true"
+    ):
+        raise ValueError("Push flow requires explicitly enabled Teams approval mode.")
     agent: BaseAgent
     if mode == "stub":
         agent = DocumentationAgent()

@@ -3,7 +3,7 @@
 import json
 import logging
 import os
-from typing import Annotated, Any, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 from uuid import UUID
 
 from agent_framework import AgentSession, Message
@@ -11,14 +11,20 @@ from agent_framework_foundry_hosting import ResponsesHostServer
 from azure.ai.agentserver.activity import ActivityAgentServerHost
 from azure.ai.agentserver.core import get_request_context
 from azure.ai.agentserver.core.storage import FoundryStateStore
+from azure.ai.agentserver.invocations import InvocationAgentServerHost
 from microsoft_agents.activity import Activity, Attachment
 from microsoft_agents.hosting.core import TurnContext, TurnState
 from pydantic import Field, ValidationError, model_validator
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
 
 from contracts.models import ContractModel, NonBlank
 
 from .approval import COMMAND, InspectCall, PendingCall, ProposeCall, ProposeResult, ToolApprovalAgent
 from .teams_card import CARD_TYPE, card, review_card, text
+
+if TYPE_CHECKING:
+    from .push_flow import PushFlow
 
 LOGGER = logging.getLogger(__name__)
 BINDING_STORE = "documentation-teams-approvals-v1"
@@ -54,6 +60,7 @@ class TeamsApproval:
     def __init__(self, agent: ToolApprovalAgent, tenant_id: UUID) -> None:
         self.agent = agent
         self.tenant_id = tenant_id
+        self.push_flow: PushFlow | None = None
 
     def binding(self, activity: Activity) -> ChannelBinding:
         platform = get_request_context()
@@ -125,6 +132,8 @@ class TeamsApproval:
                 return review_card(record, self.agent.policy.content_parameter)
             self.agent.check_pending(record.model_dump())
             self.agent.check_record(record)
+            if self.push_flow is not None and submitted.action != "reject":
+                await self.push_flow.require_current(record.pending_id)
             if submitted.action == "edit":
                 return review_card(record, self.agent.policy.content_parameter, view="edit")
             if submitted.action == "modify":
@@ -135,6 +144,8 @@ class TeamsApproval:
                 response = await self.agent.execute(modify_command, session)
                 approval = next(item for item in response if item.type == "function_approval_request")
                 replacement = await self.record(UUID(approval.id or ""), binding)
+                if self.push_flow is not None:
+                    await self.push_flow.inherit_event(record.pending_id, replacement.pending_id)
                 await self.save_binding(replacement, binding)
                 return review_card(replacement, self.agent.policy.content_parameter)
             # Ignore all client-supplied tool arguments. Reconstitute the native
@@ -152,6 +163,10 @@ class TeamsApproval:
                 text(
                     "For this workshop, submit a structured propose/propose_result command from the assessment caller, "
                     "or type: show <pending-id> to reopen a card created in this Teams conversation."
+                ),
+                *(
+                    [text("For repository notifications, send connect repo once in this personal chat.")]
+                    if self.push_flow is not None else []
                 ),
             ])
         if message.startswith("show "):
@@ -177,6 +192,10 @@ class TeamsResponsesHost(ActivityAgentServerHost, ResponsesHostServer):  # type:
     """SDK host composition; the pinned Responses SDK lacks typing metadata."""
 
 
+class PushTeamsHost(InvocationAgentServerHost, TeamsResponsesHost):
+    """Explicit opt-in pipeline route; existing Teams/Responses routes retained."""
+
+
 def create_teams_server(agent: ToolApprovalAgent) -> TeamsResponsesHost:
     if os.environ.get("DOCUMENTATION_ENABLE_TEAMS") != "true":
         raise ValueError("Teams requires explicit DOCUMENTATION_ENABLE_TEAMS=true.")
@@ -184,14 +203,93 @@ def create_teams_server(agent: ToolApprovalAgent) -> TeamsResponsesHost:
     if not tenant:
         raise ValueError("Teams requires DOCUMENTATION_TEAMS_TENANT_ID.")
     handler = TeamsApproval(agent, UUID(tenant))
-    host = TeamsResponsesHost(agent=agent, history_source="agent")
+    enabled = os.environ.get("DOCUMENTATION_ENABLE_PUSH_FLOW") == "true"
+    host = (PushTeamsHost if enabled else TeamsResponsesHost)(agent=agent, history_source="agent")
+    if enabled:
+        from microsoft_agents.activity import ConversationReference
+
+        from .assessment import AssessmentAgent
+        from .push_flow import PushFlow, PushPolicy, PushPreflight, PushRequest, ReviewAction
+        from .settings import AssessmentSettings
+
+        policy = PushPolicy.from_environment()
+        read_toolbox = os.environ.get("DOCUMENTATION_PUSH_READ_TOOLBOX")
+        if not read_toolbox:
+            raise ValueError("Push flow requires a separately pinned DOCUMENTATION_PUSH_READ_TOOLBOX.")
+        settings = AssessmentSettings.from_environment({**os.environ, "TOOLBOX_ENDPOINT": read_toolbox})
+        from contracts.repositories import azure_repository
+
+        repo = azure_repository(policy.repository_url)
+        if settings.ado_organization != repo.organization or settings.ado_project != repo.project:
+            raise ValueError("Push repository must match the assessment organization/project.")
+
+        async def notify(reference: ConversationReference, output: dict[str, Any]) -> None:
+            app_id = os.environ.get("FOUNDRY_AGENT_INSTANCE_CLIENT_ID")
+            if not app_id:
+                raise ValueError("Foundry instance identity is required for proactive Teams delivery.")
+
+            async def send(context: TurnContext) -> None:
+                await context.send_activity(Activity(
+                    type="message", text="Documentation review ready",
+                    attachments=[Attachment(content_type=CARD_TYPE, content=output)],
+                ))
+
+            adapter = host.adapter
+            if adapter is None:
+                raise ValueError("Activity adapter is not configured.")
+            await adapter.continue_conversation(app_id, reference.get_continuation_activity(), send)
+
+        flow = PushFlow(policy, handler, AssessmentAgent(settings), notify)
+        handler.push_flow = flow
+
+        async def on_push(request: Request) -> Response:
+            try:
+                flow.require_caller()
+                payload = await request.body()
+                if len(payload) > 8192:
+                    raise ValueError("Push request exceeds size limit.")
+                parsed = json.loads(payload)
+                if isinstance(parsed, dict) and parsed.get("action") == "preflight":
+                    PushPreflight.model_validate(parsed)
+                    return JSONResponse({"state": "caller_verified", "assessment_run": False})
+                push = PushRequest.model_validate_json(payload)
+                result = await flow.process(push)
+                return JSONResponse(result)
+            except PermissionError:
+                LOGGER.warning("Push caller rejected.")
+                return JSONResponse({"error": "Caller not authorized."}, status_code=403)
+            except ValueError as exc:
+                LOGGER.warning("Push request rejected (%s).", type(exc).__name__)
+                message = str(exc) if not isinstance(exc, ValidationError) else "Invalid push payload."
+                return JSONResponse({"error": message}, status_code=400)
+            except Exception as exc:
+                LOGGER.error(
+                    "Push flow failed (%s); inspect durable state, do not automatically retry.", type(exc).__name__
+                )
+                return JSONResponse({"error": "Processing failed; inspect durable event state before retry."},
+                                    status_code=500)
+
+        host.invoke_handler(on_push)
 
     @host.agent_app.activity("message")
     async def on_message(context: TurnContext, state: TurnState) -> None:
         # Action.Submit is a message with value, not a five-second Action.Execute
         # invoke. A retried delivery still goes through the runtime's atomic claim.
         try:
-            output = await handler.handle(context.activity)
+            activity = context.activity
+            flow = handler.push_flow
+            if flow is not None and (activity.text or "").strip().lower() == "connect repo" and activity.value is None:
+                output = await flow.register(activity)
+            elif (
+                flow is not None and isinstance(activity.value, dict)
+                and activity.value.get("action") == "review_push"
+            ):
+                review = ReviewAction.model_validate(activity.value)
+                output = await flow.open_review(activity, review.event_id)
+            elif flow is not None and activity.value is None and (activity.text or "").startswith("review "):
+                output = await flow.open_review(activity, UUID((activity.text or "").removeprefix("review ").strip()))
+            else:
+                output = await handler.handle(activity)
         except ValidationError:
             LOGGER.warning("Teams approval request failed schema validation.")
             await context.send_activity("Request rejected: invalid proposal or card data. Contact the operator.")
