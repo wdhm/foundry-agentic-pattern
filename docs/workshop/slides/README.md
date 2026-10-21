@@ -4,9 +4,10 @@ This folder holds the markdown content for slide-only topics. Each file has the 
 
 | Lane | Topic | File | Issue |
 |---|---|---|---|
-| P2 | Agent 365 (2 slides) | [agent-365.md](agent-365.md) | [#46](https://github.com/wdhm/foundry-agentic-pattern/issues/46) |
-| P2 | Work IQ (1 slide) | [work-iq.md](work-iq.md) | [#47](https://github.com/wdhm/foundry-agentic-pattern/issues/47) |
-| P2 | PDF and SharePoint document sources (1 slide) | [document-sources.md](document-sources.md) | [#48](https://github.com/wdhm/foundry-agentic-pattern/issues/48) |
+| P2 | **Ready deck:** framing, Foundry IQ, toolbox, agent identity, Agent 365 (5 slides with notes) | [p2-knowledge-identity.pptx](p2-knowledge-identity.pptx) | [#46](https://github.com/wdhm/foundry-agentic-pattern/issues/46) |
+| P2 | Agent 365 (2 slides, source for deck slide 5) | [agent-365.md](agent-365.md) | [#46](https://github.com/wdhm/foundry-agentic-pattern/issues/46) |
+| P2 | Work IQ (1 slide, backup) | [work-iq.md](work-iq.md) | [#47](https://github.com/wdhm/foundry-agentic-pattern/issues/47) |
+| P2 | PDF and SharePoint document sources (1 slide, backup) | [document-sources.md](document-sources.md) | [#48](https://github.com/wdhm/foundry-agentic-pattern/issues/48) |
 | P3 | AI Gateway explanatory fallback (2 slides) | [ai-gateway.md](ai-gateway.md) | [#39](https://github.com/wdhm/foundry-agentic-pattern/issues/39) (P3 content only) |
 | P3 | Model, trace, evaluation and release evidence (4 slides) | [agentops-evidence.md](agentops-evidence.md) | [#39](https://github.com/wdhm/foundry-agentic-pattern/issues/39) (P3 content only) |
 | P3 | Landing zones and subscription vending (2 slides) | [landing-zones.md](landing-zones.md) | [#50](https://github.com/wdhm/foundry-agentic-pattern/issues/50) |
