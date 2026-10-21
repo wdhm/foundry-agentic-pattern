@@ -1,0 +1,29 @@
+<policies>
+  <inbound>
+    <validate-jwt header-name="Authorization" require-scheme="Bearer" failed-validation-httpcode="401" require-expiration-time="true" require-signed-tokens="true">
+      <openid-config url="https://login.microsoftonline.com/{{documentation-gateway-tenant}}/v2.0/.well-known/openid-configuration" />
+      <audiences><audience>https://ai.azure.com</audience></audiences>
+      <issuers>
+        <issuer>https://sts.windows.net/{{documentation-gateway-tenant}}/</issuer>
+        <issuer>https://login.microsoftonline.com/{{documentation-gateway-tenant}}/v2.0</issuer>
+      </issuers>
+      <required-claims>
+        <claim name="tid" match="all"><value>{{documentation-gateway-tenant}}</value></claim>
+        <claim name="oid" match="all"><value>{{documentation-gateway-caller}}</value></claim>
+      </required-claims>
+    </validate-jwt>
+    <validate-content unspecified-content-type-action="prevent" max-size="1048576" size-exceeded-action="prevent">
+      <content type="application/json" validate-as="json" action="prevent" />
+    </validate-content>
+    <llm-token-limit counter-key="{{documentation-gateway-model-counter}}" tokens-per-minute="{{documentation-gateway-token-rate}}" token-quota="{{documentation-gateway-token-quota}}" token-quota-period="Daily" estimate-prompt-tokens="false" tokens-consumed-header-name="X-Gateway-Tokens" />
+    <set-header name="Ocp-Apim-Subscription-Key" exists-action="delete" />
+    <set-header name="api-key" exists-action="delete" />
+  </inbound>
+  <backend>
+    <forward-request timeout="240" buffer-request-body="false" buffer-response="false" fail-on-error-status-code="false" />
+  </backend>
+  <outbound>
+    <set-header name="X-Gateway-Request-Id" exists-action="override"><value>@(context.RequestId.ToString())</value></set-header>
+  </outbound>
+  <on-error />
+</policies>

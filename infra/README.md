@@ -15,6 +15,33 @@ hosted toolbox. Follow each script's approval and identity boundaries; rerunning
 onboarding can repoint the shared single-agent ADO gateway. No full clean-
 subscription provisioning/teardown or automated RBAC workflow is implemented.
 
+An optional [AI gateway module](ai-gateway/main.bicep) now prepares model and
+read-Toolbox routes on an **existing** APIM instance. It is not deployed, wired
+into CI, or a replacement for the ADO identity gateway. See the
+[integration/review guide](../docs/ai-gateway.md) for independent opt-ins,
+coverage gaps, identity/cost prerequisites and direct-mode rollback.
+The independent [assessment ingress module](ai-gateway/agent-ingress.bicep)
+adds only a fixed named-agent Responses operation for the opt-in hosted CLI,
+with a separate client identity allowlist. It does not proxy session control,
+Teams Activity or approved writes.
+
+The approved first deployment is **public/model-only**. `main.bicep` with
+`enableToolRouting=false` and omitted toolbox inputs creates no tool routes or
+tool configuration. The separate [public Developer bootstrap](ai-gateway/bootstrap-public-developer.bicep)
+creates only a paid single-unit demo service with explicit publisher/location
+inputs, no APIs, logger or grants. Initial telemetry uses
+[Azure Monitor diagnostics](ai-gateway/azure-monitor-diagnostics.bicep) with
+the built-in logger and GatewayLogs-only export to existing `log-foundry-agentic`,
+zero bodies/empty headers and no new identity grants. Set
+`diagnosticType=azuremonitor` in `main.bicep`. The alternative
+[managed-identity logger module](ai-gateway/managed-insights-logger.bicep) requires
+explicit permission for its telemetry-only role on the existing Insights
+component; that permission is still pending, but does not block Azure Monitor.
+Do not enable traffic without verified working telemetry. Follow the
+[model-only runbook](../docs/ai-gateway.md#initial-demo-public-https-model-routing-only)
+for cost/context, publisher contact, positive limits and coordinator-owned
+deployment/validation; Developer has no production SLA.
+
 ## Future IaC scope ([ADR 0014](../docs/adr/0014-infrastructure-scope.md))
 
 This is the original target backlog, not deployed-resource evidence or a

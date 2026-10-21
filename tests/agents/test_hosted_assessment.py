@@ -424,9 +424,13 @@ def test_http_host_uses_assessment_contract(settings, request_v1):
 
 
 @pytest.mark.parametrize("fault", [None, "missing-tool", "model-error", "approval", "filtered"])
-def test_production_runner_wiring_and_cleanup(settings, request_v1, monkeypatch, fault):
+@pytest.mark.parametrize("gateway_enabled", [False, True])
+def test_production_runner_wiring_and_cleanup(settings, request_v1, monkeypatch, fault, gateway_enabled):
     """Run the production adapter against in-memory SDK boundaries; no Azure resources."""
     events = []
+    if gateway_enabled:
+        settings.model_gateway_endpoint = "https://example.azure-api.net/documentation-model/"
+        settings.toolbox_gateway_endpoint = "https://example.azure-api.net/documentation-tools/mcp?api-version=v1"
     request_v1.task = AssessmentTask(
         scope="information_review",
         question="Identify the business owner, classification and runbook.",
@@ -449,7 +453,7 @@ def test_production_runner_wiring_and_cleanup(settings, request_v1, monkeypatch,
 
     class Toolbox(Resource):
         def __init__(self, credential, **kwargs):
-            assert kwargs["url"] == settings.toolbox_endpoint
+            assert kwargs["url"] == (settings.toolbox_gateway_endpoint or settings.toolbox_endpoint)
             assert kwargs["allowed_tools"] == READ_TOOLS
             assert kwargs["parse_tool_results"] is parse_read_result
             assert kwargs["tool_name_prefix"] == ""
@@ -465,6 +469,12 @@ def test_production_runner_wiring_and_cleanup(settings, request_v1, monkeypatch,
 
     class ModelAgent:
         def __init__(self, **kwargs):
+            transport = kwargs["client"].client
+            if gateway_enabled:
+                assert transport.base_url == settings.model_gateway_endpoint
+                assert transport.max_retries == 0
+            else:
+                assert not hasattr(transport, "base_url")
             assert kwargs["default_options"]["store"] is False
             assert kwargs["default_options"]["response_format"].__name__ == "AnalysisOutput"
             assert isinstance(kwargs["middleware"][0], ReadOnlyPolicy)
