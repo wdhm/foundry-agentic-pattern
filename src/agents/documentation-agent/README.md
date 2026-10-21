@@ -80,6 +80,14 @@ The default remains stub for compatibility. Assessment mode fails startup if
 required configuration is absent; it never silently falls back to a stub result.
 It does **not** invoke `doc-agent` or forward to another prompt agent.
 
+The optional [AI gateway integration](../../../docs/ai-gateway.md) can route
+assessment/evaluation model calls and read-Toolbox traffic through APIM.
+`DOCUMENTATION_MODEL_GATEWAY_ENDPOINT` and
+`DOCUMENTATION_TOOLBOX_GATEWAY_ENDPOINT` are independent, disabled-by-default
+settings; they do not replace source guards, evidence checks or version pins.
+Hosted-agent ingress, Teams Activity and approved write calls stay direct.
+No APIM deployment or live configuration change is included.
+
 ### Assessment flow
 
 ```text

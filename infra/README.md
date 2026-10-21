@@ -15,6 +15,12 @@ hosted toolbox. Follow each script's approval and identity boundaries; rerunning
 onboarding can repoint the shared single-agent ADO gateway. No full clean-
 subscription provisioning/teardown or automated RBAC workflow is implemented.
 
+An optional [AI gateway module](ai-gateway/main.bicep) now prepares model and
+read-Toolbox routes on an **existing** APIM instance. It is not deployed, wired
+into CI, or a replacement for the ADO identity gateway. See the
+[integration/review guide](../docs/ai-gateway.md) for independent opt-ins,
+coverage gaps, identity/cost prerequisites and direct-mode rollback.
+
 ## Future IaC scope ([ADR 0014](../docs/adr/0014-infrastructure-scope.md))
 
 This is the original target backlog, not deployed-resource evidence or a

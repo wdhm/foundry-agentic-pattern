@@ -29,6 +29,11 @@ prepared evidence slides and AI Gateway explanatory fallback. P2's
 toolbox and identity run order with recorded fallbacks. Shared-deck
 assembly, presenter review, rehearsal and backup recording remain outstanding.
 
+The optional [AI gateway integration](docs/ai-gateway.md) adds reviewable APIM
+model/read-toolbox routes and independent runtime opt-ins. **Direct mode remains
+the default; no live routing, deployment or Teams/approval behavior is changed.**
+Hosted-agent ingress and approved writes are not routed through APIM.
+
 ---
 
 ## What and why

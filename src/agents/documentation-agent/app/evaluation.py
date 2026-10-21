@@ -16,6 +16,7 @@ from contracts.v1 import AnalysisOutput, assemble_result
 from .agent import DocumentationAgent, request_text
 from .assessment import APP_DIR, AssessmentAgent, Check, run_with_repair
 from .execution import CaptureModel
+from .gateway import route_model_client
 from .settings import AssessmentSettings
 
 
@@ -73,6 +74,7 @@ class FoundrySuppliedRunner:
                 middleware=[CaptureModel(record, tools_disabled=True)],
                 function_invocation_configuration={"enabled": False},
             )
+            route_model_client(client, self.settings)
             async with client.client:
                 agent = Agent(
                     client=client,

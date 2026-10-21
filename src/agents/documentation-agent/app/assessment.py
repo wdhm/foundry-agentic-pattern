@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Protocol
 from uuid import uuid4
 
-from agent_framework import AgentRunInputs
+from agent_framework import Agent, AgentResponse, AgentRunInputs
 from agent_framework.exceptions import AgentInvalidRequestException
 from pydantic import ValidationError
 
@@ -16,6 +16,7 @@ from contracts.v1 import CONTRACT_VERSION, AgentRequest, AgentResult, AnalysisOu
 
 from .agent import DocumentationAgent, request_text
 from .execution import CaptureModel
+from .gateway import route_model_client
 from .read_policy import ReadOnlyPolicy, parse_read_result, read_tools
 from .settings import AssessmentSettings
 
@@ -34,7 +35,7 @@ def repair_message(problems: list[str]) -> str:
     )
 
 
-async def run_with_repair(agent: Any, message: str, check: Check | None) -> Any:
+async def run_with_repair(agent: Agent, message: str, check: Check | None) -> AgentResponse[Any]:
     """Run once; if verification finds problems, give the model one corrected attempt in the same session."""
     session = agent.create_session()
     response = await agent.run(message, session=session)
@@ -69,7 +70,7 @@ class FoundryAnalysisRunner:
             AIProjectClient(endpoint=self.settings.project_endpoint, credential=credential) as project,
             FoundryToolbox(
                 credential,
-                url=self.settings.toolbox_endpoint,
+                url=self.settings.toolbox_gateway_endpoint or self.settings.toolbox_endpoint,
                 allowed_tools=read_tools(self.settings),
                 tool_name_prefix="",
                 approval_mode="never_require",
@@ -98,6 +99,7 @@ class FoundryAnalysisRunner:
                     "allow_concurrent_invocation": False,
                 },
             )
+            route_model_client(client, self.settings)
             async with client.client:
                 agent = Agent(
                     client=client,

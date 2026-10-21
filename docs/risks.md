@@ -119,6 +119,14 @@ historical snapshots and approval boundaries.
 token-limit/429 or per-agent cost proof is recorded; full APIM FinOps
 attribution remains future hardening.
 
+**Opt-in repository increment (2026-10-21):** the user reopened gateway work.
+[ADR 0027](adr/0027-opt-in-ai-gateway.md) and the
+[integration guide](ai-gateway.md) add model/read-toolbox routing and reviewed
+APIM configuration. Direct mode remains the default. No live routes, grants or
+deployments were changed; agent ingress, approved writes and service-side
+evaluators are not covered by these opt-ins. The earlier slide disposition is
+historical; no live enforcement or per-agent billing proof follows from this code.
+
 **Findings**
 - AI Gateway token limits and quotas apply **per project + model deployment**, **not per agent**.
   Source: [Enforce token limits for models](https://learn.microsoft.com/azure/foundry/control-plane/how-to-enforce-limits-models)

@@ -308,8 +308,11 @@ def test_capture_rejects_attempted_tool_call_with_tools_disabled(payload):
         asyncio.run(CaptureModel(record, tools_disabled=True).process(context, call_next))
 
 
-def test_no_source_network_or_toolbox_in_supplied_production_runner(settings, payload, monkeypatch):
+@pytest.mark.parametrize("gateway_enabled", [False, True])
+def test_no_source_network_or_toolbox_in_supplied_production_runner(settings, payload, monkeypatch, gateway_enabled):
     events = []
+    if gateway_enabled:
+        settings.model_gateway_endpoint = "https://example.azure-api.net/documentation-model/"
 
     class Resource:
         async def __aenter__(self):
@@ -333,6 +336,12 @@ def test_no_source_network_or_toolbox_in_supplied_production_runner(settings, pa
 
     class Model:
         def __init__(self, **kwargs):
+            transport = kwargs["client"].client
+            if gateway_enabled:
+                assert transport.base_url == settings.model_gateway_endpoint
+                assert transport.max_retries == 0
+            else:
+                assert not hasattr(transport, "base_url")
             assert kwargs["tools"] == []
             assert kwargs["default_options"]["tool_choice"] == "none"
             assert kwargs["default_options"]["store"] is False
