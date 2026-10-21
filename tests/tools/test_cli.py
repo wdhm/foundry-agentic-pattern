@@ -140,6 +140,13 @@ def test_request_flags_validate_and_preserve_refs():
     assert request.contract_version == "1.0.0"
 
 
+def test_prompt_compatibility_cannot_opt_in_to_hosted_agent_gateway(capsys):
+    assert main(arguments() + [
+        "--agent-gateway-endpoint", "https://offline.azure-api.net/documentation-agent/",
+    ]) == 1
+    assert "only the version-bound hosted assessment" in capsys.readouterr().err
+
+
 @pytest.mark.parametrize("flag,value", [("--commit", "main"), ("--work-item", "0"), ("--path", " ")])
 def test_request_invalid_values(flag, value):
     with pytest.raises(ValidationError):

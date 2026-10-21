@@ -16,11 +16,64 @@ It does not turn the workshop into a production platform. See
 |---|---|---|
 | Hosted assessment -> model | `DOCUMENTATION_MODEL_GATEWAY_ENDPOINT` routes the existing Foundry client's OpenAI **Responses model-inference API** through APIM. Applies to assessment, live-source evaluation, supplied-source evaluation, and the assessor in the push-to-Teams flow. | Foundry service-side built-in evaluator calls, old prompt agents, other applications, and traffic that retains direct configuration. |
 | Hosted assessment -> Foundry Toolbox -> existing ADO gateway / GitHub / knowledge | `DOCUMENTATION_TOOLBOX_GATEWAY_ENDPOINT` routes read-toolbox MCP transport through APIM. Exact backend toolbox version is set in the infrastructure, not selected by callers. | APIM does not replace the toolbox, parse per-tool permissions, exchange delegated ADO identity, or become a new ADO gateway. Write-toolbox calls stay direct. |
-| Client / pipeline / Teams -> Foundry hosted agent | **Unchanged.** Foundry continues to host Responses and Activity. Session binding, selectors, Teams authentication and push inbox state are unchanged. | No new APIM agent-ingress endpoint, Invocations application, Teams callback proxy or fleet-wide agent governance is claimed. |
+| CLI -> Foundry hosted assessment agent | `--agent-gateway-endpoint` opts the final named-agent Responses request into a separately configured APIM ingress API. Session creation and GET-confirmed concrete version binding remain direct and unchanged. | Teams Activity, pipeline push/Invocations transport, approval decisions/writes, session control, selectors and fleet-wide governance are not routed by this CLI opt-in. |
 
 The first row's `/responses` is **model inference**, not the third row's
 version-bound hosted-agent session API. Pointing a project or agent endpoint at
 a generic proxy would conflate these paths and their identity/session semantics.
+
+## Optional hosted-agent Responses ingress
+
+This is technically feasible with supported interfaces; its initial omission
+was a staging choice, **not** a demonstrated Foundry/APIM incompatibility.
+The official [`AIProjectClient.get_openai_client` reference](https://learn.microsoft.com/python/api/azure-ai-projects/azure.ai.projects.aiprojectclient?view=azure-python#azure-ai-projects-aiprojectclient-get-openai-client)
+documents `agent_name`, the named-agent
+`{project}/agents/{name}/endpoint/protocols/openai` endpoint, an explicit
+`base_url` override, and the renewable `https://ai.azure.com/.default`
+bearer provider. The implementation retains `agent_name` when overriding the
+URL, so SDK-generated Foundry feature headers and identity remain intact.
+The CLI explicitly opts into the documented named-agent preview contract only
+when this flag is used; this is not a new general-availability/SLA claim.
+
+After separately approving/configuring
+[`agent-ingress.bicep`](../infra/ai-gateway/agent-ingress.bicep), append this to
+the existing reviewed hosted CLI invocation (keep its artifact, exact agent/
+model version, source and task arguments):
+
+```text
+--agent-gateway-endpoint https://<apim-name>.azure-api.net/documentation-agent/
+```
+
+This module is independent of `main.bicep`: it requires the existing `apimName`,
+`loggerResourceId`, HTTPS `projectEndpoint`, fixed `agentName`, `tenantId`,
+`ingressCallerObjectId` and positive `requestsPerMinute`. The ingress caller is
+the **client's object ID**, not the hosted identity used for outbound model/tool
+calls. No token is exchanged for APIM's identity and no new grant is created.
+
+Only `POST /responses` exists, bound to the reviewed named-agent backend.
+Its schema requires a nonempty `agent_session_id` and string `input`; only
+`store` and `stream` are additionally accepted. There are no wildcard paths,
+agent overrides, session-control operations, native approval input arrays or
+`previous_response_id` continuations on this route. The CLI still validates the
+hosted assessment artifact/model and creates/GET-verifies the exact version
+session directly **before** sending the unchanged session ID and request.
+Response reference/provenance checks and the truthful
+`version_specific_session_not_serving_path_proof` report stay unchanged;
+The optional `response_transport: apim_agent_ingress` field records only an
+opted-in route; the direct report shape is unchanged.
+APIM adds admission and HTTP rate control, not independent version certification;
+Foundry session authorization and existing caller/runtime checks remain required.
+
+The ingress policy validates the original client bearer identity and aggregates
+HTTP requests for this fixed agent route. It does **not** apply model token
+accounting to agent output, retry, follow backend redirects, substitute identities,
+rewrite payloads or buffer response chunks. See the official
+[`forward-request` contract](https://learn.microsoft.com/azure/api-management/forward-request-policy).
+The client also disables automatic OpenAI retries in this opt-in. Removing the
+CLI flag restores the existing direct path; gateway failures never bypass it.
+This is a read-only assessment transport surface, **not** a new
+approval-resume or Teams/push adapter. Live named-endpoint/session compatibility,
+timeouts and streaming still require isolated, separately approved validation.
 
 ## Runtime configuration
 
@@ -119,7 +172,7 @@ reviewed architecture change, not something to enable quietly in this module.
 
 ## Observability and privacy
 
-API diagnostics set request/response body bytes to **zero**, log no headers and
+All three API diagnostics set request/response body bytes to **zero**, log no headers and
 disable client-IP logging. Do not log prompts, source text, tool arguments,
 replacement text, tokens or authorization headers. Audit existing **global,
 Azure Monitor and logger** settings too: per-API Application Insights settings
@@ -158,7 +211,7 @@ never become authorization, budget or chargeback authority.
    MCP initialize/discovery/read/session cleanup and explicit errors. Confirm
    source/provenance equality and the existing push/Teams approval behavior.
    Test 429 and 403 separately; never replay approved writes as a limit test.
-5. Roll back by removing the two opt-ins from a separately reviewed deployment,
+5. Roll back by removing the runtime opt-ins and/or CLI ingress flag from the separately reviewed configuration,
    or selecting the known-good direct candidate using the existing release
    safeguards. Do not fall back automatically on a gateway outage. Disabling
    routes/project association does **not** stop APIM or logging charges; resource
@@ -172,6 +225,9 @@ payload, JSON and SSE handling, and a surfaced 429 with no automatic retry.
 The real Toolbox/MCP client is also exercised offline for initialization,
 discovery, a read call and session termination, preserving the bearer audience,
 session ID and protocol-version headers.
+The real synchronous Foundry/OpenAI SDK exercises direct and gateway named-agent
+Responses requests, keeping session POST/GET direct, renewable bearer and feature
+headers unchanged, result/provenance checks intact and gateway 429s non-retrying.
 Production-adapter tests cover both model call sites and read-toolbox selection;
 existing guard/approval/push tests remain in place. XML contract checks and
 Bicep compilation are local checks, **not APIM policy execution**.

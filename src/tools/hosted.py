@@ -5,6 +5,7 @@ import re
 import sys
 import time
 from typing import Any
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -101,16 +102,31 @@ def result_from_response(raw: dict[str, Any], request: AgentRequest, artifact: H
 
 
 def invoke_hosted(
-    project: Any, request: AgentRequest, name: str, version: str, artifact: HostedArtifact
+    project: Any, request: AgentRequest, name: str, version: str, artifact: HostedArtifact,
+    *, agent_gateway_endpoint: str | None = None,
 ) -> dict[str, Any]:
-    raw, report = hosted_response(project, request, name, version, artifact)
+    raw, report = hosted_response(
+        project, request, name, version, artifact, agent_gateway_endpoint=agent_gateway_endpoint,
+    )
     report["result"] = result_from_response(raw, request, artifact).model_dump(mode="json")
     return report
+
+
+def validate_agent_gateway_endpoint(endpoint: str) -> str:
+    url = urlsplit(endpoint)
+    if (
+        url.scheme != "https" or not url.hostname or url.username or url.password
+        or url.port not in (None, 443) or url.path != "/documentation-agent/"
+        or url.query or url.fragment
+    ):
+        raise ValueError("Agent gateway must be an HTTPS /documentation-agent/ URL without credentials or query.")
+    return endpoint
 
 
 def hosted_response(
     project: Any, request: AgentRequest, name: str, version: str, artifact: HostedArtifact,
     *, evaluation_input: str | None = None, endpoint_label_version: str | None = None,
+    agent_gateway_endpoint: str | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Invoke one version-bound session.
 
@@ -120,6 +136,12 @@ def hosted_response(
     """
     from azure.ai.projects.models import VersionRefIndicator
 
+    openai_options: dict[str, Any] = {}
+    if agent_gateway_endpoint is not None:
+        openai_options = {
+            "base_url": validate_agent_gateway_endpoint(agent_gateway_endpoint),
+            "max_retries": 0,
+        }
     if name != artifact.runtime_provenance.agent_name or not re.fullmatch(r"[1-9][0-9]*", version):
         raise ValueError("Select a concrete version of the reviewed hosted runtime.")
     session = project.agents.create_session(
@@ -152,7 +174,7 @@ def hosted_response(
     if session.agent_session_id != session_id or session.status not in {"active", "idle"}:
         raise ValueError("Hosted session GET does not confirm the ready created session.")
     require_binding()
-    with project.get_openai_client(agent_name=name) as client:
+    with project.get_openai_client(agent_name=name, **openai_options) as client:
         options = {"store": False, "stream": False} if evaluation_input is not None else {}
         raw = client.responses.create(
             input=evaluation_input if evaluation_input is not None else request.model_dump_json(),
@@ -201,6 +223,7 @@ def hosted_response(
         "request_id": str(request.request_id),
         "correlation_id": str(request.correlation_id),
         "routing": "version_specific_session_not_serving_path_proof",
+        **({"response_transport": "apim_agent_ingress"} if agent_gateway_endpoint is not None else {}),
     }
 
 

@@ -2,7 +2,7 @@
 // Counts are route observations, not tokens, money, agent versions or release evidence.
 ApiManagementGatewayLogs
 | where TimeGenerated > ago(1h)
-| where ApiId in ("documentation-model", "documentation-tools")
+| where ApiId in ("documentation-model", "documentation-tools", "documentation-agent")
 | summarize Requests=count(), Throttled=countif(ResponseCode == 429),
     Forbidden=countif(ResponseCode == 403), Failed=countif(ResponseCode >= 500)
     by ApiId, bin(TimeGenerated, 5m)

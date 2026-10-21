@@ -23,6 +23,10 @@ def parser() -> argparse.ArgumentParser:
     invoke.add_argument("--project-endpoint", required=True)
     invoke.add_argument("--agent-kind", choices=("hosted", "prompt"), default="hosted")
     invoke.add_argument("--agent-name")
+    invoke.add_argument(
+        "--agent-gateway-endpoint",
+        help="Optional reviewed APIM /documentation-agent/ Responses ingress; session control stays direct.",
+    )
     invoke.add_argument("--artifact", type=Path, help="Reviewed hosted image/build/runtime provenance JSON.")
     invoke.add_argument("--task-question", help="Explicit assessment question, never gold answers or authorization.")
     invoke.add_argument("--task-scope", choices=("change_review", "information_review"))
@@ -232,6 +236,12 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError("--model-version must be the exact version from deployment configuration.")
         if args.agent_kind == "hosted" and args.artifact is None:
             raise ValueError("Hosted assessment requires --artifact with reviewed immutable image/build provenance.")
+        if args.agent_gateway_endpoint is not None:
+            from tools.hosted import validate_agent_gateway_endpoint
+
+            if args.agent_kind != "hosted":
+                raise ValueError("--agent-gateway-endpoint supports only the version-bound hosted assessment path.")
+            validate_agent_gateway_endpoint(args.agent_gateway_endpoint)
         args.agent_name = args.agent_name or ("documentation-agent" if args.agent_kind == "hosted" else "doc-agent")
         from azure.ai.projects import AIProjectClient
         from azure.identity import AzureCliCredential
@@ -248,7 +258,10 @@ def main(argv: list[str] | None = None) -> int:
     try:
         with (
             AzureCliCredential() as credential,
-            AIProjectClient(endpoint=args.project_endpoint, credential=credential) as project,
+            AIProjectClient(
+                endpoint=args.project_endpoint, credential=credential,
+                **({"allow_preview": True} if args.agent_gateway_endpoint is not None else {}),
+            ) as project,
         ):
             agent = project.agents.get_version(args.agent_name, args.agent_version)
             if agent.name != args.agent_name or agent.version != args.agent_version:
@@ -261,7 +274,10 @@ def main(argv: list[str] | None = None) -> int:
                 actual_model = project.deployments.get(artifact.runtime_provenance.model).as_dict().get("model_version")
                 if actual_model != args.model_version:
                     raise ValueError("Hosted model deployment differs from the reviewed model version.")
-                report = invoke_hosted(project, request, agent.name, agent.version, artifact)
+                report = invoke_hosted(
+                    project, request, agent.name, agent.version, artifact,
+                    agent_gateway_endpoint=args.agent_gateway_endpoint,
+                )
             else:
                 provenance = selected_provenance(
                     agent.name, agent.version, agent.definition.as_dict(), agent.metadata or {}, args.model_version

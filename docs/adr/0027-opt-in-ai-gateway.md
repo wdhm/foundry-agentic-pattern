@@ -21,7 +21,14 @@ explicit caller identity validation, model allowlisting, usage/request limits,
 unbuffered transport and body-free API diagnostics. Do not provision a service
 or grant identities/roles automatically.
 
-Keep hosted-agent ingress, Teams Activity, version-specific sessions, selectors
+Add a separate optional, identity-bound named-agent `POST /responses` ingress
+route for the version-bound hosted assessment CLI. Use the supported SDK base-URL
+override while retaining the original bearer provider and agent feature headers.
+Keep session creation and GET-confirmed concrete version checks direct; never
+replace version evidence with a gateway-route claim. The initial omission of
+agent Responses ingress was staging, not a technical compatibility blocker.
+
+Keep Teams Activity, pipeline push transport, session control, selectors
 and approved write calls direct. Do not claim fleet-wide agent governance or
 that model routing also governs Foundry service-side evaluators. Preserve
 evidence, version pins, source guards and approval/unknown-outcome semantics.
@@ -38,7 +45,8 @@ not a live switch authorized by this decision.
   association would change live routes. Not executed; requires separate scope/
   coverage verification for this hosted runtime and its tools.
 - **Proxy every project/agent endpoint:** conflates model APIs, version/session
-  control and Activity ingress; insufficient evidence of compatible semantics.
+  control and Activity ingress. Instead, expose only the named assessment
+  Responses operation, with required session ID and no approval input arrays.
 - **Replace the ADO gateway or approvals:** loses delegated identity/exact-call
   controls; APIM is complementary, not a replacement.
 

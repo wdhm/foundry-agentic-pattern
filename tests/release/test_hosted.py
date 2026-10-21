@@ -379,15 +379,22 @@ def test_sdk_serializes_current_hosted_definition(plan):
     assert definition.as_dict() == plan.candidate_definition
 
 
-def test_real_sdk_hosted_session_and_named_responses_wire_contract(cases, raw, artifact, monkeypatch):
+@pytest.mark.parametrize("gateway_enabled", [False, True])
+@pytest.mark.parametrize("response_status", [200, 429])
+def test_real_sdk_hosted_session_and_named_responses_wire_contract(
+    cases, raw, artifact, monkeypatch, gateway_enabled, response_status,
+):
     import time
 
     import httpx
     from azure.ai.projects import AIProjectClient
     from azure.core.credentials import AccessToken
     from azure.core.pipeline.transport import HttpResponse, HttpTransport
+    from openai import RateLimitError
 
     requests = []
+    gateway = "https://offline.azure-api.net/documentation-agent/" if gateway_enabled else None
+    feature_headers = []
 
     class Response(HttpResponse):
         def __init__(self, request):
@@ -435,24 +442,127 @@ def test_real_sdk_hosted_session_and_named_responses_wire_contract(cases, raw, a
 
     def respond(request):
         requests.append(request)
-        assert request.url.path.endswith("/agents/documentation-agent/endpoint/protocols/openai/responses")
+        if gateway_enabled:
+            assert str(request.url).split("?")[0] == gateway + "responses"
+        else:
+            assert request.url.path.endswith("/agents/documentation-agent/endpoint/protocols/openai/responses")
+        assert request.headers["Authorization"] == "Bearer offline-not-a-credential"
+        assert request.headers["Foundry-Features"] == feature_headers[0]
         payload = json.loads(request.content)
         assert payload["agent_session_id"] == "offline-session"
         assert json.loads(payload["input"]) == cases[0]["request"].model_dump(mode="json")
         assert "agent_reference" not in payload
+        if response_status == 429:
+            return httpx.Response(429, json={"error": {"message": "offline throttle"}})
         return httpx.Response(200, json=raw)
 
     with AIProjectClient(
         endpoint="https://offline.example/api/projects/test", credential=credential, transport=Transport(),
+        **({"allow_preview": True} if gateway_enabled else {}),
     ) as project:
         factory = project.get_openai_client
-        monkeypatch.setattr(project, "get_openai_client", lambda **kwargs: factory(
-            **kwargs, api_key="offline-not-a-credential",
-            http_client=httpx.Client(transport=httpx.MockTransport(respond)),
-        ))
-        report = invoke_hosted(project, cases[0]["request"], "documentation-agent", "4", artifact)
-    assert report["agent_session_id"] == "offline-session"
+
+        def get_client(**kwargs):
+            client = factory(**kwargs, http_client=httpx.Client(transport=httpx.MockTransport(respond)))
+            feature_headers.append(client.default_headers["Foundry-Features"])
+            assert feature_headers[0]
+            assert client.max_retries == (0 if gateway_enabled else 2)
+            if response_status == 429 and not gateway_enabled:
+                client.max_retries = 0  # Keep the direct-mode comparison fast; its default is checked above.
+            return client
+
+        monkeypatch.setattr(project, "get_openai_client", get_client)
+        if response_status == 429:
+            with pytest.raises(RateLimitError):
+                invoke_hosted(
+                    project, cases[0]["request"], "documentation-agent", "4", artifact,
+                    agent_gateway_endpoint=gateway,
+                )
+        else:
+            report = invoke_hosted(
+                project, cases[0]["request"], "documentation-agent", "4", artifact,
+                agent_gateway_endpoint=gateway,
+            )
+            assert report["agent_session_id"] == "offline-session"
+            assert report["routing"] == "version_specific_session_not_serving_path_proof"
+            if gateway_enabled:
+                assert report["response_transport"] == "apim_agent_ingress"
+            else:
+                assert "response_transport" not in report
+            assert report["result"]["provenance"] == artifact.runtime_provenance.model_dump()
     assert len(requests) == 3
+    assert {call.args[0] for call in credential.get_token.call_args_list} == {"https://ai.azure.com/.default"}
+
+
+@pytest.mark.parametrize("endpoint", [
+    "", "http://offline/documentation-agent/", "https://user:secret@offline/documentation-agent/",
+    "https://offline:8443/documentation-agent/", "https://offline/documentation-agent/?key=secret",
+    "https://offline/documentation-agent/#fragment", "https://offline/documentation-model/",
+    "https://offline/documentation-agent",
+])
+def test_invalid_agent_gateway_is_rejected_before_session_creation(endpoint, cases, raw, artifact):
+    project, client = project_for(raw)
+    with pytest.raises(ValueError, match="Agent gateway"):
+        invoke_hosted(
+            project, cases[0]["request"], "documentation-agent", "4", artifact,
+            agent_gateway_endpoint=endpoint,
+        )
+    project.agents.create_session.assert_not_called()
+    client.responses.create.assert_not_called()
+
+
+def test_gateway_keeps_session_version_verification(cases, raw, artifact):
+    project, client = project_for(raw)
+    project.agents.get_session.return_value = session(version="5")
+    with pytest.raises(ValueError, match="not bound"):
+        invoke_hosted(
+            project, cases[0]["request"], "documentation-agent", "4", artifact,
+            agent_gateway_endpoint="https://offline.azure-api.net/documentation-agent/",
+        )
+    project.get_openai_client.assert_not_called()
+    client.responses.create.assert_not_called()
+
+
+def test_named_agent_sdk_streaming_contract_preserves_session_and_identity():
+    import time
+
+    import httpx
+    from azure.ai.projects import AIProjectClient
+    from azure.core.credentials import AccessToken
+
+    seen = []
+    credential = MagicMock(spec=["get_token"])
+    credential.get_token.return_value = AccessToken("offline-not-a-credential", int(time.time()) + 3600)
+    gateway = "https://offline.azure-api.net/documentation-agent/"
+
+    def respond(request):
+        seen.append(request)
+        assert str(request.url).split("?")[0] == gateway + "responses"
+        assert request.headers["Authorization"] == "Bearer offline-not-a-credential"
+        assert json.loads(request.content) == {
+            "input": "unchanged request", "agent_session_id": "verified-session", "stream": True,
+        }
+        return httpx.Response(200, headers={"content-type": "text/event-stream"}, content=(
+            'data: {"type":"response.output_text.delta","delta":"unchanged"}\n\n'
+            'data: {"type":"response.completed","response":{"id":"resp_1","status":"completed"}}\n\n'
+            'data: [DONE]\n\n'
+        ))
+
+    with (
+        AIProjectClient(
+            endpoint="https://offline.example/api/projects/test", credential=credential, allow_preview=True,
+        ) as project,
+        project.get_openai_client(
+            agent_name="documentation-agent", base_url=gateway, max_retries=0,
+            http_client=httpx.Client(transport=httpx.MockTransport(respond)),
+        ) as client,
+    ):
+        with client.responses.create(
+            input="unchanged request", extra_body={"agent_session_id": "verified-session"}, stream=True,
+        ) as stream:
+            assert [event.type for event in stream] == ["response.output_text.delta", "response.completed"]
+    assert len(seen) == 1
+    assert credential.get_token.call_args.args == ("https://ai.azure.com/.default",)
 
 
 @pytest.mark.parametrize("reference", [
@@ -567,7 +677,10 @@ def test_plan_review_requirements_are_not_defaults(problem, plan, cloud, tmp_pat
         HostedReleasePlan.model_validate(data)
 
 
-def test_hosted_trigger_validates_before_invocation(plan, version, artifact, raw, cases, tmp_path, monkeypatch, capsys):
+@pytest.mark.parametrize("gateway_enabled", [False, True])
+def test_hosted_trigger_validates_before_invocation(
+    plan, version, artifact, raw, cases, tmp_path, monkeypatch, capsys, gateway_enabled,
+):
     import azure.ai.projects
     import azure.identity
     project, _ = project_for(raw)
@@ -581,16 +694,24 @@ def test_hosted_trigger_validates_before_invocation(plan, version, artifact, raw
     path = tmp_path / "artifact.json"
     path.write_text(artifact.model_dump_json())
     request = cases[0]["request"]
+    gateway = "https://offline.azure-api.net/documentation-agent/"
+    extra = ["--agent-gateway-endpoint", gateway] if gateway_enabled else []
     assert trigger_main([
         "invoke", "--project-endpoint", plan.project_endpoint, "--artifact", str(path),
         "--agent-version", "4", "--model-version", plan.model_version,
         "--repo", request.subject.repo, "--commit", request.subject.commit_sha,
         "--documentation-standard-ref", request.documentation_standard_ref, "--requested-by", "offline",
         "--request-id", str(request.request_id), "--correlation-id", str(request.correlation_id),
-    ]) == 0
+    ] + extra) == 0
     report = json.loads(capsys.readouterr().out)
     assert report["agent_version"] == "4" and report["result"]["provenance"] == artifact.runtime_provenance.model_dump()
     project.agents.create_version.assert_not_called()
+    expected = {"agent_name": "documentation-agent"}
+    if gateway_enabled:
+        expected.update(base_url=gateway, max_retries=0)
+    project.get_openai_client.assert_called_once_with(**expected)
+    if gateway_enabled:
+        assert azure.ai.projects.AIProjectClient.call_args.kwargs["allow_preview"] is True
 
 
 @pytest.fixture

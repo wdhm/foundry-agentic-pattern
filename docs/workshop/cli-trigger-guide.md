@@ -58,6 +58,15 @@ documentation-trigger invoke `
 is optional. Full Git SHA is mandatory. `--request-id` and `--correlation-id`
 accept UUIDs; otherwise each invocation generates fresh IDs.
 
+The optional `--agent-gateway-endpoint https://<apim-name>.azure-api.net/documentation-agent/`
+routes only the final hosted assessment Responses request through a separately
+reviewed APIM ingress API. Exact-version session creation/readback, artifact
+checks and result provenance remain unchanged; the original client bearer
+identity is preserved. The flag is hosted-only, disables automatic Responses
+retries and never falls back on gateway errors. It does not route Teams Activity
+or approved writes. See the [gateway guide](../ai-gateway.md) for the independent
+ingress module, client identity/cost review and deployment boundaries.
+
 Task-aware runtime app `0.4.0` also supports paired `--task-question` and
 `--task-scope change_review|information_review`, serialized as canonical
 `request.task`. Omit both to preserve legacy source-based assessment.

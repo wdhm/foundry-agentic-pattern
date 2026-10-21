@@ -216,7 +216,7 @@ def test_actual_toolbox_mcp_session_keeps_auth_and_lifecycle_headers(monkeypatch
             assert request.headers["mcp-protocol-version"] == "2025-06-18"
 
 
-@pytest.mark.parametrize("filename", ["model-policy.xml", "tool-policy.xml"])
+@pytest.mark.parametrize("filename", ["model-policy.xml", "tool-policy.xml", "agent-policy.xml"])
 def test_policy_contract_is_identity_bound_nonreplaying_and_stream_safe(filename):
     policy = ElementTree.parse(ROOT / "infra" / "ai-gateway" / filename).getroot()
     auth = policy.find("inbound/validate-jwt")
@@ -237,6 +237,11 @@ def test_policy_contract_is_identity_bound_nonreplaying_and_stream_safe(filename
         assert limit.attrib["token-quota-period"] == "Daily"
         assert limit.attrib["estimate-prompt-tokens"] == "false"
         assert policy.find("inbound/validate-content") is not None
-    else:
+    elif filename == "tool-policy.xml":
         assert policy.find("inbound/rate-limit-by-key").attrib["renewal-period"] == "60"
         assert policy.findtext("inbound/set-query-parameter/value") == "v1"
+    else:
+        assert policy.find("inbound/rate-limit-by-key").attrib["renewal-period"] == "60"
+        assert policy.find("inbound/llm-token-limit") is None
+        assert policy.find("inbound/validate-content") is not None
+        assert forward.attrib["follow-redirects"] == "false"

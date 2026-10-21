@@ -32,7 +32,9 @@ assembly, presenter review, rehearsal and backup recording remain outstanding.
 The optional [AI gateway integration](docs/ai-gateway.md) adds reviewable APIM
 model/read-toolbox routes and independent runtime opt-ins. **Direct mode remains
 the default; no live routing, deployment or Teams/approval behavior is changed.**
-Hosted-agent ingress and approved writes are not routed through APIM.
+The hosted assessment CLI can separately opt its named-agent Responses request
+into APIM; session/version checks stay direct. Teams Activity, pipeline push
+transport and approved writes remain direct.
 
 ---
 

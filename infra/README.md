@@ -20,6 +20,10 @@ read-Toolbox routes on an **existing** APIM instance. It is not deployed, wired
 into CI, or a replacement for the ADO identity gateway. See the
 [integration/review guide](../docs/ai-gateway.md) for independent opt-ins,
 coverage gaps, identity/cost prerequisites and direct-mode rollback.
+The independent [assessment ingress module](ai-gateway/agent-ingress.bicep)
+adds only a fixed named-agent Responses operation for the opt-in hosted CLI,
+with a separate client identity allowlist. It does not proxy session control,
+Teams Activity or approved writes.
 
 ## Future IaC scope ([ADR 0014](../docs/adr/0014-infrastructure-scope.md))
 

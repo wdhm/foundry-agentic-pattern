@@ -123,7 +123,9 @@ attribution remains future hardening.
 [ADR 0027](adr/0027-opt-in-ai-gateway.md) and the
 [integration guide](ai-gateway.md) add model/read-toolbox routing and reviewed
 APIM configuration. Direct mode remains the default. No live routes, grants or
-deployments were changed; agent ingress, approved writes and service-side
+deployments were changed. The hosted assessment CLI also has a separate
+named-agent Responses ingress opt-in; session/version checks remain direct.
+Teams Activity, pipeline push transport, approved writes and service-side
 evaluators are not covered by these opt-ins. The earlier slide disposition is
 historical; no live enforcement or per-agent billing proof follows from this code.
 
