@@ -5,10 +5,104 @@ boundary: it can authenticate callers, constrain model selection and usage, and
 throttle access to a versioned toolbox. It cannot determine whether an answer is
 supported by sources or whether a human approved the exact write.
 
-**Repository integration only; nothing deployed or rerouted.** This opt-in
-increment reopens the earlier slides-only disposition in ADR 0022 for review.
-It does not turn the workshop into a production platform. See
+**Repository preparation; no deployment or routing proof is recorded here.**
+The user approved a public, model-only Developer demo on 2026-10-21.
+Tool/agent routes remain future opt-ins, not part of that initial deployment.
+This reopens the earlier slides-only disposition in ADR 0022; it does not turn
+the workshop into a production platform. See
 [ADR 0027](adr/0027-opt-in-ai-gateway.md).
+
+## Initial demo: public HTTPS, model routing only
+
+The approved starting architecture is one **Developer** unit in **Sweden
+Central**, public HTTPS, no VNet, private endpoint, VPN or WAF. The user approved
+the quoted **USD 0.0658/hour (~USD 48.03 per 730 hours)** configuration.
+This is a time-specific retail estimate, not a billing guarantee; log ingestion/
+retention and model usage are additional. Developer has **no production SLA**.
+Provider registration, capacity, deployment and live acceptance remain operator
+steps; this document is not evidence that they happened.
+
+The intended demo context is subscription
+`ac021984-29ca-42e6-9c21-36e599814543`, resource group
+`rg-foundry-agentic-pattern`, candidate service `apim-foundry-agentic-r8n3ld`.
+The parent coordinator owns final merge and Azure execution. Publisher
+organization/contact, exact caller object ID, deployment pin and positive
+`tokensPerMinute`/`dailyTokenQuota` values must be explicitly reviewed before
+execution; this repo invents neither personal contact details nor usage budgets.
+
+Three separate templates keep paid service creation, telemetry permission and
+route configuration independently reviewable:
+
+| Step | Template and inputs | Scope |
+|---|---|---|
+| Public demo bootstrap | [`bootstrap-public-developer.bicep`](../infra/ai-gateway/bootstrap-public-developer.bicep): required `apimName`, `location`, `publisherName`, `publisherEmail` | Creates only one public Developer unit with a system-assigned identity. No API routes, logger, role assignments or runtime opt-ins. |
+| Separately authorized telemetry setup | [`managed-insights-logger.bicep`](../infra/ai-gateway/managed-insights-logger.bicep): required `apimName`, `applicationInsightsName` | References existing APIM/Insights and adds its managed-identity logger plus one **Monitoring Metrics Publisher** assignment scoped to that Insights component. This new RBAC grant is **pending separate permission**; paid service approval does not authorize it. |
+| Model-only configuration | [`main.bicep`](../infra/ai-gateway/main.bicep): required `apimName`, `projectEndpoint`, `tenantId`, `callerObjectId`, `loggerResourceId`, `modelDeployment`, `tokensPerMinute`, `dailyTokenQuota`; set `enableToolRouting=false`, omit both toolbox inputs | Creates only the model API/policy, model/common named values and model diagnostics. No tool API/operations/policy/diagnostics/counter/rate values; no agent ingress deployment or runtime change. |
+
+`loggerResourceId` comes from the telemetry module output, not the bootstrap.
+Service creation can proceed while logging permission is pending, but **do not
+deploy model routes or enable traffic without the reviewed working logger**.
+There is no silent unlogged/key-auth fallback. The nullable
+`toolboxGatewayEndpoint` output is **null** for model-only configuration.
+Omitting the toolbox URL also defaults to model-only; old callers supplying the
+original toolbox URL and positive request limit still get their two-route
+configuration. Enabling tools without both inputs fails explicitly rather than
+inventing a URL or quota. Conditional resources in an **incremental** deployment
+omit creation/update; they do not delete tool APIs from an earlier installation.
+If reusing an instance, inventory existing routes before claiming model-only
+coverage. The recorded demo inventory found no APIM instance.
+
+Prepare reviewed ARM parameter files under ignored `.azure/` locally. After
+the coordinator completes Azure preflight, the first explicit execution step
+is (this command **creates a paid resource**, not a local check):
+
+```powershell
+az deployment group create --subscription ac021984-29ca-42e6-9c21-36e599814543 `
+  --resource-group rg-foundry-agentic-pattern --name apim-public-bootstrap `
+  --template-file .\infra\ai-gateway\bootstrap-public-developer.bicep `
+  --parameters '@.azure/apim-bootstrap.parameters.json'
+```
+
+Use `apimName=apim-foundry-agentic-r8n3ld`, `location=swedencentral` and the
+operator-confirmed publisher organization/contact in that ignored parameter
+file; no public-repo personal contact is provided. Wait for successful service
+provisioning. **Only after explicit permission for the component-scoped
+telemetry grant**, prepare the logger parameters with that APIM name and
+`applicationInsightsName=appi-foundry-agentic`, then run:
+
+```powershell
+az deployment group create --subscription ac021984-29ca-42e6-9c21-36e599814543 `
+  --resource-group rg-foundry-agentic-pattern --name apim-managed-telemetry `
+  --template-file .\infra\ai-gateway\managed-insights-logger.bicep `
+  --parameters '@.azure/apim-logger.parameters.json'
+```
+
+After telemetry permission, provisioning and ingestion have been verified,
+configure the model-only route with the exact inputs above:
+
+```powershell
+az deployment group create --subscription ac021984-29ca-42e6-9c21-36e599814543 `
+  --resource-group rg-foundry-agentic-pattern --name apim-model-configuration `
+  --template-file .\infra\ai-gateway\main.bicep `
+  --parameters '@.azure/apim-model.parameters.json'
+```
+
+Before bootstrap, verify/register `Microsoft.ApiManagement` in that exact
+subscription through the approved operator workflow; do not change CLI defaults.
+The service-only deployer needs APIM creation permission, not role-assignment
+permission. The separately authorized telemetry step requires role-assignment
+permission at the existing Insights resource, not broad model/tool roles.
+Verify provisioning, managed-identity ingestion and body-free diagnostics, then
+test admission/model/limit behavior using an explicitly reviewed client identity.
+Only after that validation should a separately reviewed runtime candidate add
+**`DOCUMENTATION_MODEL_GATEWAY_ENDPOINT` alone**. Keep the Toolbox setting and
+CLI agent-ingress flag unset; do not republish Teams or change write/approval
+transport. A template deployment alone does not route the hosted application.
+
+This manual SDK route works with the documented classic Developer policy
+support. It is **not** a Foundry portal-native AI gateway association, which
+requires an eligible **v2** instance. Do not try to associate this Developer
+instance with the project or enable wider native project routing.
 
 ## Three different traffic paths
 
@@ -106,8 +200,8 @@ tenant-wide rule to make a local test pass.
 
 ## Infrastructure and enforcement
 
-[`infra/ai-gateway/main.bicep`](../infra/ai-gateway/main.bicep) configures two
-APIs on an **existing, separately approved APIM instance**, plus named values,
+[`infra/ai-gateway/main.bicep`](../infra/ai-gateway/main.bicep) configures a model
+API and an optional tools API on an **existing, separately approved APIM instance**, plus named values,
 policies and body-free Application Insights diagnostics using an existing logger.
 It does not create an APIM service, logger, Foundry resource, identity or RBAC
 assignment; it is not wired into CI or the existing release/deployment scripts.
@@ -116,10 +210,10 @@ assignment; it is not wired into CI or the existing release/deployment scripts.
 |---|---|
 | `apimName`, `loggerResourceId` | Existing instance and its APIM Application Insights logger resource ID. Fixed API/named-value names mean one reviewed project/caller per instance for this module; do not overwrite another installation. |
 | `projectEndpoint` | Exact HTTPS Foundry project endpoint, no trailing slash; must equal the candidate's `DOCUMENTATION_PROJECT_ENDPOINT`. |
-| `readToolboxBaseUrl` | Exact HTTPS versioned **read-only** Foundry Toolbox URL ending `/toolboxes/<name>/versions/<number>`, no `/mcp`, query or trailing slash. Must correspond to the candidate's direct `TOOLBOX_ENDPOINT`. Never target the write toolbox or the ADO gateway directly. |
+| `enableToolRouting`, `readToolboxBaseUrl` | Initially `false` and omitted, respectively. Future tools opt-in: exact HTTPS versioned **read-only** Foundry Toolbox URL ending `/toolboxes/<name>/versions/<number>`, no `/mcp`, query or trailing slash. Must correspond to the candidate's direct `TOOLBOX_ENDPOINT`. Never target the write toolbox or the ADO gateway directly. |
 | `tenantId`, `callerObjectId` | Reviewed tenant and calling managed identity's **object** ID, not its client ID or a caller-supplied agent-name header. |
 | `modelDeployment` | Same deployment as `AZURE_AI_MODEL_DEPLOYMENT_NAME`; preserve/review its concrete `DOCUMENTATION_MODEL_VERSION` and evaluator pins independently. |
-| `tokensPerMinute`, `dailyTokenQuota`, `toolRequestsPerMinute` | Required positive values; no production budget or capacity is chosen by default. Token counters aggregate this route's project/deployment; tool counters aggregate the configured toolbox. |
+| `tokensPerMinute`, `dailyTokenQuota`, `toolRequestsPerMinute` | First two always required and positive; tool request limit required only when tools are enabled. No production budget or capacity is chosen by default. Token counters aggregate this route's project/deployment; tool counters aggregate the configured toolbox. |
 
 The model API exposes only `POST /responses`. Request validation restricts
 `model` to the reviewed deployment and rejects `store:true` and
@@ -172,13 +266,28 @@ reviewed architecture change, not something to enable quietly in this module.
 
 ## Observability and privacy
 
-All three API diagnostics set request/response body bytes to **zero**, log no headers and
+Every deployed API diagnostic sets request/response body bytes to **zero**, logs no headers and
 disable client-IP logging. Do not log prompts, source text, tool arguments,
 replacement text, tokens or authorization headers. Audit existing **global,
 Azure Monitor and logger** settings too: per-API Application Insights settings
 do not prove that every other diagnostic sink is body-free. Review retention
 and access before enabling traffic. No diagnostic settings or log export are
 changed by this PR on Azure.
+
+The separate managed-identity logger module reuses **`appi-foundry-agentic`**, already backed by
+**`log-foundry-agentic`** with local authentication disabled. The supported
+[APIM managed-identity logger contract](https://learn.microsoft.com/azure/api-management/api-management-howto-app-insights#logger-with-connection-string-and-managed-identity-credentials-recommended)
+uses `credentials.identityClientId=SystemAssigned` **plus** the existing
+Insights connection string read by ARM. This is keyless **authentication**, not
+connection-string-free configuration: routing metadata still contains an
+instrumentation identifier. Do not print, commit or output that value or switch
+to the portal's instrumentation-key-only setup. No `listKeys` call or local-auth
+enablement is used. Only the APIM identity's telemetry publisher role is proposed
+at that Insights component; its workspace, retention, local-auth setting and
+the project's existing managed-identity ingestion are not changed. This grant
+must be separately approved before deployment. APIM receives
+no backend model/tool role. Allow telemetry RBAC propagation and verify ingestion;
+if it fails, stop rather than silently disabling diagnostics or using key auth.
 
 `X-Gateway-Request-Id` is generated by APIM, not trusted from the caller.
 [`requests.kql`](../infra/ai-gateway/requests.kql) is a body-free route-count
@@ -198,17 +307,20 @@ never become authorization, budget or chargeback authority.
 2. Review region/tier availability and current pricing. Current Foundry portal
    integration supports existing v2 instances in the same subscription/tenant;
    Standard v2 / Premium v2 network features and prices differ from Basic v2.
-   Do not assume a free offer, Developer SLA or zero cost because this PR creates
-   no service. APIM, log ingestion/retention, and model usage can all incur cost.
+   Do not assume a free offer or Developer SLA. The independent bootstrap
+   creates a paid service; log ingestion/retention and model usage also incur cost.
 3. Review concrete backend URLs, toolbox version/allowlist, caller ID and
    deployment/version mapping against an immutable candidate and this module's
-   exact commit. Obtain separate approval before ARM deployment/validation,
-   identity grants, publishing or any live/model calls. Do not change serving
-   selectors or the Teams application as part of gateway setup.
+   exact commit. The public Developer service has recorded user authorization;
+   the telemetry grant still needs explicit permission. Keep publishing and
+   live/model calls within their separately authorized scope. The coordinator
+   owns Azure validation/deployment; do not change serving selectors or the
+   Teams application as part of gateway setup.
 4. In an approved isolated candidate, establish a direct baseline; then verify
-   both gateway routes independently with APIM request evidence, denied
-   identities, wrong model, quota/TPM behavior, normal JSON and streaming,
-   MCP initialize/discovery/read/session cleanup and explicit errors. Confirm
+   the model route with APIM request evidence, denied identities, wrong model,
+   required `store:false`, rejected background requests, quota/TPM behavior,
+   normal JSON/streaming and explicit errors. Future tool routing requires
+   its own MCP initialize/discovery/read/session-cleanup validation. Confirm
    source/provenance equality and the existing push/Teams approval behavior.
    Test 429 and 403 separately; never replay approved writes as a limit test.
 5. Roll back by removing the runtime opt-ins and/or CLI ingress flag from the separately reviewed configuration,
@@ -231,6 +343,11 @@ headers unchanged, result/provenance checks intact and gateway 429s non-retrying
 Production-adapter tests cover both model call sites and read-toolbox selection;
 existing guard/approval/push tests remain in place. XML contract checks and
 Bicep compilation are local checks, **not APIM policy execution**.
+`tests/infra/test_ai_gateway_templates.py` additionally compiles the templates
+with `BICEP_CLI` (or `bicep` on PATH), checking conditional tool resources/config/
+outputs, explicit limits, model diagnostic dependencies, model-only/legacy
+parameter shapes, public single-unit service-only bootstrap,
+existing-Insights managed-identity logger and separately scoped telemetry role.
 
 No Azure provisioning, ARM validation, paid model call, policy enforcement,
 runtime Toolbox/APIM compatibility, live streaming/session or cost attribution
@@ -245,3 +362,4 @@ and agents are already centrally governed.
 - [Expose an existing MCP server: protocol/auth limitations and streaming precautions](https://learn.microsoft.com/azure/api-management/expose-existing-mcp-server)
 - [AI gateway capabilities](https://learn.microsoft.com/azure/api-management/genai-gateway-capabilities)
 - [API Management pricing](https://azure.microsoft.com/pricing/details/api-management/)
+- [APIM Application Insights managed-identity integration](https://learn.microsoft.com/azure/api-management/api-management-howto-app-insights)

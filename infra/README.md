@@ -25,6 +25,19 @@ adds only a fixed named-agent Responses operation for the opt-in hosted CLI,
 with a separate client identity allowlist. It does not proxy session control,
 Teams Activity or approved writes.
 
+The approved first deployment is **public/model-only**. `main.bicep` with
+`enableToolRouting=false` and omitted toolbox inputs creates no tool routes or
+tool configuration. The separate [public Developer bootstrap](ai-gateway/bootstrap-public-developer.bicep)
+creates only a paid single-unit demo service with explicit publisher/location
+inputs, no APIs, logger or grants. The separate
+[managed-identity logger module](ai-gateway/managed-insights-logger.bicep) requires
+explicit permission for its telemetry-only role on the existing Insights
+component; that permission is still pending. Do not configure model routes or
+enable traffic without approved working telemetry. Follow the
+[model-only runbook](../docs/ai-gateway.md#initial-demo-public-https-model-routing-only)
+for cost/context, publisher contact, positive limits and coordinator-owned
+deployment/validation; Developer has no production SLA.
+
 ## Future IaC scope ([ADR 0014](../docs/adr/0014-infrastructure-scope.md))
 
 This is the original target backlog, not deployed-resource evidence or a

@@ -1,6 +1,6 @@
 # 0027. Add an opt-in AI gateway without changing live routes
 
-- **Status:** Proposed; repository implementation for review, no deployment authorization
+- **Status:** Public model-only demo architecture approved by user; implementation under review, no deployment evidence
 - **Date:** 2026-10-21
 - **Related:** [0014](0014-infrastructure-scope.md), [0021](0021-agent-user-and-ado-mcp-gateway.md), [0022](0022-mvp-scope-platform-first.md), [0024](0024-hosted-documentation-runtime.md)
 
@@ -20,6 +20,24 @@ existing Toolbox/ADO identity chain. Configure an existing APIM instance with
 explicit caller identity validation, model allowlisting, usage/request limits,
 unbuffered transport and body-free API diagnostics. Do not provision a service
 or grant identities/roles automatically.
+
+The user subsequently approved the concrete starting deployment: public HTTPS,
+one Developer unit in Sweden Central (quoted USD 0.0658/hour, approximately
+USD 48.03/730 hours), no production SLA, VNet, private endpoint, VPN or WAF.
+Start with **model routing only**; tool/agent APIs and their runtime opt-ins are
+not enabled. Publisher contact and operational limits remain explicit inputs.
+
+Provide a separately invoked public Developer bootstrap for an environment
+without APIM. It creates only the service and its system-assigned identity, no
+API routes, logger or role assignments. A separate, explicitly authorized
+telemetry module grants only Monitoring Metrics Publisher on the existing
+`appi-foundry-agentic` component to that identity. Permission for this new grant
+is pending independently of the approved paid service; model routes/traffic
+wait for approved working telemetry. The logger uses documented managed-identity
+credentials and ARM-read connection metadata; it does not enable local auth,
+create another workspace, grant model/tool permissions or output logging values.
+The route module independently omits tools and their configuration/dependencies
+when disabled. No template or CI job automatically changes application routing.
 
 Add a separate optional, identity-bound named-agent `POST /responses` ingress
 route for the version-bound hosted assessment CLI. Use the supported SDK base-URL

@@ -6,8 +6,12 @@ param apimName string
 @description('Foundry project HTTPS endpoint, without trailing slash. Must match the reviewed agent definition.')
 param projectEndpoint string
 
-@description('Exact versioned READ-ONLY Toolbox URL, excluding /mcp and query, without trailing slash.')
-param readToolboxBaseUrl string
+@description('Optional exact versioned READ-ONLY Toolbox URL. Omit for model-only deployment.')
+@minLength(1)
+param readToolboxBaseUrl string?
+
+@description('Defaults to model-only when toolbox inputs are omitted. Existing callers providing toolbox inputs retain both routes.')
+param enableToolRouting bool = readToolboxBaseUrl != null
 
 @description('Entra tenant and allowed caller object ID (managed identity in hosted deployments). Not caller headers.')
 param tenantId string
@@ -26,21 +30,25 @@ param tokensPerMinute int
 param dailyTokenQuota int
 
 @minValue(1)
-param toolRequestsPerMinute int
+param toolRequestsPerMinute int?
 
 resource apim 'Microsoft.ApiManagement/service@2024-05-01' existing = {
   name: apimName
 }
 
-var settings = {
+var modelSettings = {
   'documentation-gateway-tenant': tenantId
   'documentation-gateway-caller': callerObjectId
   'documentation-gateway-token-rate': string(tokensPerMinute)
   'documentation-gateway-token-quota': string(dailyTokenQuota)
-  'documentation-gateway-tool-rate': string(toolRequestsPerMinute)
   'documentation-gateway-model-counter': '${apimName}:${projectEndpoint}:${modelDeployment}:model'
-  'documentation-gateway-tool-counter': '${apimName}:${readToolboxBaseUrl}:tools'
 }
+
+var toolSettings = enableToolRouting ? {
+  'documentation-gateway-tool-rate': string(toolRequestsPerMinute ?? fail('Tool routing requires toolRequestsPerMinute.'))
+  'documentation-gateway-tool-counter': '${apimName}:${readToolboxBaseUrl ?? fail('Tool routing requires readToolboxBaseUrl.')}:tools'
+} : {}
+var settings = union(modelSettings, toolSettings)
 
 resource namedValues 'Microsoft.ApiManagement/service/namedValues@2024-05-01' = [for setting in items(settings): {
   parent: apim
@@ -104,7 +112,7 @@ resource modelPolicy 'Microsoft.ApiManagement/service/apis/policies@2024-05-01' 
   dependsOn: [namedValues]
 }
 
-resource toolApi 'Microsoft.ApiManagement/service/apis@2024-05-01' = {
+resource toolApi 'Microsoft.ApiManagement/service/apis@2024-05-01' = if (enableToolRouting) {
   parent: apim
   name: 'documentation-tools'
   properties: {
@@ -112,11 +120,11 @@ resource toolApi 'Microsoft.ApiManagement/service/apis@2024-05-01' = {
     path: 'documentation-tools'
     protocols: ['https']
     subscriptionRequired: false
-    serviceUrl: readToolboxBaseUrl
+    serviceUrl: enableToolRouting ? (readToolboxBaseUrl ?? fail('Tool routing requires readToolboxBaseUrl.')) : null
   }
 }
 
-resource toolOperations 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = [for method in ['POST', 'GET', 'DELETE']: {
+resource toolOperations 'Microsoft.ApiManagement/service/apis/operations@2024-05-01' = [for method in ['POST', 'GET', 'DELETE']: if (enableToolRouting) {
   parent: toolApi
   name: 'mcp-${toLower(method)}'
   properties: {
@@ -128,7 +136,7 @@ resource toolOperations 'Microsoft.ApiManagement/service/apis/operations@2024-05
   }
 }]
 
-resource toolPolicy 'Microsoft.ApiManagement/service/apis/policies@2024-05-01' = {
+resource toolPolicy 'Microsoft.ApiManagement/service/apis/policies@2024-05-01' = if (enableToolRouting) {
   parent: toolApi
   name: 'policy'
   properties: {
@@ -138,26 +146,34 @@ resource toolPolicy 'Microsoft.ApiManagement/service/apis/policies@2024-05-01' =
   dependsOn: [namedValues, toolOperations]
 }
 
-resource diagnostics 'Microsoft.ApiManagement/service/apis/diagnostics@2024-05-01' = [for apiName in ['documentation-model', 'documentation-tools']: {
-  name: '${apim.name}/${apiName}/applicationinsights'
-  properties: {
-    loggerId: loggerResourceId
-    alwaysLog: 'allErrors'
-    logClientIp: false
-    httpCorrelationProtocol: 'W3C'
-    verbosity: 'error'
-    sampling: { samplingType: 'fixed', percentage: 100 }
-    frontend: {
-      request: { headers: [], body: { bytes: 0 } }
-      response: { headers: [], body: { bytes: 0 } }
-    }
-    backend: {
-      request: { headers: [], body: { bytes: 0 } }
-      response: { headers: [], body: { bytes: 0 } }
-    }
+var diagnosticsProperties = {
+  loggerId: loggerResourceId
+  alwaysLog: 'allErrors'
+  logClientIp: false
+  httpCorrelationProtocol: 'W3C'
+  verbosity: 'error'
+  sampling: { samplingType: 'fixed', percentage: 100 }
+  frontend: {
+    request: { headers: [], body: { bytes: 0 } }
+    response: { headers: [], body: { bytes: 0 } }
   }
-  dependsOn: [modelApi, toolApi]
-}]
+  backend: {
+    request: { headers: [], body: { bytes: 0 } }
+    response: { headers: [], body: { bytes: 0 } }
+  }
+}
+
+resource modelDiagnostics 'Microsoft.ApiManagement/service/apis/diagnostics@2024-05-01' = {
+  parent: modelApi
+  name: 'applicationinsights'
+  properties: diagnosticsProperties
+}
+
+resource toolDiagnostics 'Microsoft.ApiManagement/service/apis/diagnostics@2024-05-01' = if (enableToolRouting) {
+  parent: toolApi
+  name: 'applicationinsights'
+  properties: diagnosticsProperties
+}
 
 output modelGatewayEndpoint string = '${apim.properties.gatewayUrl}/documentation-model/'
-output toolboxGatewayEndpoint string = '${apim.properties.gatewayUrl}/documentation-tools/mcp?api-version=v1'
+output toolboxGatewayEndpoint string? = enableToolRouting ? '${apim.properties.gatewayUrl}/documentation-tools/mcp?api-version=v1' : null

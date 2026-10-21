@@ -35,6 +35,9 @@ the default; no live routing, deployment or Teams/approval behavior is changed.*
 The hosted assessment CLI can separately opt its named-agent Responses request
 into APIM; session/version checks stay direct. Teams Activity, pipeline push
 transport and approved writes remain direct.
+The user-approved first deployment is **public HTTPS, model routing only**;
+the independent Developer bootstrap and model-only configuration do not enable
+tool/agent routes or application traffic automatically.
 
 ---
 
