@@ -24,7 +24,9 @@ an approved evaluator and thresholds, matching candidate-version evidence and
 separate execution approval. No live-evaluation claim follows from offline tests.
 
 P3's [40-minute presenter guide](docs/workshop/p3-presenter-guide.md) links the
-prepared evidence slides and AI Gateway explanatory fallback. Shared-deck
+prepared evidence slides and AI Gateway explanatory fallback. P2's
+[presenter guide](docs/workshop/p2-presenter-guide.md) has the knowledge,
+toolbox and identity run order with recorded fallbacks. Shared-deck
 assembly, presenter review, rehearsal and backup recording remain outstanding.
 
 ---
