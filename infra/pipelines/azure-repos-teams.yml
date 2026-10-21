@@ -1,0 +1,62 @@
+# Install in the Azure Repos integration-team repository only after preflight.
+# Replace the REVIEWED_* values with operator-approved immutable settings.
+parameters:
+  - name: preflightOnly
+    type: boolean
+    default: false
+
+trigger:
+  batch: true
+  branches:
+    include: [main]
+  paths:
+    include:
+      - src/order_sync.py
+      - config/settings.json
+pr: none
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  runtimeCommit: REVIEWED_MERGED_GITHUB_COMMIT
+  hostedVersion: REVIEWED_HOSTED_VERSION
+  foundryEndpoint: https://foundry-agentic-r8n3ld.services.ai.azure.com/api/projects/proj-agentic
+  sourceRepository: https://dev.azure.com/foundry-agentic/integration-team/_git/8321c788-67e4-473c-9ad0-9f8847d077e1
+
+steps:
+  - checkout: none
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '3.13'
+  - task: AzureCLI@2
+    displayName: Assess pushed snapshot and notify registered reviewer
+    inputs:
+      azureSubscription: REVIEWED_FEDERATED_SERVICE_CONNECTION
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+        [[ "$RUNTIME_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+        [[ "$HOSTED_VERSION" =~ ^[1-9][0-9]*$ ]]
+        [[ "$SOURCE_BRANCH" == "refs/heads/main" ]]
+        [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+        # Execute only the reviewed runtime, never scripts from the changed repo.
+        python -m pip install --quiet --index-url https://pypi.org/simple \
+          "git+https://github.com/wdhm/foundry-agentic-pattern.git@$RUNTIME_COMMIT"
+        extra=()
+        if [[ "$PREFLIGHT_ONLY" == "True" || "$PREFLIGHT_ONLY" == "true" ]]; then extra=(--preflight); fi
+        python -m tools.push_trigger "${extra[@]}" \
+          --endpoint "$FOUNDRY_ENDPOINT" --version "$HOSTED_VERSION" \
+          --repository "$SOURCE_REPOSITORY" --branch "$SOURCE_BRANCH" \
+          --commit "$SOURCE_COMMIT" --pipeline-id "$PIPELINE_ID" --build-id "$BUILD_ID"
+    env:
+      RUNTIME_COMMIT: $(runtimeCommit)
+      HOSTED_VERSION: $(hostedVersion)
+      FOUNDRY_ENDPOINT: $(foundryEndpoint)
+      SOURCE_REPOSITORY: $(sourceRepository)
+      SOURCE_BRANCH: $(Build.SourceBranch)
+      SOURCE_COMMIT: $(Build.SourceVersion)
+      PIPELINE_ID: $(System.DefinitionId)
+      BUILD_ID: $(Build.BuildId)
+      PREFLIGHT_ONLY: ${{ parameters.preflightOnly }}
