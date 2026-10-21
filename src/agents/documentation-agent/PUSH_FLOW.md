@@ -1,6 +1,6 @@
 # Azure Repos main push -> assessment -> personal Teams review
 
-**Integration increment; not yet live-enabled.** This goes beyond the manual
+**Live main-push increment, verified 2026-10-21.** This goes beyond the manual
 workflow MVP in ADR 0022. It reuses the Azure Repos reader merged in #93, the
 normal assessment runtime and the native Teams approval handler from #94.
 The initial scope is one repository, `refs/heads/main`, one registered reviewer
@@ -123,14 +123,47 @@ construct the legacy `vstoken` issuer/subject. No client secret or PAT is needed
 The caller prints only event/session identifiers, not source content or tokens,
 and stops only the pipeline-owned session. A timeout is not retried blindly.
 
-### Prepared cloud foundation (2026-10-21)
+### Cloud foundation and live result (2026-10-21)
 
 With explicit user approval, a dedicated `id-ado-push-teams` managed identity,
 `fap-push-teams` Azure DevOps service connection and exact returned Entra
 federated credential were created. Only project-scoped Foundry Agent Consumer
-was assigned. The connection reports ready; this is not proof of a successful
-federated pipeline run. No pipeline trigger or new serving version was enabled
-by this preparation.
+was assigned. The connection is authorized only for pipeline
+**`documentation-main-to-teams` (ID 1)**. Manual run 1 proved federated invocation
+and returned `caller_verified` with `assessment_run=false`.
+
+Source commit `fd68158d8a621baad7abc408ddb44e6134b7f3a4` (PR #101) was built in
+ACR run `dtg`, with an operator-reviewed deployment-only push policy. Image:
+`sha256:4d63c5b980ff04c87be3e329f23cbf400d1d7c80a57c15eb7ebb9268e642f09d`.
+Hosted **v21** is selected at 100%, with the existing Teams publication and bot
+identity preserved; v13 is retained. No new wiki/source permission was granted.
+
+The user registered their personal chat using `connect repo`. An initial YAML
+enablement did not queue CI because the REST-created pipeline had no registered
+trigger. Its definition was then given explicit CI filters matching the YAML
+(main, `/src/order_sync.py`, `/config/settings.json`, batching enabled).
+Keep both the registered filters and YAML aligned when maintaining the pipeline.
+
+A comment-only source change automatically queued
+[run 2](https://dev.azure.com/foundry-agentic/integration-team/_build/results?buildId=2)
+with reason **`batchedCI`**, source commit
+`571ad37536ca2302d98da073255c6ae4f4ef0961`. It succeeded:
+
+| Evidence | Observed result |
+|---|---|
+| Pipeline | Queued 11:00:33Z; started 11:00:50Z; completed 11:02:56Z |
+| Notification result | `notified`, `duplicate=false`, at 11:02:41Z |
+| Event | `ec80b096-48f4-5ba9-8bc7-218c82f4570c` |
+| Stored assessment | `insufficient_information`, 3 findings, 4 evidence entries; exact pushed commit retained |
+| User-observed Teams UI | Notification arrived automatically; Open review displayed the assessment report and sandbox approval card; Reject returned Proposal rejected |
+| Pending call | `cc2ba5e5-558e-4834-bbb5-c9e95b002a2f` |
+| Pipeline session | `0abf7d81158a78d800mba8cDOryX6Z6ymjL4gXMgEF9M3uOS5j`, GET-confirmed version 21, idle after caller's stop |
+
+The user did not paste proposal JSON, and no Approve was requested for this test.
+Reject is user-observed UI evidence plus the existing runtime checks, not an
+independent gateway call-count audit. The inbox readback independently confirmed
+the event/result/pending linkage. This is delivery and integration proof, not a
+full quality evaluation or approved production-documentation update.
 
 ## Deduplication, failures and freshness
 
@@ -156,13 +189,13 @@ An `opening` record after a crash needs operator reconciliation, not automatic
 creation of another approval. SDK default retention is finite (30 days); this
 is neither indefinite deduplication nor a Cosmos audit implementation.
 
-## Acceptance still required
+## Remaining acceptance boundaries
 
 Local tests use the real triple-protocol SDK host with model/tool/delivery
-doubles. Live acceptance requires a federated pipeline run, an authenticated
-`connect repo`, a real main push, observed assessment output, proactive card,
-and reviewer decisions against the sandbox. Do not claim this works merely
-because identity resources or the YAML exist.
+doubles. The live run above additionally proves workload authentication,
+registration, a real push-triggered assessment, proactive delivery and reviewer
+Reject. Automatic failure recovery, source/wiki concurrency guarantees, group
+chat delivery and a complete PR-triggered approval story are not established.
 
 This increment cannot alone close PR-specific #30: PR triggers/comments and
 timing evidence remain. Full audit/commit attribution and real documentation
