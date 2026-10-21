@@ -6,18 +6,38 @@
 
 **Recorded runtime (2026-10-21):** hosted `documentation-agent:13` serves 100%. Assessment uses toolbox `documentation-agent-readonly:1`; only the approval runtime uses `documentation-agent-write:1` (`ado___wiki_upsert_page` only). Re-check serving before delivery; if it changed, update this line rather than presenting stale versions.
 
+## Slides
+
+[`slides/p2-knowledge-identity.pptx`](slides/p2-knowledge-identity.pptx): five slides, one per topic, each with speaker notes. Slides 2–4 end in a **LIVE DEMO** bar that names the command or view to switch to. Keep each slide up for under a minute, then demo.
+
 ## Run order and hard stops
 
-| Time | Minutes | Material and speaking sequence | Fallback / stop point |
+| Time | Minutes | Slide → demo | Fallback / stop point |
 |---|---|---|---|
-| 10:30-10:35 | 5 | **Mock data (F8).** 1 min: fictional Order Sync (webshop → Fabrikam ERP) in [`samples/sample-integration`](../../samples/sample-integration/README.md). 2 min: [PR #62](https://github.com/wdhm/foundry-agentic-pattern/pull/62) diff (retry/backoff, `erp.timeoutSeconds`, dead-letter queue). 2 min: the drifted wiki page `/Order Sync/Overview` and work item 1, then the three planted drifts in [`data/`](../../data/README.md#contents) | Browser tabs only; no agent call. If ADO is slow, show the planted-gaps row in [`data/`](../../data/README.md#contents) |
-| 10:35-10:43 | 8 | **Foundry IQ (F3).** 2 min: [documentation standard](../../data/knowledge/documentation-standard.md) and its `DS-xx` rule IDs. 3 min: knowledge base `kb-doc-agent` → source `ks-doc-knowledge` → index `doc-knowledge`, reached as an MCP tool over the project-MI connection `kb-doc-agent-mcp`. 3 min: why stable rules are indexed but wiki/work items are read live ([guide](foundry-iq-guide.md), [ADR 0011](../adr/0011-knowledge-foundry-iq-and-toolbox.md)) | Use the guide's diagram and design-choice table. Do not re-index or change the knowledge base live |
-| 10:43-10:55 | 12 | **Toolbox (F1), main demo.** 3 min: in the Foundry portal show `documentation-agent-readonly` (four read tools over `kb-doc-agent-mcp`, `github-mcp`, `ado-mcp-proxy`) next to `documentation-agent-write` (one tool). 2 min: GitHub over the hosted read-only MCP server with a fine-grained token ([guide](github-mcp-guide.md)). 5 min: one assessment of PR #62 → `gaps_found`, every evidence item pinned (commit `ad623147…`, wiki ETag, work-item revision) and findings citing DS-30. 2 min: the same reads also work from Azure Repos ([#93](https://github.com/wdhm/foundry-agentic-pattern/pull/93), [guide](azure-devops-workflow-guide.md)) | Live only if the rehearsal run passed (see below). Otherwise show the recorded result in the [GitHub guide](github-mcp-guide.md#the-result) and the live gate row `order-sync-retry 5/1/5` ([evidence](evaluation-release-guide.md#live-gate-evidence-2026-10-20)). Never enable write tools in an assessment |
-| 10:55-11:03 | 8 | **Identity & resource organisation.** 3 min: Entra **Agent ID**: the hosted agent's identity and its agent user `documentation-agent@…`; the token chain MI → blueprint → agent identity → agent user ([guide](agent-identity-guide.md)). 2 min: *the connection decides which identity is presented* ([table](resource-organization-guide.md#identities-who-authenticates-where)). 3 min: ADO wiki history of `/Workshop/Approval-Sandbox`: the commit from John's Teams Approve is authored by **documentation-agent (agent user)**, not a person | Wiki history is a read; no new write. If Entra is slow, use the identity table. Name the security debt below honestly |
-| 11:03-11:10 | 7 | **Slides:** [Agent 365](slides/agent-365.md) (fleet governance, [#46](https://github.com/wdhm/foundry-agentic-pattern/issues/46)), [Work IQ](slides/work-iq.md) ([#47](https://github.com/wdhm/foundry-agentic-pattern/issues/47)), [document sources](slides/document-sources.md) (PDF/SharePoint, [#48](https://github.com/wdhm/foundry-agentic-pattern/issues/48)). About 2 minutes each, 1 minute hand-over to Louise | Slides only |
+| 10:30-10:32 | 2 | **Framing** (slide 1). One sentence on data: *everything runs on a fictional Order Sync integration with three planted drifts, so we can show real calls safely* ([data](../../data/README.md)). | Slide only |
+| 10:32-10:45 | 13 | **Foundry IQ (F3)** (slide 2). Run `demo-foundry-iq.ps1`: the knowledge base returns DS-14 Error handling and DS-30 Drift as references. Then in the Foundry portal open knowledge base `kb-doc-agent` → source `ks-doc-knowledge` → index `doc-knowledge`, and the MCP connection `kb-doc-agent-mcp` (project managed identity). Close on *stable rules are indexed; code, wiki and work items are read live* ([guide](foundry-iq-guide.md), [ADR 0011](../adr/0011-knowledge-foundry-iq-and-toolbox.md)) | Show the [standard](../../data/knowledge/documentation-standard.md) and the guide's diagram. Do not re-index or change the knowledge base live |
+| 10:45-10:58 | 13 | **Toolbox (F1)** (slide 3). Run `demo-toolbox.ps1`: `documentation-agent-readonly` (four read tools over three connections) next to `documentation-agent-write` (one tool). Show the same in the Foundry portal. Then the PR #62 assessment → `gaps_found` with pinned evidence and findings citing DS-30 | Assessment live only if it passed at rehearsal (see below). Otherwise the recorded result ([GitHub guide](github-mcp-guide.md#the-result), [gate evidence](evaluation-release-guide.md#live-gate-evidence-2026-10-20)). Never enable write tools in an assessment |
+| 10:58-11:06 | 8 | **Agent identity** (slide 4). Run `demo-toolbox.ps1 -TryAsMe`: Foundry IQ and GitHub answer, but ADO refuses a person because the connection only accepts the agent's identity. In Entra Agent ID show the agent identity and the agent user. Open the wiki history of `/Workshop/Approval-Sandbox`: John's Teams Approve commit is authored by **documentation-agent (agent user)** ([guide](agent-identity-guide.md), [identity table](resource-organization-guide.md#identities-who-authenticates-where)) | Use the slide's table. Wiki history is a read; no new write. Name the security debt below |
+| 11:06-11:10 | 4 | **Agent 365** (slide 5): registry, access, security, lifecycle ([source](slides/agent-365.md), [#46](https://github.com/wdhm/foundry-agentic-pattern/issues/46)). Hand over to Louise | Slide only |
 
-Total: **5 + 8 + 12 + 8 + 7 = 40 minutes**. Keep questions for the shared 11:50 Q&A. If a view fails, switch to its fallback at once; do not debug access on stage.
+Total: **2 + 13 + 13 + 8 + 4 = 40 minutes**. Keep questions for the shared 11:50 Q&A. If a view fails, switch to its fallback at once; do not debug access on stage.
 
+**Backup slides, only if asked:** [Work IQ](slides/work-iq.md) ([#47](https://github.com/wdhm/foundry-agentic-pattern/issues/47)) and [PDF/SharePoint sources](slides/document-sources.md) ([#48](https://github.com/wdhm/foundry-agentic-pattern/issues/48)).
+
+## Set up the showcase
+
+Do this the day before and again 30 minutes before the slot. Every step is read-only.
+
+1. **Sign in** with `az login` as the tenant admin (the scripts use `az account get-access-token`).
+2. **Foundry IQ script:** `./infra/scripts/demo-foundry-iq.ps1 -SearchService srch-foundry-agentic-r8n3ld`. Pass: DS-14 and DS-30 among the references. Use `-Query "..."` to ask a different question live.
+3. **Toolbox script:** `./infra/scripts/demo-toolbox.ps1 -ProjectEndpoint https://foundry-agentic-r8n3ld.services.ai.azure.com/api/projects/proj-agentic`, then again with `-TryAsMe`. Pass: two toolboxes listed; with `-TryAsMe`, the ADO source is refused (`-32007`, `AgenticIdentityToken`).
+4. **Browser tabs**, in demo order:
+   - [Foundry portal](https://ai.azure.com) → project `proj-agentic` → knowledge base `kb-doc-agent`, then the two toolboxes.
+   - [Microsoft Entra admin center](https://entra.microsoft.com) → Agent ID → the `documentation-agent` agent identity, and Users → `documentation-agent@…` (the agent user).
+   - [Wiki page `/Workshop/Approval-Sandbox`](https://dev.azure.com/foundry-agentic/integration-team/_wiki/wikis/integration-team.wiki?pagePath=/Workshop/Approval-Sandbox) → History. Commits `d3ddedec71` (Teams Approve, 2026-10-20) and `ca622ad0cf` are by the agent user.
+   - [PR #62](https://github.com/wdhm/foundry-agentic-pattern/pull/62) and the recorded fallback result.
+5. **Rehearse the PR #62 assessment** once (next section) and record the run and session IDs.
+6. **Open the deck** in presenter view; the notes hold the talk track.
 ## Live assessment: rehearse first
 
 The live toolbox demo is one read-only assessment of PR #62 on the serving version. It is allowed live only if the same request passed at the rehearsal on the same serving version:

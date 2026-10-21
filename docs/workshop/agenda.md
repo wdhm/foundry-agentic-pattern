@@ -59,11 +59,11 @@ show the recorded result.
 
 | Time | Feature | F | Type | Content |
 |---|---|---|---|---|
-| 10:30–10:35 | Mock data | F8 | Demo | Fictional Order Sync integration, wiki page, work item and the three planted drifts in PR #62 ([data](../../data/README.md)) |
-| 10:35–10:43 | Foundry IQ | F3 | Demo | Stable knowledge: the documentation standard as a knowledge base, called as an MCP tool; findings cite rule IDs ([guide](foundry-iq-guide.md)) |
-| 10:43–10:55 | Toolbox (MCP · DevOps · GitHub) | F1 | Read-only demo (recorded fallback) | `documentation-agent-readonly` vs `documentation-agent-write`; one assessment of PR #62 → `gaps_found` with pinned evidence ([GitHub guide](github-mcp-guide.md)); same reads from Azure Repos ([guide](azure-devops-workflow-guide.md)). No write tools in an assessment |
-| 10:55–11:03 | Identities & resource org | – | Demo | Agent identity and agent user ([guide](agent-identity-guide.md)); which identity each connection presents ([guide](resource-organization-guide.md)); the wiki commit from John's Teams Approve is authored by the agent user. Name the security debt: the agent user is Basic + Contributors for the write path ([#22](https://github.com/wdhm/foundry-agentic-pattern/issues/22)) |
-| 11:03–11:10 | *Agent 365 · Work IQ · PDF/SharePoint* | – | [Slides](slides/README.md) | Fleet governance across M365 ([#46](https://github.com/wdhm/foundry-agentic-pattern/issues/46)), work context ([#47](https://github.com/wdhm/foundry-agentic-pattern/issues/47)), document sources ([#48](https://github.com/wdhm/foundry-agentic-pattern/issues/48)) |
+| 10:30–10:32 | Framing | F8 | Slide | One sentence: all demos run on a fictional Order Sync integration with planted drifts ([data](../../data/README.md)) |
+| 10:32–10:45 | Foundry IQ | F3 | Demo | The documentation standard as a knowledge base, called as an MCP tool; `demo-foundry-iq.ps1` returns DS-14 and DS-30 ([guide](foundry-iq-guide.md)) |
+| 10:45–10:58 | Toolbox (MCP · DevOps · GitHub) | F1 | Read-only demo (recorded fallback) | `demo-toolbox.ps1`: `documentation-agent-readonly` vs `documentation-agent-write`; one assessment of PR #62 → `gaps_found` with pinned evidence ([GitHub guide](github-mcp-guide.md)). No write tools in an assessment |
+| 10:58–11:06 | Agent identity | – | Demo | ADO refuses a person and accepts only the agent's identity; Entra Agent ID and the agent user ([guide](agent-identity-guide.md)); the wiki commit from John's Teams Approve is authored by the agent user. Name the security debt: the agent user is Basic + Contributors for the write path ([#22](https://github.com/wdhm/foundry-agentic-pattern/issues/22)) |
+| 11:06–11:10 | *Agent 365* | – | Slide | Fleet governance across M365 ([#46](https://github.com/wdhm/foundry-agentic-pattern/issues/46)). Work IQ ([#47](https://github.com/wdhm/foundry-agentic-pattern/issues/47)) and PDF/SharePoint ([#48](https://github.com/wdhm/foundry-agentic-pattern/issues/48)) are backup slides |
 
 ## 11:10–11:50 · P3 · AgentOps & platform · Louise
 
