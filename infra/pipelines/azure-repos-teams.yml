@@ -6,7 +6,8 @@ parameters:
     default: false
 
 trigger:
-  batch: true
+  # One main commit per event: batching can hide an earlier completed PR.
+  batch: false
   branches:
     include: [main]
   paths:
@@ -30,7 +31,7 @@ steps:
     inputs:
       versionSpec: '3.13'
   - task: AzureCLI@2
-    displayName: Assess pushed snapshot and notify registered reviewer
+    displayName: Verify merged PR, publish draft and notify reviewer
     inputs:
       azureSubscription: REVIEWED_FEDERATED_SERVICE_CONNECTION
       scriptType: bash
@@ -46,7 +47,7 @@ steps:
           "git+https://github.com/wdhm/foundry-agentic-pattern.git@$RUNTIME_COMMIT"
         extra=()
         if [[ "$PREFLIGHT_ONLY" == "True" || "$PREFLIGHT_ONLY" == "true" ]]; then extra=(--preflight); fi
-        python -m tools.push_trigger "${extra[@]}" \
+        python -m tools.push_trigger "${extra[@]}" --merged-pr-drafts \
           --endpoint "$FOUNDRY_ENDPOINT" --version "$HOSTED_VERSION" \
           --repository "$SOURCE_REPOSITORY" --branch "$SOURCE_BRANCH" \
           --commit "$SOURCE_COMMIT" --pipeline-id "$PIPELINE_ID" --build-id "$BUILD_ID"
@@ -60,3 +61,6 @@ steps:
       PIPELINE_ID: $(System.DefinitionId)
       BUILD_ID: $(Build.BuildId)
       PREFLIGHT_ONLY: ${{ parameters.preflightOnly }}
+      # Scoped Azure DevOps job token, not the Foundry workload token.
+      # Permit draft branch creation/contribution; never bypass main policies.
+      SYSTEM_ACCESSTOKEN: $(System.AccessToken)

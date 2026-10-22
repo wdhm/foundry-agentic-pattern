@@ -32,7 +32,7 @@ BINDING_STORE = "documentation-teams-approvals-v1"
 
 class CardAction(ContractModel):
     interface_version: Literal["1.0.0"]
-    action: Literal["approve", "reject", "edit", "modify", "inspect"]
+    action: Literal["approve", "reject", "edit", "modify", "inspect", "details"]
     pending_id: UUID
     args_hash: Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")]
     content: Annotated[NonBlank, Field(max_length=16000)] | None = None
@@ -116,6 +116,11 @@ class TeamsApproval:
             if stored is None or ChannelBinding.model_validate(stored.value) != binding:
                 raise ValueError("This card belongs to another user, conversation or session, or predates Teams cards.")
 
+    async def render(self, record: PendingCall) -> dict[str, Any]:
+        if self.push_flow is not None:
+            return await self.push_flow.render_pending(record)
+        return review_card(record, self.agent.policy.content_parameter)
+
     async def handle(self, activity: Activity) -> dict[str, Any]:
         binding = self.binding(activity)
         session = AgentSession(session_id=binding.platform_session_id)
@@ -129,6 +134,8 @@ class TeamsApproval:
             if record.args_hash != submitted.args_hash:
                 raise ValueError("Card arguments do not match the stored proposal. Reopen the correct card.")
             if submitted.action == "inspect":
+                return await self.render(record)
+            if submitted.action == "details":
                 return review_card(record, self.agent.policy.content_parameter)
             self.agent.check_pending(record.model_dump())
             self.agent.check_record(record)
@@ -147,13 +154,13 @@ class TeamsApproval:
                 if self.push_flow is not None:
                     await self.push_flow.inherit_event(record.pending_id, replacement.pending_id)
                 await self.save_binding(replacement, binding)
-                return review_card(replacement, self.agent.policy.content_parameter)
+                return await self.render(replacement)
             # Ignore all client-supplied tool arguments. Reconstitute the native
             # decision from the owner/session-checked server-side pending call.
             decision = record.approval().to_function_approval_response(submitted.action == "approve")
             response = await self.agent.execute(Message("user", [decision]), session)
             result = PendingCall.model_validate_json(response[0].text or "")
-            return review_card(result, self.agent.policy.content_parameter)
+            return await self.render(result)
 
         message = (activity.text or "").strip()
         if message.lower() in {"", "help", "start", "hej", "hi"}:
@@ -172,7 +179,7 @@ class TeamsApproval:
         if message.startswith("show "):
             pending_id = UUID(message.removeprefix("show ").strip())
             await self.check_binding(pending_id, binding)
-            return review_card(await self.record(pending_id, binding), self.agent.policy.content_parameter)
+            return await self.render(await self.record(pending_id, binding))
         try:
             command = COMMAND.validate_json(message)
         except ValidationError:
@@ -209,6 +216,7 @@ def create_teams_server(agent: ToolApprovalAgent) -> TeamsResponsesHost:
         from microsoft_agents.activity import ConversationReference
 
         from .assessment import AssessmentAgent
+        from .draft_reader import ToolboxDraftReader
         from .push_flow import PushFlow, PushPolicy, PushPreflight, PushRequest, ReviewAction
         from .settings import AssessmentSettings
 
@@ -239,7 +247,13 @@ def create_teams_server(agent: ToolApprovalAgent) -> TeamsResponsesHost:
                 raise ValueError("Activity adapter is not configured.")
             await adapter.continue_conversation(app_id, reference.get_continuation_activity(), send)
 
-        flow = PushFlow(policy, handler, AssessmentAgent(settings), notify)
+        draft_reader = ToolboxDraftReader(settings) if policy.merged_pr_drafts else None
+        flow = PushFlow(
+            policy, handler, AssessmentAgent(settings), notify,
+            read_draft=draft_reader,
+            read_notes=draft_reader.read_notes if draft_reader is not None else None,
+            read_wiki=agent.wiki_reader,
+        )
         handler.push_flow = flow
 
         async def on_push(request: Request) -> Response:
@@ -252,6 +266,10 @@ def create_teams_server(agent: ToolApprovalAgent) -> TeamsResponsesHost:
                 if isinstance(parsed, dict) and parsed.get("action") == "preflight":
                     PushPreflight.model_validate(parsed)
                     return JSONResponse({"state": "caller_verified", "assessment_run": False})
+                if isinstance(parsed, dict) and parsed.get("action") == "draft_published":
+                    from contracts.drafts import DraftPublished
+
+                    return JSONResponse(await flow.publish_draft(DraftPublished.model_validate(parsed)))
                 push = PushRequest.model_validate_json(payload)
                 result = await flow.process(push)
                 return JSONResponse(result)

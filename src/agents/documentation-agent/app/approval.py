@@ -6,7 +6,7 @@ import json
 import logging
 import os
 import re
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -24,6 +24,7 @@ from pydantic import Field, JsonValue, TypeAdapter, ValidationError, model_valid
 
 from contracts.models import ContractModel, NonBlank
 from contracts.v1 import AgentResult, Evidence, Provenance
+from contracts.wiki import WikiETag, WikiSnapshot
 
 from .agent import request_text
 from .approval_common import ApprovalAgentBase, approval_decision, canonical_hash
@@ -42,6 +43,7 @@ class ToolApprovalPolicy(ContractModel):
     content_parameter: Annotated[str, Field(pattern=r"^[A-Za-z][A-Za-z0-9_]*$")]
     proposal_page_parameter: NonBlank | None = None
     proposal_section_parameter: NonBlank | None = None
+    wiki_etag_parameter: Literal["etag"] | None = None
     auth_mode: Literal["managed_identity", "azure_cli"] = "managed_identity"
     timeout_seconds: int = Field(default=60, gt=0, le=180)
     approval_ttl_seconds: int = Field(default=3600, gt=0, le=86400)
@@ -56,6 +58,13 @@ class ToolApprovalPolicy(ContractModel):
             raise ValueError("Approval requires an explicit versioned Foundry Toolbox HTTPS endpoint.")
         if self.content_parameter in self.fixed_arguments:
             raise ValueError("The content parameter must not replace a fixed target argument.")
+        if self.wiki_etag_parameter is not None:
+            if (
+                self.tool_name != "ado___wiki_upsert_page" or self.content_parameter != "content"
+                or "etag" in self.fixed_arguments or self.fixed_arguments.get("branch") != "wikiMaster"
+                or not all(isinstance(self.fixed_arguments.get(k), str) for k in ("project", "wikiIdentifier", "path"))
+            ):
+                raise ValueError("Conditional wiki updates require fixed wikiMaster target fields and a dynamic etag.")
         if any(not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", key) for key in self.fixed_arguments):
             raise ValueError("Fixed arguments must be tool parameters, not runtime metadata.")
         bindings = (self.proposal_page_parameter, self.proposal_section_parameter)
@@ -69,7 +78,12 @@ class ToolApprovalPolicy(ContractModel):
         canonical_hash(self.model_dump(mode="json"))
         return self
 
-    def arguments(self, content: str) -> dict[str, JsonValue]:
+    def arguments(self, content: str, expected_wiki_etag: str | None = None) -> dict[str, JsonValue]:
+        if self.wiki_etag_parameter is not None:
+            etag = TypeAdapter(WikiETag).validate_python(expected_wiki_etag)
+            return {**self.fixed_arguments, self.content_parameter: content, "etag": etag}
+        if expected_wiki_etag is not None:
+            raise ValueError("This policy does not allow a dynamic wiki version.")
         return {**self.fixed_arguments, self.content_parameter: content}
 
     @classmethod
@@ -85,6 +99,7 @@ class ProposeCall(ContractModel):
     run_id: UUID
     content: Text
     evidence: Annotated[list[Evidence], Field(min_length=1, max_length=10)]
+    expected_wiki_etag: WikiETag | None = None
 
 
 class ProposeResult(ContractModel):
@@ -121,7 +136,7 @@ ARGUMENTS: TypeAdapter[dict[str, JsonValue]] = TypeAdapter(dict[str, JsonValue])
 
 class PendingCall(ContractModel):
     interface_version: Literal["1.0.0"] = "1.0.0"
-    runtime_version: Literal["0.5.0"] = "0.5.0"
+    runtime_version: Literal["0.5.0", "0.6.0"] = "0.6.0"
     pending_id: UUID = Field(default_factory=uuid4)
     call_id: UUID = Field(default_factory=uuid4)
     run_id: UUID
@@ -257,16 +272,40 @@ async def connect_tool(policy: ToolApprovalPolicy) -> AsyncIterator[ToolConnecti
 
 
 Connector = Callable[[ToolApprovalPolicy], AbstractAsyncContextManager[ToolConnection]]
+WikiRead = Callable[[str], Awaitable[WikiSnapshot]]
+
+
+def wiki_reader_from_environment(policy: ToolApprovalPolicy) -> WikiRead | None:
+    if policy.wiki_etag_parameter is None:
+        return None
+    from .settings import AssessmentSettings
+    from .wiki_page import ToolboxWikiReader
+
+    endpoint = os.environ.get("DOCUMENTATION_PUSH_READ_TOOLBOX")
+    if not endpoint:
+        raise ValueError("Conditional wiki approval requires DOCUMENTATION_PUSH_READ_TOOLBOX.")
+    settings = AssessmentSettings.from_environment({**os.environ, "TOOLBOX_ENDPOINT": endpoint})
+    if (
+        settings.ado_project != policy.fixed_arguments["project"]
+        or settings.ado_wiki != policy.fixed_arguments["wikiIdentifier"]
+        or settings.auth_mode != policy.auth_mode
+    ):
+        raise ValueError("Wiki reader and writer must use the same configured project/wiki and authentication mode.")
+    return ToolboxWikiReader(settings)
 
 
 class ToolApprovalAgent(ApprovalAgentBase):
     def __init__(
-        self, policy: ToolApprovalPolicy, *, connector: Connector = connect_tool, allow_local: bool = False
+        self, policy: ToolApprovalPolicy, *, connector: Connector = connect_tool, allow_local: bool = False,
+        wiki_reader: WikiRead | None = None,
     ) -> None:
         super().__init__(name="documentation-tool-approval", description="Exact-call approval; no automatic writes.")
         self.policy = policy.model_copy(deep=True)
         self.connector = connector
         self.allow_local = allow_local
+        self.wiki_reader = wiki_reader
+        if policy.wiki_etag_parameter is not None and wiki_reader is None:
+            raise ValueError("Conditional wiki updates require a target readback adapter.")
 
     def policy_hash(self) -> str:
         return canonical_hash(self.policy.model_dump(mode="json"))
@@ -275,7 +314,10 @@ class ToolApprovalAgent(ApprovalAgentBase):
         if record.policy_hash != self.policy_hash() or record.tool != self.policy.tool_name:
             raise ValueError("Approval target policy changed; create a new proposal.")
         content = record.arguments.get(self.policy.content_parameter)
-        if not isinstance(content, str) or self.policy.arguments(content) != record.arguments:
+        etag = record.arguments.get("etag") if self.policy.wiki_etag_parameter is not None else None
+        if etag is not None and not isinstance(etag, str):
+            raise ValueError("Stored wiki ETag must be a string.")
+        if not isinstance(content, str) or self.policy.arguments(content, etag) != record.arguments:
             raise ValueError("Stored arguments do not match the fixed target policy.")
         if record.args_hash != canonical_hash({"tool": record.tool, "arguments": record.arguments}):
             raise ValueError("Stored approval arguments hash does not match.")
@@ -316,7 +358,7 @@ class ToolApprovalAgent(ApprovalAgentBase):
     async def proposal(
         self, command: ProposeCall, actor: str, session_id: str, origin: ProposalOrigin | None = None
     ) -> PendingCall:
-        arguments = self.policy.arguments(command.content)
+        arguments = self.policy.arguments(command.content, command.expected_wiki_etag)
         async with asyncio.timeout(self.policy.timeout_seconds), self.connector(self.policy) as connection:
             if connection.spec.name != self.policy.tool_name:
                 raise ValueError("Tool discovery returned a different tool.")
@@ -377,7 +419,13 @@ class ToolApprovalAgent(ApprovalAgentBase):
             record.decided_at = datetime.now(UTC)
             changed = await self.replace(store, str(record.pending_id), record.model_dump(mode="json"), item.etag)
             replacement = await self.proposal(
-                ProposeCall(action="propose", run_id=record.run_id, content=command.content, evidence=record.evidence),
+                ProposeCall(
+                    action="propose", run_id=record.run_id, content=command.content, evidence=record.evidence,
+                    expected_wiki_etag=(
+                        TypeAdapter(WikiETag).validate_python(record.arguments.get("etag"))
+                        if self.policy.wiki_etag_parameter is not None else None
+                    ),
+                ),
                 actor,
                 session.session_id,
                 record.origin,
@@ -421,12 +469,19 @@ class ToolApprovalAgent(ApprovalAgentBase):
             if canonical_hash(connection.spec.model_dump(mode="json")) != record.tool_hash:
                 raise ValueError("Tool schema or metadata changed; create a new proposal.")
             validate_schema(connection.spec.inputSchema, record.arguments)
+            if self.policy.wiki_etag_parameter is not None:
+                await self.verify_wiki(record, after_write=False)
             if record.expires_at <= datetime.now(UTC):
                 raise ValueError("Approval expired during tool discovery; create a new proposal.")
             record.status = "executing"
             claimed = await self.replace(store, str(record.pending_id), record.model_dump(mode="json"), item.etag)
             try:
                 record.result = await connection.invoke_once(record.arguments)
+                if self.policy.wiki_etag_parameter is not None:
+                    verified = await self.verify_wiki(record, after_write=True)
+                    record.result["wiki_readback"] = {
+                        "path": verified.path, "etag": verified.etag, "uri": verified.uri,
+                    }
                 record.status = "succeeded"
                 record.completed_at = datetime.now(UTC)
                 await self.replace(store, str(record.pending_id), record.model_dump(mode="json"), claimed.etag)
@@ -440,6 +495,20 @@ class ToolApprovalAgent(ApprovalAgentBase):
                 await self.replace(store, str(record.pending_id), record.model_dump(mode="json"), claimed.etag)
                 raise
         return [Content.from_text(record.model_dump_json())]
+
+    async def verify_wiki(self, record: PendingCall, *, after_write: bool) -> WikiSnapshot:
+        path = self.policy.fixed_arguments.get("path")
+        if self.wiki_reader is None or not isinstance(path, str):
+            raise ValueError("Wiki readback is not configured.")
+        snapshot = await self.wiki_reader(path)
+        if snapshot.path != path:
+            raise ValueError("Wiki readback returned another page.")
+        if after_write:
+            if snapshot.content != record.arguments[self.policy.content_parameter]:
+                raise ValueError("Wiki readback differs from the approved content; do not retry automatically.")
+        elif snapshot.etag.strip('"') != str(record.arguments["etag"]).strip('"'):
+            raise ValueError("Wiki changed since this draft was created. Reject it and generate a fresh draft.")
+        return snapshot
 
 
 def main() -> None:
@@ -463,7 +532,8 @@ def main() -> None:
     policy = ToolApprovalPolicy.model_validate_json(args.policy.read_text(encoding="utf-8"))
     os.environ["AGENTSERVER_STATE_ROOT"] = str(args.state_dir.resolve())
     logging.basicConfig(level=logging.INFO)
-    ResponsesHostServer(ToolApprovalAgent(policy, allow_local=True), history_source="agent").run(
+    agent = ToolApprovalAgent(policy, allow_local=True, wiki_reader=wiki_reader_from_environment(policy))
+    ResponsesHostServer(agent, history_source="agent").run(
         host="127.0.0.1", port=args.port
     )
 

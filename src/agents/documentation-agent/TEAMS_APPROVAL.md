@@ -7,8 +7,8 @@ Activity handling in the same application, using
 `azure-ai-agentserver-activity==1.0.0b4` and the M365 Agents SDK. It follows the
 official [Activity echo sample](https://github.com/microsoft-foundry/foundry-samples/tree/main/samples/python/hosted-agents/bring-your-own/activity/echo)
 and SDK multi-protocol host composition. No separate bot service is added.
-Approval records retain runtime version 0.5.0 because the underlying approval
-engine is unchanged. Package, approval-engine and Foundry deployment versions
+That deployment used approval runtime 0.5.0. The new conditional-page extension
+uses runtime 0.6.0 in package 0.8.0 and is not yet deployed. Package, approval-engine and Foundry deployment versions
 are different identifiers; deployment evidence must record the immutable image.
 
 **Deployment recorded 2026-10-20:** this working-tree snapshot was built as
@@ -21,6 +21,15 @@ The deployment initially included uncommitted changes; exact source hashes are r
 locally under ignored `.azure/teams-card-deployment/`, and the handoff is on #16.
 
 ## What the card does
+
+The optional [merged-PR draft flow](PUSH_FLOW.md#merged-pr-draft-review-new-code-not-live-enabled)
+uses a compact card with a commit-pinned Azure Repos draft link instead of inline
+content/evidence. Notification follows a completed PR, not an open PR. The
+runtime verifies the published draft bytes before notifying the reviewer;
+Approve uses those same saved bytes. This new mode is not enabled on the current
+deployment. Explicit/manual proposals retain the full card described below.
+With `compose_wiki_page`, the draft is the complete updated integration page
+and **Changes** links to separate diff/evidence notes; it is not the sandbox report.
 
 One card shows the exact tool name, all fixed arguments, full proposed content,
 supplied evidence with exact versions, expiry and run/pending/hash identifiers.
@@ -171,7 +180,7 @@ the user initiated the write through Approve, not an operator REST write.
 
 Reject/Modify are user-observed UI evidence, not independent gateway call-count
 audits. Approve includes independent target readback but does not prove an
-exactly-once external transaction. The tool has no ETag protection; the user
+exactly-once external transaction. That sandbox test did not supply an ETag; the user
 confirmed no concurrent editing of the sandbox during the test.
 Evidence is recorded on [#16](https://github.com/wdhm/foundry-agentic-pattern/issues/16#issuecomment-6289412106)
 and [#1](https://github.com/wdhm/foundry-agentic-pattern/issues/1#issuecomment-6289412441).
