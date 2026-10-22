@@ -60,6 +60,15 @@ def validate_report(
     if any(item.get("type") not in {"message", "reasoning"} for item in raw.get("output", [])):
         raise ValueError("Evaluation outer response contains unexpected tools/approval output.")
     report = EvaluationResponse.model_validate_json(structured_text(raw))
+    validate_execution(report, payload, artifact, definition, lineage, observed_model)
+    return report
+
+
+def validate_execution(
+    report: EvaluationResponse, payload: EvaluationRequest, artifact: HostedArtifact,
+    definition: dict[str, Any], lineage: dict[str, Any], observed_model: str,
+) -> None:
+    """Validate the captured execution, independently of the outer response transport."""
     record = report.execution
     if (
         record.request_id != payload.request.request_id
@@ -103,7 +112,6 @@ def validate_report(
         raise ValueError("Supplied-source evaluation unexpectedly used/discovered tools.")
     if payload.source_mode == "live_sources" and (not record.tool_calls or not record.tool_schemas):
         raise ValueError("Live evaluation needs observed tool calls and discovered schemas.")
-    return report
 
 
 def arguments(value: Any) -> dict[str, Any]:

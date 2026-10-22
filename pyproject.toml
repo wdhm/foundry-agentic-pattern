@@ -35,6 +35,7 @@ generate-contract-schemas = "contracts.generate_schema:main"
 documentation-agent = "documentation_agent.main:main"
 documentation-prompt = "contracts.prompt:main"
 documentation-trigger = "tools.cli:main"
+documentation-code-eval = "tools.code_eval:main"
 
 [tool.setuptools]
 packages = ["contracts", "documentation_agent", "tools"]
