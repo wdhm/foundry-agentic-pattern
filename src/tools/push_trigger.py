@@ -11,6 +11,7 @@ from urllib.parse import quote, urlsplit
 from urllib.request import Request, urlopen
 from uuid import UUID
 
+from contracts.drafts import PreparedDraft
 from contracts.repositories import azure_repository
 
 
@@ -87,6 +88,14 @@ def send_push(client: FoundryPushClient, version: str, payload: dict[str, Any]) 
             if result != {"state": "caller_verified", "assessment_run": False}:
                 raise ValueError("Workload authentication preflight did not pass.")
             return result
+        if result.get("state") == "draft_ready":
+            draft = PreparedDraft.model_validate(result)
+            if (
+                draft.source_commit != payload.get("commit_sha")
+                or draft.pull_request_id != payload.get("pull_request_id")
+            ):
+                raise ValueError("Prepared draft does not match the submitted merged PR.")
+            return draft.model_dump(mode="json")
         if result.get("state") not in {"notified", "opened"} or not isinstance(result.get("duplicate"), bool):
             raise ValueError("Push flow did not confirm notification or an already-opened review.")
         UUID(result["event_id"])
@@ -94,6 +103,29 @@ def send_push(client: FoundryPushClient, version: str, payload: dict[str, Any]) 
     finally:
         # This stops only our pipeline-owned compute, never the Teams conversation.
         client.request("POST", path + ":stop?api-version=v1")
+
+
+def send_merged_pr(
+    client: FoundryPushClient, version: str, payload: dict[str, Any],
+) -> dict[str, Any]:
+    from .merged_pr import AzureDraftClient
+
+    source = AzureDraftClient(payload["repository_url"])
+    number = source.completed_pr(payload["commit_sha"])
+    if number is None:
+        return {"state": "skipped", "reason": "not_a_completed_pr_merge", "assessment_run": False}
+    payload = {**payload, "pull_request_id": number}
+    response = send_push(client, version, payload)
+    if response.get("state") != "draft_ready":
+        return response
+    prepared = PreparedDraft.model_validate(response)
+    commit = source.publish(prepared)
+    # Notification is a separate acknowledged stage. A crash after publication
+    # can resume with the same immutable draft; uncertain notification cannot.
+    return send_push(client, version, {
+        "interface_version": "1.0.0", "action": "draft_published",
+        "event_id": str(prepared.event_id), "draft_commit": commit,
+    })
 
 
 def main() -> None:
@@ -106,7 +138,12 @@ def main() -> None:
     parser.add_argument("--commit", required=True)
     parser.add_argument("--pipeline-id", required=True, type=int)
     parser.add_argument("--build-id", required=True, type=int)
-    parser.add_argument("--preflight", action="store_true", help="Verify workload identity without assessment/notification")
+    parser.add_argument(
+        "--preflight", action="store_true", help="Verify workload identity without assessment/notification"
+    )
+    parser.add_argument(
+        "--merged-pr-drafts", action="store_true", help="Skip direct pushes; publish verified PR drafts"
+    )
     args = parser.parse_args()
     repo = azure_repository(args.repository)
     UUID(repo.repository)
@@ -120,7 +157,11 @@ def main() -> None:
     }
     if args.preflight:
         payload = {"interface_version": "1.0.0", "action": "preflight"}
-    result = send_push(FoundryPushClient(args.endpoint, args.agent), args.version, payload)
+    client = FoundryPushClient(args.endpoint, args.agent)
+    result = (
+        send_merged_pr(client, args.version, payload)
+        if args.merged_pr_drafts and not args.preflight else send_push(client, args.version, payload)
+    )
     print(json.dumps(result))
 
 

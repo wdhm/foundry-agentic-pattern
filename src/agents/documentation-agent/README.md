@@ -60,6 +60,12 @@ The opt-in [Azure Repos push flow](PUSH_FLOW.md) prepares main-snapshot assessme
 proactive notification and reviewer-owned approval handoff. The v21 deployment
 and automatic Azure Pipeline run 2 demonstrated this flow through Teams Reject
 on 2026-10-21. It remains sandbox-only and does not implement PR comments.
+An optional merged-PR mode now prepares immutable Azure Repos draft links and
+compact cards; it is local code pending coordinated deployment and pipeline permissions.
+Its opt-in `compose_wiki_page` mode preserves the actual page and updates only
+proposed sections, with separate diff/evidence notes and ETag-bound approval.
+`approval/order-sync-policy.json` targets `/Order Sync/Overview`; the live sandbox
+policy is not changed by adding this file. Real conditional-write acceptance is pending.
 It was deployed as v13 and selected on 2026-10-20. The user verified real Teams
 cards, Reject, Modify, old-decision rejection and Approve; independent ADO readback
 confirmed the approved sandbox content. See the guide for the recorded image,

@@ -1,0 +1,15 @@
+{
+  "toolbox_endpoint": "https://foundry-agentic-r8n3ld.services.ai.azure.com/api/projects/proj-agentic/toolboxes/documentation-agent-write/versions/1/mcp?api-version=v1",
+  "tool_name": "ado___wiki_upsert_page",
+  "fixed_arguments": {
+    "project": "integration-team",
+    "wikiIdentifier": "integration-team.wiki",
+    "path": "/Order Sync/Overview",
+    "branch": "wikiMaster"
+  },
+  "content_parameter": "content",
+  "wiki_etag_parameter": "etag",
+  "auth_mode": "managed_identity",
+  "timeout_seconds": 60,
+  "approval_ttl_seconds": 3600
+}

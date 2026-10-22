@@ -15,14 +15,16 @@ from azure.ai.agentserver.core.storage import FoundryStateStore, FoundryStorageC
 from microsoft_agents.activity import Activity, ConversationReference
 from pydantic import Field, model_validator
 
+from contracts.drafts import DraftPublished, PreparedDraft, VerifiedDraft, content_hash, draft_url, pull_request_url
 from contracts.models import CommitSha, ContractModel, NonBlank
 from contracts.repositories import azure_repository
 from contracts.v1 import AgentRequest, AgentResult
+from contracts.wiki import WikiSnapshot
 
-from .approval import ProposeCall
+from .approval import PendingCall, ProposeCall, WikiRead
 from .approval_common import canonical_hash
 from .teams import ChannelBinding, TeamsApproval
-from .teams_card import card, review_card, text
+from .teams_card import card, linked_review_card, review_card, text
 
 LOGGER = logging.getLogger(__name__)
 STORE = "documentation-push-flow-v1"
@@ -39,9 +41,13 @@ class PushPolicy(ContractModel):
     work_item_ids: list[Annotated[int, Field(strict=True, gt=0)]] = Field(default_factory=list)
     documentation_standard_ref: NonBlank
     sandbox_page: Literal["/Workshop/Approval-Sandbox"] = "/Workshop/Approval-Sandbox"
+    merged_pr_drafts: bool = False
+    compose_wiki_page: bool = False
 
     @model_validator(mode="after")
     def valid_sources(self) -> Self:
+        if self.compose_wiki_page and not self.merged_pr_drafts:
+            raise ValueError("Real wiki page composition requires the merged-PR draft flow.")
         repo = azure_repository(self.repository_url)
         UUID(repo.repository)
         if len(set(self.source_paths)) != len(self.source_paths):
@@ -53,6 +59,10 @@ class PushPolicy(ContractModel):
             ):
                 raise ValueError("Source paths must be unambiguous repository-relative files.")
         return self
+
+    @property
+    def write_target(self) -> str:
+        return self.wiki_page if self.compose_wiki_page else self.sandbox_page
 
     @classmethod
     def from_environment(cls) -> Self:
@@ -69,6 +79,7 @@ class PushRequest(ContractModel):
     pipeline_id: Annotated[int, Field(strict=True, gt=0)]
     build_id: Annotated[int, Field(strict=True, gt=0)]
     commit_sha: CommitSha
+    pull_request_id: Annotated[int, Field(strict=True, gt=0)] | None = None
 
 
 class PushPreflight(ContractModel):
@@ -92,6 +103,7 @@ class Assessment(Protocol):
 
 
 Notify = Callable[[ConversationReference, dict[str, Any]], Awaitable[None]]
+ReadDraft = Callable[[str, UUID, str], Awaitable[str]]
 
 
 def event_key(policy: PushPolicy, commit: str) -> str:
@@ -126,13 +138,27 @@ def report_content(result: AgentResult) -> str:
 
 
 class PushFlow:
-    def __init__(self, policy: PushPolicy, teams: TeamsApproval, assessor: Assessment, notify: Notify) -> None:
+    def __init__(
+        self, policy: PushPolicy, teams: TeamsApproval, assessor: Assessment, notify: Notify,
+        read_draft: ReadDraft | None = None,
+        read_notes: ReadDraft | None = None,
+        read_wiki: WikiRead | None = None,
+    ) -> None:
         self.policy = policy
         self.teams = teams
         self.assessor = assessor
         self.notify = notify
-        if teams.agent.policy.fixed_arguments.get("path") != policy.sandbox_page:
-            raise ValueError("Push flow may write only the reviewed sandbox, never the integration wiki.")
+        self.read_draft = read_draft
+        self.read_notes = read_notes
+        self.read_wiki = read_wiki
+        if policy.merged_pr_drafts and read_draft is None:
+            raise ValueError("Merged-PR drafts require a commit-pinned draft reader.")
+        if teams.agent.policy.fixed_arguments.get("path") != policy.write_target:
+            raise ValueError("Approval target does not match the operator's explicit push-flow target.")
+        if policy.compose_wiki_page and (
+            read_wiki is None or read_notes is None or teams.agent.policy.wiki_etag_parameter != "etag"
+        ):
+            raise ValueError("Real page updates require snapshot/notes readers and conditional ETag approval.")
 
     async def store(self) -> FoundryStateStore:
         # Pipeline and reviewer need different identities. Access to this shared
@@ -167,7 +193,11 @@ class PushFlow:
         return card([
             text("Repository notifications connected", weight="Bolder", size="Medium"),
             text(f"Repository: {self.policy.repository_url}"),
-            text("Main-branch changes will be assessed and sent to this personal chat."),
+            text(
+                "Merged pull requests will be assessed; draft links will be sent to this personal chat."
+                if self.policy.merged_pr_drafts else
+                "Main-branch changes will be assessed and sent to this personal chat."
+            ),
             text("Opening a review creates a new approval in your session. Automation never approves a write."),
         ])
 
@@ -186,6 +216,10 @@ class PushFlow:
             or request.pipeline_id != self.policy.pipeline_id
         ):
             raise ValueError("Push repository, branch or pipeline does not match operator policy.")
+        if self.policy.merged_pr_drafts and request.pull_request_id is None:
+            raise ValueError("This flow accepts only a pipeline-verified completed pull request.")
+        if not self.policy.merged_pr_drafts and request.pull_request_id is not None:
+            raise ValueError("Merged-PR delivery is not enabled on this version.")
         key = event_key(self.policy, request.commit_sha)
         store = await self.store()
         async with store:
@@ -197,6 +231,12 @@ class PushFlow:
                 raise ValueError("Stored recipient differs from the configured reviewer.")
             previous = await store.get_item(key)
             if previous:
+                if previous.value["policy_hash"] != canonical_hash(self.policy.model_dump(mode="json")):
+                    raise ValueError("Stored event uses a different policy; do not reuse it.")
+                if previous.value["request"].get("pull_request_id") != request.pull_request_id:
+                    raise ValueError("Commit was already associated with a different pull request.")
+                if self.policy.merged_pr_drafts and previous.value["state"] == "draft_ready":
+                    return self.prepared_draft(previous.value, duplicate=True)
                 if previous.value["state"] in {"notified", "opened"}:
                     return {"event_id": key, "state": previous.value["state"], "duplicate": True}
                 raise ValueError("This commit already has an incomplete/failed attempt; inspect it, do not auto-retry.")
@@ -222,10 +262,15 @@ class PushFlow:
                 await store.create_item("latest", pointer)
             assessment = AgentRequest.model_validate({
                 "contract_version": "1.0.0", "request_id": key, "correlation_id": str(uuid4()),
-                "trigger": "azure_repos_main_push", "requested_by": f"pipeline:{request.pipeline_id}",
+                "trigger": "azure_repos_pr_merged" if self.policy.merged_pr_drafts else "azure_repos_main_push",
+                "requested_by": f"pipeline:{request.pipeline_id}",
                 "subject": {
                     "repo": self.policy.repository_url, "commit_sha": request.commit_sha,
                     "changed_paths": self.policy.source_paths,
+                    **(
+                        {"pr_reference": pull_request_url(self.policy.repository_url, request.pull_request_id)}
+                        if request.pull_request_id is not None else {}
+                    ),
                 },
                 "context": {"wiki_page_paths": [self.policy.wiki_page], "work_item_ids": self.policy.work_item_ids},
                 "documentation_standard_ref": self.policy.documentation_standard_ref,
@@ -241,6 +286,21 @@ class PushFlow:
                 },
             })
             try:
+                snapshot = None
+                if self.policy.compose_wiki_page:
+                    if self.read_wiki is None:
+                        raise ValueError("Wiki snapshot reader is unavailable.")
+                    snapshot = await self.read_wiki(self.policy.wiki_page)
+                    if snapshot.path != self.policy.wiki_page:
+                        raise ValueError("Wiki snapshot targets another page.")
+                    if assessment.task is None:
+                        raise ValueError("Page composition requires an explicit assessment task.")
+                    assessment.task.question += (
+                        " Each proposed change must target one plain H2 section heading on the requested page. "
+                        "Supply final documentation text for that section, not instructions to an editor. "
+                        "Do not rewrite the page title or unrelated sections. Use explicit Information missing "
+                        "placeholders for requested facts not supported by sources."
+                    )
                 result = await self.assessor.assess(assessment)
                 if result.request_id != assessment.request_id:
                     raise ValueError("Assessment result belongs to another event.")
@@ -248,6 +308,18 @@ class PushFlow:
                     raise ValueError("Assessment evidence does not match the pushed commit.")
                 if any(p.target_page != self.policy.wiki_page for p in result.proposed_changes):
                     raise ValueError("Assessment proposed an unexpected wiki target.")
+                if snapshot is not None:
+                    if self.read_wiki is None:
+                        raise ValueError("Wiki snapshot reader is unavailable.")
+                    after = await self.read_wiki(self.policy.wiki_page)
+                    if after != snapshot:
+                        raise ValueError("Wiki changed during assessment; generate a fresh draft.")
+                    wiki_evidence = [item for item in result.evidence if item.source == "wiki"]
+                    if not wiki_evidence or any(
+                        item.version.strip('"') != snapshot.etag.strip('"') for item in wiki_evidence
+                    ):
+                        raise ValueError("Assessment wiki evidence does not match the captured page version.")
+                    record["wiki_base"] = snapshot.model_dump(mode="json")
                 record.update(result=result.model_dump(mode="json"), state="ready")
                 claimed = await store.set_item(key, record, if_match=claimed.etag)
             except Exception as exc:
@@ -258,6 +330,26 @@ class PushFlow:
             current = await store.get_item("latest")
             if current is None or current.value != pointer:
                 raise ValueError("This assessment was superseded; no notification sent.")
+            if self.policy.merged_pr_drafts:
+                # Validate write limits before handing a draft to the pipeline.
+                # The exact same bytes will later become the pending arguments.
+                if self.policy.compose_wiki_page:
+                    from .wiki_page import compose_page, review_notes
+
+                    base = WikiSnapshot.model_validate(record["wiki_base"])
+                    content = compose_page(base, result)
+                    record["review_notes"] = review_notes(base, content, result)
+                else:
+                    content = report_content(result)
+                if result.proposed_changes:
+                    ProposeCall(
+                        action="propose", run_id=result.request_id, content=content, evidence=result.evidence,
+                        expected_wiki_etag=record.get("wiki_base", {}).get("etag"),
+                    )
+                record.update(state="draft_ready", draft_content=content)
+                prepared = self.prepared_draft(record, duplicate=False)
+                await store.set_item(key, record, if_match=claimed.etag)
+                return prepared
             notification = card([
                 text("Documentation review ready", weight="Bolder", size="Medium"),
                 text(f"Repository: {self.policy.repository_url}"),
@@ -287,6 +379,119 @@ class PushFlow:
             await store.set_item(key, record, if_match=claimed.etag)
             return {"event_id": key, "state": "notified", "duplicate": False}
 
+    @staticmethod
+    def prepared_draft(record: dict[str, Any], *, duplicate: bool) -> dict[str, Any]:
+        return PreparedDraft(
+            event_id=record["event_id"], state="draft_ready", duplicate=duplicate,
+            content=record["draft_content"], content_sha256=content_hash(record["draft_content"]),
+            source_commit=record["request"]["commit_sha"], pull_request_id=record["request"]["pull_request_id"],
+            review_notes=record.get("review_notes"),
+        ).model_dump(mode="json")
+
+    async def publish_draft(self, published: DraftPublished) -> dict[str, Any]:
+        self.require_caller()
+        if not self.policy.merged_pr_drafts or self.read_draft is None:
+            raise ValueError("Draft publication is not enabled.")
+        key = str(published.event_id)
+        store = await self.store()
+        async with store:
+            item = await store.get_item(key)
+            latest = await store.get_item("latest")
+            if item is None or latest is None or latest.value["event_id"] != key:
+                raise ValueError("Draft event is unknown or superseded.")
+            record = item.value
+            if record["policy_hash"] != canonical_hash(self.policy.model_dump(mode="json")):
+                raise ValueError("Draft policy changed.")
+            if record["state"] in {"notified", "opened"}:
+                if record.get("draft", {}).get("commit") != published.draft_commit:
+                    raise ValueError("Cannot replace the draft behind an existing approval.")
+                return {"event_id": key, "state": record["state"], "duplicate": True}
+            if record["state"] != "draft_ready":
+                raise ValueError("Draft is not ready; inspect uncertain delivery before retrying.")
+            actual = await self.read_draft(self.policy.repository_url, published.event_id, published.draft_commit)
+            if actual != record["draft_content"]:
+                raise ValueError("Published draft bytes differ from the saved proposal; no notification sent.")
+            if record.get("review_notes") is not None:
+                if self.read_notes is None:
+                    raise ValueError("Review notes reader is unavailable.")
+                notes = await self.read_notes(self.policy.repository_url, published.event_id, published.draft_commit)
+                if notes != record["review_notes"]:
+                    raise ValueError("Published review notes differ from the saved diff/evidence.")
+            verified = VerifiedDraft(commit=published.draft_commit, content_sha256=content_hash(actual))
+            record["draft"] = verified.model_dump(mode="json")
+            result = AgentResult.model_validate(record["result"])
+            notification = card([
+                text("Documentation draft ready", weight="Bolder", size="Medium"),
+                text(f"Merged PR #{record['request']['pull_request_id']}"),
+                text(f"Findings: {len(result.findings)}; missing facts: {len(result.missing_information)}."),
+                text(f"Approval target: {self.policy.write_target}"),
+                text("Draft only. The live integration wiki is unchanged."),
+            ], [
+                {"type": "Action.OpenUrl", "title": "View draft",
+                 "url": draft_url(self.policy.repository_url, published.event_id, published.draft_commit)},
+                {"type": "Action.OpenUrl", "title": "Merged PR",
+                 "url": pull_request_url(self.policy.repository_url, record["request"]["pull_request_id"])},
+                {"type": "Action.Submit", "title": "Review decision", "associatedInputs": "none",
+                 "data": {"interface_version": "1.0.0", "action": "review_push", "event_id": key}},
+            ])
+            if record.get("review_notes") is not None:
+                notification["body"].append({"type": "ActionSet", "actions": [{
+                    "type": "Action.OpenUrl", "title": "Changes & evidence",
+                    "url": draft_url(
+                        self.policy.repository_url, published.event_id, published.draft_commit, review=True
+                    ),
+                }]})
+                notification = card(notification["body"], notification["actions"])
+            # The read may have taken time; do not knowingly notify an older event.
+            latest = await store.get_item("latest")
+            if latest is None or latest.value["event_id"] != key:
+                raise ValueError("Draft was superseded during verification.")
+            record["state"] = "notifying"
+            claimed = await store.set_item(key, record, if_match=item.etag)
+            try:
+                recipient = Recipient.model_validate(record["recipient"])
+                await self.notify(ConversationReference.model_validate(recipient.reference), notification)
+            except Exception as exc:
+                LOGGER.error("Draft notification %s uncertain (%s); do not resend blindly.", key, type(exc).__name__)
+                record.update(state="notification_unknown", error_type=type(exc).__name__)
+                await store.set_item(key, record, if_match=claimed.etag)
+                raise
+            record["state"] = "notified"
+            await store.set_item(key, record, if_match=claimed.etag)
+            return {"event_id": key, "state": "notified", "duplicate": False}
+
+    def render_review(self, pending: PendingCall, record: dict[str, Any]) -> dict[str, Any]:
+        if not record.get("draft"):
+            return review_card(pending, self.teams.agent.policy.content_parameter)
+        draft = VerifiedDraft.model_validate(record["draft"])
+        content = pending.arguments[self.teams.agent.policy.content_parameter]
+        if not isinstance(content, str):
+            raise ValueError("Pending content is not text.")
+        result = AgentResult.model_validate(record["result"])
+        return linked_review_card(
+            pending,
+            draft_url(self.policy.repository_url, UUID(record["event_id"]), draft.commit),
+            pull_request_url(self.policy.repository_url, record["request"]["pull_request_id"]),
+            self.policy.write_target, len(result.findings), len(result.missing_information),
+            matches_draft=content_hash(content) == draft.content_sha256,
+            page_update=self.policy.compose_wiki_page,
+            notes_link=(
+                draft_url(self.policy.repository_url, UUID(record["event_id"]), draft.commit, review=True)
+                if record.get("review_notes") is not None else None
+            ),
+        )
+
+    async def render_pending(self, pending: PendingCall) -> dict[str, Any]:
+        store = await self.store()
+        async with store:
+            lineage = await store.get_item(f"pending:{pending.pending_id}")
+            if lineage is None:
+                return review_card(pending, self.teams.agent.policy.content_parameter)
+            record = await store.get_item(lineage.value["event_id"])
+            if record is None:
+                raise ValueError("Proposal origin is unavailable; cannot render draft review.")
+            return self.render_review(pending, record.value)
+
     async def open_review(self, activity: Activity, event_id: UUID) -> dict[str, Any]:
         binding = self.reviewer(activity)
         store = await self.store()
@@ -309,11 +514,17 @@ class PushFlow:
             if record["state"] == "opened":
                 await self.teams.check_binding(UUID(record["pending_id"]), binding)
                 pending = await self.teams.record(UUID(record["pending_id"]), binding)
-                return review_card(pending, self.teams.agent.policy.content_parameter)
+                return self.render_review(pending, record)
             if record["state"] not in {"notified", "notification_unknown", "notifying"}:
                 raise ValueError("Review is not ready or was already claimed; inspect status before retrying.")
             result = AgentResult.model_validate(record["result"])
             if not result.proposed_changes:
+                if record.get("draft"):
+                    return card([
+                        text("Review completed - no write proposed", weight="Bolder", size="Medium"),
+                        text(f"Status: {result.documentation_status}. Read the findings in the draft."),
+                    ], [{"type": "Action.OpenUrl", "title": "View findings",
+                         "url": draft_url(self.policy.repository_url, event_id, record["draft"]["commit"])}])
                 return card([
                     text("Assessment completed without a write proposal", weight="Bolder"),
                     text(f"Status: {result.documentation_status}"),
@@ -321,7 +532,10 @@ class PushFlow:
                     *[text(m.description) for m in result.missing_information],
                 ])
             proposal = ProposeCall(
-                action="propose", run_id=result.request_id, content=report_content(result), evidence=result.evidence,
+                action="propose", run_id=result.request_id,
+                content=record["draft_content"] if record.get("draft") else report_content(result),
+                evidence=result.evidence,
+                expected_wiki_etag=record.get("wiki_base", {}).get("etag"),
             )
             record["state"] = "opening"
             claimed = await store.set_item(str(event_id), record, if_match=item.etag)
@@ -335,7 +549,7 @@ class PushFlow:
                 await self.teams.save_binding(pending, binding)
                 record.update(state="opened", pending_id=str(pending.pending_id))
                 await store.set_item(str(event_id), record, if_match=claimed.etag)
-                return review_card(pending, self.teams.agent.policy.content_parameter)
+                return self.render_review(pending, record)
             except Exception as exc:
                 LOGGER.error("Opening push review %s failed (%s); no automatic retry.", event_id, type(exc).__name__)
                 raise
