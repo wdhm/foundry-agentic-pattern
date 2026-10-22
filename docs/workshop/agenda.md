@@ -51,18 +51,18 @@ backup recording aligned with actual results.
 ## 10:30–11:10 · P2 · Knowledge & identity · Rickard
 
 Use the [40-minute P2 presenter guide](p2-presenter-guide.md) for the run order,
-fallbacks and hard stops. Demos target hosted **`documentation-agent`** (v13
-serving at 100%, recorded 2026-10-21) with its **own** identity and agent user. The
-assessment uses only the read-only toolbox. The live PR #62 assessment runs only
-if the same request passed at rehearsal on the same serving version; otherwise
-show the recorded result.
+fallbacks and hard stops. Foundry IQ and Toolbox are demoed in the Foundry
+playground on the read-only prompt agent **`p2-demo-agent`** (toolbox
+`p2-demo-toolbox`: Foundry IQ + GitHub). Each answer is followed by the Foundry
+view behind it: the knowledge base, then the toolboxes. The hosted
+**`documentation-agent`** keeps its **own** identity and agent user for Azure DevOps.
 
 | Time | Feature | F | Type | Content |
 |---|---|---|---|---|
 | 10:30–10:32 | Framing | F8 | Slide | One sentence: all demos run on a fictional Order Sync integration with planted drifts ([data](../../data/README.md)) |
-| 10:32–10:45 | Foundry IQ | F3 | Demo | The documentation standard as a knowledge base, called as an MCP tool; `demo-foundry-iq.ps1` returns DS-14 and DS-30 ([guide](foundry-iq-guide.md)) |
-| 10:45–10:58 | Toolbox (MCP · DevOps · GitHub) | F1 | Read-only demo (recorded fallback) | `demo-toolbox.ps1`: `documentation-agent-readonly` vs `documentation-agent-write`; one assessment of PR #62 → `gaps_found` with pinned evidence ([GitHub guide](github-mcp-guide.md)). No write tools in an assessment |
-| 10:58–11:06 | Agent identity | – | Demo | ADO refuses a person and accepts only the agent's identity; Entra Agent ID and the agent user ([guide](agent-identity-guide.md)); the wiki commit from John's Teams Approve is authored by the agent user. Name the security debt: the agent user is Basic + Contributors for the write path ([#22](https://github.com/wdhm/foundry-agentic-pattern/issues/22)) |
+| 10:32–10:45 | Foundry IQ | F3 | Playground demo | Ask `p2-demo-agent` what the standard requires for error handling and drift → `knowledge_base_retrieve`, cites DS-14/DS-30/DS-31; then the knowledge base `kb-doc-agent` in Foundry ([guide](foundry-iq-guide.md)) |
+| 10:45–10:58 | Toolbox (MCP · DevOps · GitHub) | F1 | Playground demo | Ask which rules PR #62 now requires → GitHub PR + files + knowledge in one answer; then Toolboxes in Foundry: `p2-demo-toolbox`, `documentation-agent-readonly` and `documentation-agent-write` ([GitHub guide](github-mcp-guide.md)) |
+| 10:58–11:06 | Agent identity | – | Demo | ADO accepts only the documentation agent's identity, which is why the demo toolbox has no ADO; Entra Agent ID and the agent user ([guide](agent-identity-guide.md)); the wiki commit from John's Teams Approve is authored by the agent user. Name the security debt: the agent user is Basic + Contributors for the write path ([#22](https://github.com/wdhm/foundry-agentic-pattern/issues/22)) |
 | 11:06–11:10 | *Agent 365* | – | Slide | Fleet governance across M365 ([#46](https://github.com/wdhm/foundry-agentic-pattern/issues/46)). Work IQ ([#47](https://github.com/wdhm/foundry-agentic-pattern/issues/47)) and PDF/SharePoint ([#48](https://github.com/wdhm/foundry-agentic-pattern/issues/48)) are backup slides |
 
 ## 11:10–11:50 · P3 · AgentOps & platform · Louise
