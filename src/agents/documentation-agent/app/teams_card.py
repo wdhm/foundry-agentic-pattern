@@ -48,6 +48,48 @@ def action(record: PendingCall, verb: str, title: str, *, inputs: bool = False) 
     }
 
 
+def linked_review_card(
+    record: PendingCall, draft_link: str, pr_link: str, target: str, findings: int, missing: int,
+    *, matches_draft: bool, page_update: bool = False, notes_link: str | None = None,
+) -> dict[str, Any]:
+    pending = record.status == "pending" and record.expires_at > datetime.now(UTC)
+    status = "expired" if record.status == "pending" and not pending else record.status
+    body = [
+        text(
+            "Review documentation draft" if pending else f"Documentation proposal: {status}",
+            weight="Bolder", size="Medium",
+        ),
+        text(f"Target: {target}"),
+        text(f"Findings: {findings}; missing facts: {missing}."),
+        text(
+            "Read the exact draft before approving. The update is bound to the wiki version used to create it."
+            if page_update and matches_draft else
+            "Read the linked, commit-pinned draft before approving. Approval writes that exact content to the sandbox."
+            if matches_draft else
+            "You edited this proposal. The original draft link no longer represents the new text. Review the revision."
+        ),
+    ]
+    links = [{"type": "Action.OpenUrl", "title": "Merged PR", "url": pr_link}]
+    if matches_draft:
+        links.insert(0, {"type": "Action.OpenUrl", "title": "View draft", "url": draft_link})
+        if notes_link:
+            links.insert(1, {"type": "Action.OpenUrl", "title": "Changes", "url": notes_link})
+    body.append({"type": "ActionSet", "actions": links})
+    body.append(text(f"Expires: {record.expires_at.astimezone(UTC):%d %b %Y %H:%M} UTC"))
+    body.append(text(f"Pending: {record.pending_id}"))
+    if pending and matches_draft:
+        actions = [
+            action(record, "approve", "Approve"), action(record, "edit", "Modify"), action(record, "reject", "Reject"),
+        ]
+    elif pending:
+        actions = [action(record, "details", "Review revision"), action(record, "reject", "Reject")]
+    else:
+        actions = [action(record, "inspect", "Refresh status")]
+        if status in {"executing", "outcome_unknown"}:
+            body.append(text("Outcome is uncertain. Inspect the target; do not retry the write."))
+    return card(body, actions)
+
+
 def review_card(
     record: PendingCall, content_parameter: str, *, view: Literal["review", "edit"] = "review"
 ) -> dict[str, Any]:

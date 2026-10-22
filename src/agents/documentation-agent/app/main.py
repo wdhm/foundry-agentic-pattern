@@ -33,9 +33,10 @@ def create_server() -> ResponsesHostServer:
     elif mode == "approval":
         if os.environ.get("DOCUMENTATION_ENABLE_APPROVAL") != "true":
             raise ValueError("Approval mode requires explicit DOCUMENTATION_ENABLE_APPROVAL=true.")
-        from .approval import ToolApprovalAgent, ToolApprovalPolicy
+        from .approval import ToolApprovalAgent, ToolApprovalPolicy, wiki_reader_from_environment
 
-        agent = ToolApprovalAgent(ToolApprovalPolicy.from_environment())
+        policy = ToolApprovalPolicy.from_environment()
+        agent = ToolApprovalAgent(policy, wiki_reader=wiki_reader_from_environment(policy))
         if os.environ.get("DOCUMENTATION_ENABLE_TEAMS") == "true":
             from .teams import create_teams_server
 

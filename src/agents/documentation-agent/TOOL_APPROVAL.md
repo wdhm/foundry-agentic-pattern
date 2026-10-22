@@ -1,7 +1,7 @@
 # Exact-call Toolbox approval (#15)
 
-**Implementation, not deployed or live-accepted.** Package/approval runtime
-version is `0.5.0`; the unchanged assessment implementation continues to report
+**Sandbox runtime is deployed; conditional real-page extension is not yet live-accepted.**
+Current local package is `0.8.0`, approval runtime `0.6.0`; the assessment implementation continues to report
 `0.4.0` in assessment provenance. This is an explicitly
 enabled runtime in the existing hosted application, not another dummy-receipt
 demo. It consumes an existing Foundry Toolbox through the official SDK and can
@@ -167,6 +167,28 @@ This returns the stored state, not permission to retry.
 
 ## Persistence and failure semantics
 
+### Conditional actual-page updates (new, not live-enabled)
+
+The optional `wiki_etag_parameter: "etag"` policy restricts writes to
+`ado___wiki_upsert_page` with fixed project/wiki/path/`wikiMaster` arguments.
+Each `propose` command then requires `expected_wiki_etag`, a concrete existing
+wiki Git-blob version. Wildcards, missing versions and changing the ETag outside
+the approved arguments are rejected. Modify carries the original ETag forward.
+
+`DOCUMENTATION_PUSH_READ_TOOLBOX` supplies the readback adapter with the same
+project/wiki/authentication mode as the writer. Before dispatch the runtime
+checks that the page still has the approved base version, then passes that
+ETag to the tool. After success it reads back and checks the exact content.
+Stale prechecks cause no dispatch; tool/readback failures after the claim remain
+non-retryable uncertain outcomes. Successful receipts include `wiki_readback`.
+Records created by this engine use runtime version 0.6.0; old 0.5.0 records can
+still be parsed, but changed policies require fresh approvals.
+
+See [actual page updates](PUSH_FLOW.md#actual-integration-page-updates-local-implementation-rollout-pending)
+for composition and required live conditional-write/deletion-race verification.
+Do not treat the presence of the tool's `etag` schema property as proof of
+server enforcement. The existing sandbox policy remains unconditional and unchanged.
+
 The shared approval utilities were extracted from the #1 spike. That spike keeps
 its dummy behavior; the new mode uses a different store:
 `documentation-tool-approvals-v1`, with SDK user isolation plus explicit owner
@@ -185,7 +207,7 @@ evidence, expiry, decisions, feedback and returned tool result.
 
 Unknown fields are rejected. Text is nonblank and at most 16,000 characters;
 feedback is at most 1,000. Full state contains `interface_version=1.0.0`,
-`runtime_version=0.5.0`, pending/call/run IDs, status, exact arguments, hashes,
+`runtime_version=0.6.0` (older records may contain `0.5.0`), pending/call/run IDs, status, exact arguments, hashes,
 origin (when selected from a result), evidence, owner/session, timestamps and
 optional result/decision/replacement fields. Native wire approval IDs are SDK-owned
 and may differ from the pending UUID. Generate authoritative schemas offline:
