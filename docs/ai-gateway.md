@@ -160,9 +160,11 @@ Use the [documented native Foundry workflow](https://learn.microsoft.com/azure/f
 not a generic project connection or our `/documentation-model/` API:
 
 1. Complete preparation, validation and source review before paid execution.
-   Confirm the same approved subscription/tenant and a signed-in **New Foundry**
-   browser. If browser access is unavailable, hold creation rather than provision
-   another standalone service that cannot satisfy native UI acceptance.
+   Confirm the same approved subscription/tenant. The separately reviewed
+   infrastructure prerequisite may be provisioned before browser login using
+   [`bootstrap-public-v2.bicep`](../infra/ai-gateway/bootstrap-public-v2.bicep),
+   but this is **not native association or UI acceptance**. A signed-in
+   **New Foundry** browser is still required for the documented association.
 2. In **Manage > AI Gateway > Add AI Gateway**, choose the **Foundry resource**
    `foundry-agentic-R8N3LD`. Select **Create new** for the documented Basic v2
    creation path, or **Use existing** for a separately prepared eligible v2
@@ -177,6 +179,33 @@ not a generic project connection or our `/documentation-model/` API:
    authorization. Existing-project enablement is a separate model-routing switch;
    new projects inherit gateway enablement by default, so do not create a test
    project as an acceptance shortcut.
+
+The v2 bootstrap creates exactly one public Basic v2 unit with a system-assigned
+identity and **no grants**, with the developer portal disabled and legacy
+TLS/SSL protocols explicitly disabled. It then invokes the existing
+`azure-monitor-diagnostics.bicep` module **after service creation**, reusing its
+global deny, explicit credential-free logger dependency and body-free
+information-level diagnostics. Required parameters are `apimName`, `location`,
+`publisherName`, `publisherEmail` and `logAnalyticsWorkspaceName`; prepare them
+under ignored `.azure/`, using the newly approved name and existing workspace.
+No model/tool/agent APIs, backends, project connection, native association or
+application activation are declared. Do not deploy `main.bicep` on this new
+instance as a stand-in for native integration.
+
+The [2024-05-01 service contract](https://learn.microsoft.com/azure/templates/microsoft.apimanagement/2024-05-01/service)
+includes `BasicV2`, portal status and protocol properties. No cipher-suite
+customization is copied: Basic v2 [does not support changing default ciphers](https://learn.microsoft.com/azure/api-management/api-management-howto-manage-protocols-ciphers).
+Compilation proves the resource shape, not live SKU acceptance or effective TLS;
+require exact-parameter ARM validation, reviewed what-if and post-deployment
+readback before accepting the prerequisite.
+
+The provider may seed sample APIs during service creation. ARM cannot install
+the global policy before the service exists: treat bootstrap as incomplete until
+the **entire** deployment succeeds and effective policies/diagnostics are read
+back. If the monitoring module fails, stop rollout, inspect and repair that
+specific failure; do not claim a protected resource from service provisioning
+alone. Keep provider samples inert through inherited deny, without deleting them.
+Reconcile native association's later policy changes before project activation.
 
 The official guide requires Contributor/Owner to create APIM, appropriate
 APIM Service Contributor/Owner access to reuse it, and Foundry **Manage** access.
