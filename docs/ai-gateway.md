@@ -329,6 +329,28 @@ and `logAnalyticsDestinationType=Dedicated` for **`log-foundry-agentic`**.
 No category group, metrics export, `GatewayLlmLogs`, prompt/completion logging,
 new identity role or App Insights authentication change is requested.
 
+Global and API-scoped **Azure Monitor** diagnostics use `verbosity=information`
+and fixed **100% sampling** so successful requests are included, not just errors.
+Microsoft's [diagnostic settings reference, preserved in its official source](https://github.com/MicrosoftDocs/azure-docs/blob/917ab49269056f24b3859f21af962276411037a5/articles/api-management/diagnostic-logs-reference.md)
+explicitly defines **Error** as failed requests and error traces, and
+**Information** as failed **and successful** requests plus information/error traces.
+The current Learn reference redirects to REST, whose trace-only wording does
+not explain this request-filtering behavior. Do not use `error` as a privacy
+control: privacy is enforced separately by zero body bytes, empty header lists,
+`logClientIp=false`, no trace policies and GatewayLogs-only export.
+Existing Application Insights diagnostic verbosity remains unchanged.
+
+If a previously deployed gateway has error records but no successful records,
+read back verbosity at **both** scopes: an API override supersedes global settings.
+After source review and fresh validation, redeploy the monitor and model
+configuration templates with their existing reviewed parameters; do not recreate
+the service, change callers/limits or enable runtime routing. Confirm both Azure
+Monitor scopes read back `information` with the same privacy settings, then use
+only a separately authorized bounded success probe to verify real ingestion and
+privacy. Missing historical success records are not backfilled by this change.
+Do not repeat already-proven token-limit probes or treat error-only ingestion
+as complete observability acceptance.
+
 Verify the built-in logger and supported diagnostic settings on the actual
 service before traffic. Operational logs still include request/service metadata
 such as URLs, timing, status and error information; restrict workspace access and

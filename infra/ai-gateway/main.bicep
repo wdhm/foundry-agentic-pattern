@@ -154,7 +154,7 @@ var baseDiagnosticsProperties = {
   loggerId: loggerResourceId
   alwaysLog: 'allErrors'
   logClientIp: false
-  verbosity: 'error'
+  verbosity: diagnosticType == 'azuremonitor' ? 'information' : 'error'
   sampling: { samplingType: 'fixed', percentage: 100 }
   frontend: {
     request: { headers: [], body: { bytes: 0 } }

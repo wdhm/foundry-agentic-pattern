@@ -121,6 +121,10 @@ def test_body_free_diagnostics_cover_only_deployed_apis(templates):
     template = templates["main"]
     settings = template["variables"]["baseDiagnosticsProperties"]
     assert settings["logClientIp"] is False
+    assert settings["verbosity"] == (
+        "[if(equals(parameters('diagnosticType'), 'azuremonitor'), 'information', 'error')]"
+    )
+    assert settings["sampling"] == {"samplingType": "fixed", "percentage": 100}
     for side in ("frontend", "backend"):
         for direction in ("request", "response"):
             assert settings[side][direction] == {"headers": [], "body": {"bytes": 0}}
@@ -215,6 +219,8 @@ def test_azure_monitor_uses_existing_workspace_without_roles_or_payload_categori
     assert logger_id in resources["Microsoft.ApiManagement/service/diagnostics"]["dependsOn"]
     assert template["outputs"]["loggerResourceId"]["value"] == logger_id
     assert defaults["logClientIp"] is False
+    assert defaults["verbosity"] == "information"
+    assert defaults["sampling"] == {"samplingType": "fixed", "percentage": 100}
     for side in ("frontend", "backend"):
         for direction in ("request", "response"):
             assert defaults[side][direction] == {"headers": [], "body": {"bytes": 0}}
