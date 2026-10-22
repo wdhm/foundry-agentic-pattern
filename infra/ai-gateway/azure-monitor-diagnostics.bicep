@@ -70,7 +70,7 @@ resource monitorDefaults 'Microsoft.ApiManagement/service/diagnostics@2024-05-01
     loggerId: monitorLogger.id
     alwaysLog: 'allErrors'
     logClientIp: false
-    verbosity: 'error'
+    verbosity: 'information'
     sampling: { samplingType: 'fixed', percentage: 100 }
     frontend: {
       request: { headers: [], body: { bytes: 0 } }
