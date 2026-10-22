@@ -113,7 +113,85 @@ only its analysis fields to the checker. An envelope must echo the
 request ID and carry real caller-supplied runtime provenance. Never fill provenance
 from reference answers. Proposed changes require human review, not write approval.
 
-## Live and saved-response checks
+## Local code-based baseline from hosted captures
+
+`documentation-code-eval` (or `python -m tools.code_eval`) complements the
+existing diagnostic checker and Foundry model-judged evaluators. It runs **only
+local Python checks** against the existing five-case suite and saved hosted
+evaluation captures; there is no invocation, credential discovery, judge/API
+call, deployment, approval renewal or promotion path.
+
+From the repository checkout, with Python 3.11+ and the existing
+`.[agent,prompt,dev]` environment:
+
+```powershell
+python -m tools.code_eval `
+  --captures evals/results/candidate-run `
+  --plan evals/results/reviewed-plan.json `
+  --output evals/results/baseline.json
+```
+
+Input is the **unmodified** `CASE_ID-evaluation.json` files saved by
+`tools.hosted_release`, one for every case indexed by `datasets/suite.json`,
+plus that run's saved hosted evaluation plan. Each capture contains outer
+session/artifact lineage and `evaluation: {result: AgentResult, execution:
+ExecutionRecord}`. The plan provides the reviewed artifact, definition,
+model version, observed model, serving label and task scopes; it is not
+reconstructed from answers. Bare `AnalysisOutput`, ordinary assessment results,
+legacy prompt traces and a prior baseline are **not** supported inputs.
+Missing/malformed required captures fail; unexpected case filenames are an
+input error. Duplicate JSON keys and repeated execution/session/request/model
+response identities fail, rather than overwriting or skipping cases.
+
+The default output is the ignored `evals/results/baseline.json`. It is a UTF-8
+JSON array in suite order, with exactly `{score, result}` per case. `score`
+contains `case_id`, the booleans below, `passed`, nullable `error`,
+`evidence_kind`, and SHA-256 digests of the parsed suite and full saved plan
+(sorted-key JSON). `result` retains the entire input capture, including source,
+commit, model, prompt, policy and transport lineage; it is `null` when the
+evaluation contract cannot be parsed. Valid-contract captures are retained
+even when another check fails. Required failures use `false`, not a skip,
+inapplicable score or perfect fallback.
+
+| Check | Exact meaning and applicability |
+|---|---|
+| `contract_valid` | The nested `EvaluationResponse`, including `AgentResult`/execution, validates through the shared contracts. Includes evidence-ID uniqueness/reference resolution, status structure and human-review requirements. Does not imply capture completeness. |
+| `status_matches` | Exact equality with the scenario's structured `expected_status`. Four cases require `insufficient_information` and a contract-valid nonempty missing-information explanation; this checks structural abstention, not whether its prose is correct or complete. |
+| `source_consistent` | Existing source verifier accepts evidence kind/URI/exact version/excerpt against case fixtures, with HTML unescaping and whitespace normalization. For two live-source cases, captured reads must also cover required sources and match pinned readable content; supplied-source cases must not contain observed MCP operations. |
+| `execution_valid` | Existing capture and evaluator-input validators accept request/task correlation, packaged instructions/provenance, isolated bundle, completed model calls, final-answer assembly and observed tool/schema/result linkage under the read-only policy. Also checks saved outer/session/artifact lineage and independent case identities. For three supplied-source cases tools must be absent; two live-source cases require actual captured read calls/schemas. This is a deterministic boundary check, **not** Foundry tool-call accuracy. |
+| `passed` | All four checks are true and no input/duplicate error exists. There is no weighted aggregate or semantic accuracy score. |
+
+Exit **0** means all five cases passed; **1** means at least one required case
+failed (the full five-row report is still written); **2** means configuration,
+suite or I/O failure (diagnostic on stderr, no new report; any old report is
+unchanged). Always check the exit code before consuming an existing file.
+The optional `--suite` uses the same versioned five-case loader, not a new
+corpus format. Paths can be overridden with `--output`; it cannot overwrite
+the plan, suite or captures.
+
+These checks deliberately do **not** score editorial answer/forbidden-claim
+keywords as semantic groundedness, business-owner correctness, stub-fidelity
+reasoning or missing-information completeness. A vacuous/no-claim response can
+have source-consistent citations and still be unhelpful. Saved captures are
+untrusted evidence: consistency checks cannot authenticate that a model/tool
+actually ran, restore unavailable snapshots, prove current access, validate
+blocked integrations, or certify a serving version. The committed wiki blob
+and scoped work-item revision are reused as documented above; the work-item
+projection is not a complete independently authenticated REST capture.
+Existing suite blockers/baseline classifications are unchanged. Replay does
+not enforce fresh live-write approval/serving-proof timestamps because it
+never invokes or writes to the service.
+
+No measured five-case agent baseline is bundled. Tests reuse the existing
+synthetic capture doubles and exercise success/failure/exit behavior with
+network, credential, live-execution and judge entrypoints blocked. Use
+`--evidence-kind synthetic` for such grader tests; the default `saved_capture`
+labels replayed evidence, **not** newly measured/live quality. Do not commit
+private captures, plans or generated reports. The three existing Foundry
+evaluators remain separate: groundedness (minimum 3/5), task adherence
+(exactly 1), and tool-call accuracy (minimum 3/5; only the two live-tool cases).
+
+### Existing live and saved-response diagnostic checker
 
 [`check_planted_gaps.py`](check_planted_gaps.py) uses shared Pydantic contract
 validation, documentation status, recall, evidence integrity and the existing
