@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import json
 from contextlib import asynccontextmanager, contextmanager
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
@@ -9,7 +10,10 @@ import pytest
 from azure.ai.agentserver.core import FoundryAgentRequestContext, reset_request_context, set_request_context
 from azure.ai.agentserver.core.storage import FoundryStateStore
 from documentation_agent.approval import STORE_NAME, ToolApprovalAgent, ToolApprovalPolicy
+from documentation_agent.conversation import STORE as CHAT_STORE
+from documentation_agent.conversation import ConversationService, ConversationSources
 from documentation_agent.push_flow import STORE, PushFlow, PushPolicy, PushRequest, event_key
+from documentation_agent.settings import AssessmentSettings
 from documentation_agent.teams import BINDING_STORE, TeamsApproval, create_teams_server
 from httpx import ASGITransport, AsyncClient
 from mcp.types import Tool
@@ -75,7 +79,7 @@ def harness(tmp_path, monkeypatch):
     monkeypatch.setenv("AGENTSERVER_STATE_ROOT", str(tmp_path / "state"))
     stores = {
         name: asyncio.run(FoundryStateStore.get_or_create(name, user_isolation=name != STORE))
-        for name in [STORE, STORE_NAME, BINDING_STORE, "function_approvals", "agent_sessions"]
+        for name in [STORE, STORE_NAME, BINDING_STORE, CHAT_STORE, "function_approvals", "agent_sessions"]
     }
 
     async def get_store(name, **kwargs):
@@ -300,7 +304,8 @@ def test_duplicate_open_reuses_pending_and_foreign_conversation_is_refused(harne
 
 
 @pytest.mark.parametrize("merged", [False, True])
-def test_real_http_pipeline_to_proactive_card_and_user_open(harness, tmp_path, monkeypatch, merged):
+@pytest.mark.parametrize("chat_enabled", [False, True])
+def test_real_http_pipeline_to_proactive_card_and_user_open(harness, tmp_path, monkeypatch, merged, chat_enabled):
     async def run():
         flow, teams, assessor, _, connection, _ = harness
         flow.policy.merged_pr_drafts = merged
@@ -320,7 +325,17 @@ def test_real_http_pipeline_to_proactive_card_and_user_open(harness, tmp_path, m
         for key, value in env.items():
             monkeypatch.setenv(key, value)
         monkeypatch.setattr("documentation_agent.assessment.AssessmentAgent", lambda settings: assessor)
-        host = create_teams_server(teams.agent)
+        runner = SimpleNamespace(reply=AsyncMock(return_value="Read-only answer."))
+        conversation = ConversationService(
+            AssessmentSettings.from_environment({**env, "TOOLBOX_ENDPOINT": env["DOCUMENTATION_PUSH_READ_TOOLBOX"]}),
+            ConversationSources.model_validate({
+                "subject": {"repo": REPO, "commit_sha": "a" * 40},
+                "context": {"wiki_page_paths": [flow.policy.wiki_page], "work_item_ids": [1]},
+                "documentation_standard_ref": "standard",
+            }),
+            runner,
+        ) if chat_enabled else None
+        host = create_teams_server(teams.agent, conversation=conversation)
         sent = []
         continued = []
 
@@ -347,12 +362,19 @@ def test_real_http_pipeline_to_proactive_card_and_user_open(harness, tmp_path, m
                 text="connect repo"
             ).model_dump(mode="json", by_alias=True, exclude_none=True))
             assert posted.status_code == 202, posted.text
+            if chat_enabled:
+                asked = await client.post("/activity/messages", headers=reviewer_headers, json=activity(
+                    text="How does Order Sync work?"
+                ).model_dump(mode="json", by_alias=True, exclude_none=True))
+                assert asked.status_code == 202 and sent[-1].text == "Read-only answer."
             blocked = await client.post("/invocations", headers=reviewer_headers, json=push().model_dump(mode="json"))
             assert blocked.status_code == 403, blocked.text
             preflight = await client.post(
                 "/invocations", headers=pipeline_headers, json={"interface_version": "1.0.0", "action": "preflight"},
             )
             assert preflight.json() == {"state": "caller_verified", "assessment_run": False}
+            bad = await client.post("/invocations", headers=pipeline_headers, json={"question": "Read the wiki"})
+            assert bad.status_code == 400
             assessor.assess.assert_not_called()
             notification = await client.post(
                 "/invocations", headers=pipeline_headers,
@@ -379,6 +401,7 @@ def test_real_http_pipeline_to_proactive_card_and_user_open(harness, tmp_path, m
             pending = sent[-1].attachments[0].content
             assert [a["title"] for a in pending["actions"]] == ["Approve", "Modify", "Reject"]
             connection.invoke_once.assert_not_called()
+            assert runner.reply.await_count == int(chat_enabled)
             declined = await client.post(
                 "/activity/messages", headers=reviewer_headers, json=activity(
                     value=button(pending, "Reject")

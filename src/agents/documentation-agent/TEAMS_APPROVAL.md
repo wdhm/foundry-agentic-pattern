@@ -92,6 +92,16 @@ user/session/conversation. Free text is not automatically treated as a write.
 The upstream assessment/PR caller still needs to submit the selected proposal;
 this is not a natural-language proposal-generation feature.
 
+With the separately enabled [conversational path](README.md#optional-conversational-toolbox-path),
+ordinary text receives a read-only model/Toolbox answer as a normal Teams message.
+The existing personal-chat/tenant/platform-user checks run before chat too.
+Questions and follow-ups do not require JSON. JSON-shaped commands still fail
+closed if malformed, card actions never fall back to the model, and conversational
+agreement never becomes an approval. Chat is disabled by default in code. After
+isolated Responses acceptance, v26 was explicitly selected for Teams on 2026-10-22.
+The user confirmed fresh notification registration and merged-PR build 6 reported
+delivery; final wiki approval/readback is pending. The approval flow does not require chat.
+
 The card callback is:
 
 ```json
