@@ -242,3 +242,35 @@ def test_output_cannot_overwrite_inputs(replay):
     original = paths[0].read_bytes()
     assert main([*args, "--output", str(paths[0])]) == 2
     assert paths[0].read_bytes() == original
+
+
+@pytest.mark.parametrize("failure", ["write", "replace"])
+def test_publish_failure_preserves_previous_report_and_cleans_temporary_file(replay, monkeypatch, capsys, failure):
+    from pathlib import Path
+    from tempfile import NamedTemporaryFile
+
+    args, _, _, output = replay
+    output.parent.mkdir()
+    previous = b"previous report\n"
+    output.write_bytes(previous)
+    if failure == "write":
+        def failing_file(*args, **kwargs):
+            target = NamedTemporaryFile(*args, **kwargs)
+            write = target.write
+            def partial_write(text):
+                write(text[:10])
+                target.flush()
+                raise OSError("Injected partial write failure.")
+            monkeypatch.setattr(target, "write", partial_write)
+            return target
+        monkeypatch.setattr("tools.code_eval.NamedTemporaryFile", failing_file)
+    else:
+        def failing_replace(source, destination):
+            assert source.parent == destination.parent == output.parent
+            assert source.read_text()
+            raise OSError("Injected replace failure.")
+        monkeypatch.setattr(Path, "replace", failing_replace)
+    assert main(args) == 2
+    assert "Injected" in capsys.readouterr().err
+    assert output.read_bytes() == previous
+    assert list(output.parent.iterdir()) == [output]

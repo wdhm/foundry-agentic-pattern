@@ -164,7 +164,9 @@ inapplicable score or perfect fallback.
 Exit **0** means all five cases passed; **1** means at least one required case
 failed (the full five-row report is still written); **2** means configuration,
 suite or I/O failure (diagnostic on stderr, no new report; any old report is
-unchanged). Always check the exit code before consuming an existing file.
+unchanged). Reports are published by same-directory temporary file and atomic
+replacement; failed writes/replacements clean up the temporary file. Always
+check the exit code before consuming an existing file.
 The optional `--suite` uses the same versioned five-case loader, not a new
 corpus format. Paths can be overridden with `--output`; it cannot overwrite
 the plan, suite or captures.

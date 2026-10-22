@@ -5,6 +5,7 @@ import hashlib
 import json
 import sys
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Any, Literal
 from uuid import UUID
 
@@ -193,6 +194,22 @@ def evaluate(
     return rows
 
 
+def write_report(path: Path, rows: list[dict[str, Any]]) -> None:
+    text = json.dumps(rows, indent=2, allow_nan=False) + "\n"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary: Path | None = None
+    try:
+        with NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=path.parent, prefix=f".{path.name}.", suffix=".tmp", delete=False,
+        ) as target:
+            temporary = Path(target.name)
+            target.write(text)
+        temporary.replace(path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--captures", type=Path, required=True, help="Directory containing CASE_ID-evaluation.json")
@@ -207,8 +224,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.output.resolve() in {path.resolve() for path in inputs}:
             raise ValueError("Output must not overwrite an input file.")
         rows = evaluate(args.captures, args.plan, args.suite, args.evidence_kind)
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(json.dumps(rows, indent=2, allow_nan=False) + "\n", encoding="utf-8")
+        write_report(args.output, rows)
     except (OSError, *INPUT_ERRORS) as exc:
         print(f"Code evaluation input/output error: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 2
