@@ -20,6 +20,10 @@ The task-aware assessment CLI preserves `request.task`, and GET-confirmed
 session/outer-reference discrepancies fail closed without overwriting provenance. See the
 [CLI](../../docs/workshop/cli-trigger-guide.md) and
 [release guide](../../docs/workshop/evaluation-release-guide.md).
+[`code_eval.py`](code_eval.py) replays saved hosted evaluation captures locally
+through the existing contracts/source/policy validators and writes per-case
+code-based scores without invoking a model or the cloud. See the
+[command, input shape and metric limits](../../evals/README.md#local-code-based-baseline-from-hosted-captures).
 
 | Folder | What | Decision |
 |---|---|---|
