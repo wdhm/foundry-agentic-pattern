@@ -66,6 +66,10 @@ Its opt-in `compose_wiki_page` mode preserves the actual page and updates only
 proposed sections, with separate diff/evidence notes and ETag-bound approval.
 `approval/order-sync-policy.json` targets `/Order Sync/Overview`; the live sandbox
 policy is not changed by adding this file. Real conditional-write acceptance is pending.
+The selected demo publisher uses `draft_storage: wiki`: automatic draft-only writes
+under `/Drafts/Order Sync`, followed by human approval of the actual page update.
+It requires no Git draft-branch write permission. Draft and destination versions
+are checked; draft pages remain after the decision.
 It was deployed as v13 and selected on 2026-10-20. The user verified real Teams
 cards, Reject, Modify, old-decision rejection and Approve; independent ADO readback
 confirmed the approved sandbox content. See the guide for the recorded image,

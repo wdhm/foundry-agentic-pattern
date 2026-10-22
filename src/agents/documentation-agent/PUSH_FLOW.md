@@ -8,8 +8,9 @@ and `/Workshop/Approval-Sandbox`. It is not a PR-comment implementation of #30.
 
 ## Merged-PR draft review (new code; not live-enabled)
 
-Package 0.8.0 adds this mode and conditional-page approval engine 0.6.0;
-assessment provenance is unchanged. Set `merged_pr_drafts: true` in a reviewed push policy and use the updated pipeline
+Package 0.8.0 added this mode and conditional-page approval engine 0.6.0;
+0.8.1 adds the selected wiki-draft publisher below. Assessment provenance is
+unchanged. Set `merged_pr_drafts: true` in a reviewed push policy and use the updated pipeline
 template to opt into the post-merge flow. The previously deployed main-push flow
 remains unchanged until that coordinated rollout.
 
@@ -151,6 +152,58 @@ Existing supersession/retention limits below apply. If automation configuration
 changes, older policy-bound reviews are rejected rather than silently migrated.
 
 ## Flow
+
+### Selected demo variant: wiki drafts (2026-10-22, rollout pending)
+
+The user selected **`/Drafts` pages in the existing wiki**, replacing Git draft
+branch publication. Configure `draft_storage: "wiki"` together with
+`merged_pr_drafts: true` and `compose_wiki_page: true`. Select the fixed
+`order-sync-policy.json`, including `review_draft_prefix: "/Drafts/Order Sync"`.
+
+The existing pipeline job token is needed only to verify the completed PR. It
+does not write repository content in this variant. The earlier attempt to grant
+draft-branch permissions returned 403; no such permission grant was applied and
+no alternate identity is used to bypass that denial.
+
+The hosted agent automatically writes only fresh review pages under
+`/Drafts/Order Sync/PR-<number>-<event UUID>`, plus a `-review` page for the diff
+and evidence. The existing parent `/Drafts/Order Sync` must be prepared once.
+The automatic publisher constructs paths itself and rejects traversal or any
+path outside that prefix. It reuses the existing agent identity/write Toolbox,
+not operator credentials. These are real **draft-area writes**, explicitly
+separate from the published-page approval gate.
+
+The event is durably claimed before draft creation. Every page is read back
+and content-checked before notifying Teams. Failure can leave a partial draft;
+the event becomes `draft_publication_unknown` and is not blindly retried.
+The workflow never overwrites the live documentation during draft generation.
+
+**Draft page** links to the wiki draft; **Changes** links to its review notes.
+These links use existing wiki authentication/permissions. They are not immutable
+Git-commit links: approval stores the draft and notes snapshots and ETags and
+checks both again before execution, in addition to the destination page ETag.
+Editing either draft page invalidates the old approval. The user must obtain a
+fresh review, not approve whatever happens to be at the mutable link.
+
+**Modify** publishes a new uniquely named draft revision and new notes, then
+creates a replacement pending call. The new card points to that exact recorded
+revision and requires another approval. A failure before replacement can leave
+an orphan draft and the original pending state; no published-page write occurs.
+External wiki edits are never silently imported; use Modify to create a new
+reviewed revision.
+
+After **Approve**, the runtime writes only the exact saved draft-page content
+to `/Order Sync/Overview`, carrying the approved destination ETag, then verifies
+target readback. The draft and notes remain as review history. Decision status
+is in the card/SDK state; no status banner is copied into the published page.
+Reject leaves the published page unchanged and also retains the draft.
+
+The Git-branch variant remains opt-in code but is not the chosen demo path.
+No automatic draft cleanup, broad wiki target, source-PR approval or atomic
+cross-page transaction is introduced. Live conditional-write caveats above
+still apply.
+
+### Original deployed main-push variant
 
 1. An Azure Pipeline starts after relevant files change on main. It executes
    only the caller from a reviewed immutable commit of this application repo,

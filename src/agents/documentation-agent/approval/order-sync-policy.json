@@ -9,6 +9,7 @@
   },
   "content_parameter": "content",
   "wiki_etag_parameter": "etag",
+  "review_draft_prefix": "/Drafts/Order Sync",
   "auth_mode": "managed_identity",
   "timeout_seconds": 60,
   "approval_ttl_seconds": 3600

@@ -12,7 +12,7 @@ WikiETag = Annotated[str, Field(pattern=r'^(?:[a-fA-F0-9]{40}|"[a-fA-F0-9]{40}")
 
 class WikiSnapshot(ContractModel):
     path: NonBlank
-    content: Annotated[str, Field(max_length=16000)]
+    content: Annotated[str, Field(max_length=64000)]
     etag: WikiETag
     uri: Annotated[str, Field(pattern=r"^https://dev\.azure\.com/[^\s]+$")]
 
@@ -23,3 +23,8 @@ class WikiSnapshot(ContractModel):
         if self.etag.strip('"').lower() != blob:
             raise ValueError("Wiki content does not match its Git-blob ETag.")
         return self
+
+
+class WikiDraftBundle(ContractModel):
+    page: WikiSnapshot
+    notes: WikiSnapshot | None = None

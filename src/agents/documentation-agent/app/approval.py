@@ -44,6 +44,7 @@ class ToolApprovalPolicy(ContractModel):
     proposal_page_parameter: NonBlank | None = None
     proposal_section_parameter: NonBlank | None = None
     wiki_etag_parameter: Literal["etag"] | None = None
+    review_draft_prefix: Literal["/Drafts/Order Sync"] | None = None
     auth_mode: Literal["managed_identity", "azure_cli"] = "managed_identity"
     timeout_seconds: int = Field(default=60, gt=0, le=180)
     approval_ttl_seconds: int = Field(default=3600, gt=0, le=86400)
@@ -65,6 +66,8 @@ class ToolApprovalPolicy(ContractModel):
                 or not all(isinstance(self.fixed_arguments.get(k), str) for k in ("project", "wikiIdentifier", "path"))
             ):
                 raise ValueError("Conditional wiki updates require fixed wikiMaster target fields and a dynamic etag.")
+        if self.review_draft_prefix is not None and self.wiki_etag_parameter is None:
+            raise ValueError("Reviewed wiki drafts require a conditional target-page policy.")
         if any(not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", key) for key in self.fixed_arguments):
             raise ValueError("Fixed arguments must be tool parameters, not runtime metadata.")
         bindings = (self.proposal_page_parameter, self.proposal_section_parameter)
@@ -100,6 +103,8 @@ class ProposeCall(ContractModel):
     content: Text
     evidence: Annotated[list[Evidence], Field(min_length=1, max_length=10)]
     expected_wiki_etag: WikiETag | None = None
+    review_draft: WikiSnapshot | None = None
+    review_notes: WikiSnapshot | None = None
 
 
 class ProposeResult(ContractModel):
@@ -122,6 +127,8 @@ class ModifyCall(ContractModel):
     pending_id: UUID
     feedback: Annotated[NonBlank, Field(max_length=1000)]
     content: Text
+    review_draft: WikiSnapshot | None = None
+    review_notes: WikiSnapshot | None = None
 
 
 class InspectCall(ContractModel):
@@ -147,6 +154,8 @@ class PendingCall(ContractModel):
     tool_hash: str
     evidence: list[Evidence]
     origin: ProposalOrigin | None = None
+    review_draft: WikiSnapshot | None = None
+    review_notes: WikiSnapshot | None = None
     owner: str
     session_id: str
     created_at: datetime
@@ -321,6 +330,17 @@ class ToolApprovalAgent(ApprovalAgentBase):
             raise ValueError("Stored arguments do not match the fixed target policy.")
         if record.args_hash != canonical_hash({"tool": record.tool, "arguments": record.arguments}):
             raise ValueError("Stored approval arguments hash does not match.")
+        self.check_draft(record.review_draft, content, record.review_notes)
+
+    def check_draft(self, draft: WikiSnapshot | None, content: str, notes: WikiSnapshot | None = None) -> None:
+        prefix = self.policy.review_draft_prefix
+        if prefix is not None:
+            if draft is None or not draft.path.startswith(prefix + "/PR-") or draft.content != content:
+                raise ValueError("Approval requires the exact versioned review draft in the configured draft area.")
+        elif draft is not None:
+            raise ValueError("This policy does not accept external draft references.")
+        if notes is not None and (draft is None or notes.path != draft.path + "-review"):
+            raise ValueError("Review notes must belong to the same draft revision.")
 
     def from_result(self, command: ProposeResult) -> tuple[ProposeCall, ProposalOrigin]:
         page_key = self.policy.proposal_page_parameter
@@ -359,6 +379,7 @@ class ToolApprovalAgent(ApprovalAgentBase):
         self, command: ProposeCall, actor: str, session_id: str, origin: ProposalOrigin | None = None
     ) -> PendingCall:
         arguments = self.policy.arguments(command.content, command.expected_wiki_etag)
+        self.check_draft(command.review_draft, command.content, command.review_notes)
         async with asyncio.timeout(self.policy.timeout_seconds), self.connector(self.policy) as connection:
             if connection.spec.name != self.policy.tool_name:
                 raise ValueError("Tool discovery returned a different tool.")
@@ -374,6 +395,8 @@ class ToolApprovalAgent(ApprovalAgentBase):
             tool_hash=tool_hash,
             evidence=command.evidence,
             origin=origin,
+            review_draft=command.review_draft,
+            review_notes=command.review_notes,
             owner=actor,
             session_id=session_id,
             created_at=now,
@@ -411,6 +434,7 @@ class ToolApprovalAgent(ApprovalAgentBase):
                 return [Content.from_text(record.model_dump_json())]
             self.check_pending(record.model_dump())
             self.check_record(record)
+            self.check_draft(command.review_draft, command.content, command.review_notes)
             # Void before discovery/storage of a replacement; failure cannot restore
             # permission to execute the original proposal.
             record.status = "modified"
@@ -425,6 +449,8 @@ class ToolApprovalAgent(ApprovalAgentBase):
                         TypeAdapter(WikiETag).validate_python(record.arguments.get("etag"))
                         if self.policy.wiki_etag_parameter is not None else None
                     ),
+                    review_draft=command.review_draft,
+                    review_notes=command.review_notes,
                 ),
                 actor,
                 session.session_id,
@@ -469,6 +495,16 @@ class ToolApprovalAgent(ApprovalAgentBase):
             if canonical_hash(connection.spec.model_dump(mode="json")) != record.tool_hash:
                 raise ValueError("Tool schema or metadata changed; create a new proposal.")
             validate_schema(connection.spec.inputSchema, record.arguments)
+            if record.review_draft is not None:
+                if self.wiki_reader is None:
+                    raise ValueError("Draft readback is not configured.")
+                current_draft = await self.wiki_reader(record.review_draft.path)
+                if current_draft != record.review_draft:
+                    raise ValueError("Review draft changed. Generate a fresh reviewed proposal before approving.")
+                if record.review_notes is not None:
+                    current_notes = await self.wiki_reader(record.review_notes.path)
+                    if current_notes != record.review_notes:
+                        raise ValueError("Review notes changed. Generate a fresh reviewed proposal before approving.")
             if self.policy.wiki_etag_parameter is not None:
                 await self.verify_wiki(record, after_write=False)
             if record.expires_at <= datetime.now(UTC):

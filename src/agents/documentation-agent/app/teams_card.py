@@ -51,6 +51,7 @@ def action(record: PendingCall, verb: str, title: str, *, inputs: bool = False) 
 def linked_review_card(
     record: PendingCall, draft_link: str, pr_link: str, target: str, findings: int, missing: int,
     *, matches_draft: bool, page_update: bool = False, notes_link: str | None = None,
+    wiki_draft: bool = False,
 ) -> dict[str, Any]:
     pending = record.status == "pending" and record.expires_at > datetime.now(UTC)
     status = "expired" if record.status == "pending" and not pending else record.status
@@ -71,7 +72,9 @@ def linked_review_card(
     ]
     links = [{"type": "Action.OpenUrl", "title": "Merged PR", "url": pr_link}]
     if matches_draft:
-        links.insert(0, {"type": "Action.OpenUrl", "title": "View draft", "url": draft_link})
+        links.insert(0, {
+            "type": "Action.OpenUrl", "title": "Draft page" if wiki_draft else "View draft", "url": draft_link,
+        })
         if notes_link:
             links.insert(1, {"type": "Action.OpenUrl", "title": "Changes", "url": notes_link})
     body.append({"type": "ActionSet", "actions": links})

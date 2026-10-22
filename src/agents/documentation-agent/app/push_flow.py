@@ -19,12 +19,13 @@ from contracts.drafts import DraftPublished, PreparedDraft, VerifiedDraft, conte
 from contracts.models import CommitSha, ContractModel, NonBlank
 from contracts.repositories import azure_repository
 from contracts.v1 import AgentRequest, AgentResult
-from contracts.wiki import WikiSnapshot
+from contracts.wiki import WikiDraftBundle, WikiSnapshot
 
 from .approval import PendingCall, ProposeCall, WikiRead
 from .approval_common import canonical_hash
 from .teams import ChannelBinding, TeamsApproval
 from .teams_card import card, linked_review_card, review_card, text
+from .wiki_drafts import WikiDraftPublisher
 
 LOGGER = logging.getLogger(__name__)
 STORE = "documentation-push-flow-v1"
@@ -43,11 +44,14 @@ class PushPolicy(ContractModel):
     sandbox_page: Literal["/Workshop/Approval-Sandbox"] = "/Workshop/Approval-Sandbox"
     merged_pr_drafts: bool = False
     compose_wiki_page: bool = False
+    draft_storage: Literal["git_branch", "wiki"] = "git_branch"
 
     @model_validator(mode="after")
     def valid_sources(self) -> Self:
         if self.compose_wiki_page and not self.merged_pr_drafts:
             raise ValueError("Real wiki page composition requires the merged-PR draft flow.")
+        if self.draft_storage == "wiki" and not self.compose_wiki_page:
+            raise ValueError("Wiki drafts require complete-page composition.")
         repo = azure_repository(self.repository_url)
         UUID(repo.repository)
         if len(set(self.source_paths)) != len(self.source_paths):
@@ -143,6 +147,7 @@ class PushFlow:
         read_draft: ReadDraft | None = None,
         read_notes: ReadDraft | None = None,
         read_wiki: WikiRead | None = None,
+        wiki_publisher: WikiDraftPublisher | None = None,
     ) -> None:
         self.policy = policy
         self.teams = teams
@@ -151,14 +156,20 @@ class PushFlow:
         self.read_draft = read_draft
         self.read_notes = read_notes
         self.read_wiki = read_wiki
-        if policy.merged_pr_drafts and read_draft is None:
+        self.wiki_publisher = wiki_publisher
+        if policy.merged_pr_drafts and policy.draft_storage == "git_branch" and read_draft is None:
             raise ValueError("Merged-PR drafts require a commit-pinned draft reader.")
         if teams.agent.policy.fixed_arguments.get("path") != policy.write_target:
             raise ValueError("Approval target does not match the operator's explicit push-flow target.")
         if policy.compose_wiki_page and (
-            read_wiki is None or read_notes is None or teams.agent.policy.wiki_etag_parameter != "etag"
+            read_wiki is None or teams.agent.policy.wiki_etag_parameter != "etag"
+            or (policy.draft_storage == "git_branch" and read_notes is None)
         ):
             raise ValueError("Real page updates require snapshot/notes readers and conditional ETag approval.")
+        if policy.draft_storage == "wiki" and (
+            wiki_publisher is None or teams.agent.policy.review_draft_prefix != "/Drafts/Order Sync"
+        ):
+            raise ValueError("Wiki drafts require a prefix-restricted publisher and draft-bound approval policy.")
 
     async def store(self) -> FoundryStateStore:
         # Pipeline and reviewer need different identities. Access to this shared
@@ -235,7 +246,10 @@ class PushFlow:
                     raise ValueError("Stored event uses a different policy; do not reuse it.")
                 if previous.value["request"].get("pull_request_id") != request.pull_request_id:
                     raise ValueError("Commit was already associated with a different pull request.")
-                if self.policy.merged_pr_drafts and previous.value["state"] == "draft_ready":
+                if (
+                    self.policy.merged_pr_drafts and self.policy.draft_storage == "git_branch"
+                    and previous.value["state"] == "draft_ready"
+                ):
                     return self.prepared_draft(previous.value, duplicate=True)
                 if previous.value["state"] in {"notified", "opened"}:
                     return {"event_id": key, "state": previous.value["state"], "duplicate": True}
@@ -348,7 +362,9 @@ class PushFlow:
                     )
                 record.update(state="draft_ready", draft_content=content)
                 prepared = self.prepared_draft(record, duplicate=False)
-                await store.set_item(key, record, if_match=claimed.etag)
+                claimed = await store.set_item(key, record, if_match=claimed.etag)
+                if self.policy.draft_storage == "wiki":
+                    return await self.publish_wiki_draft(store, record, claimed.etag)
                 return prepared
             notification = card([
                 text("Documentation review ready", weight="Bolder", size="Medium"),
@@ -388,9 +404,59 @@ class PushFlow:
             review_notes=record.get("review_notes"),
         ).model_dump(mode="json")
 
+    async def publish_wiki_draft(
+        self, store: FoundryStateStore, record: dict[str, Any], etag: str,
+    ) -> dict[str, Any]:
+        if self.wiki_publisher is None:
+            raise ValueError("Wiki draft publisher is not configured.")
+        key = record["event_id"]
+        record["state"] = "draft_publishing"
+        claimed = await store.set_item(key, record, if_match=etag)
+        try:
+            bundle = await self.wiki_publisher.publish(
+                UUID(key), record["request"]["pull_request_id"], record["draft_content"], record.get("review_notes"),
+            )
+        except Exception as exc:
+            LOGGER.error("Wiki draft publication %s uncertain (%s); no automatic retry.", key, type(exc).__name__)
+            record.update(state="draft_publication_unknown", error_type=type(exc).__name__)
+            await store.set_item(key, record, if_match=claimed.etag)
+            raise
+        record["wiki_draft"] = bundle.model_dump(mode="json")
+        latest = await store.get_item("latest")
+        if latest is None or latest.value["event_id"] != key:
+            record["state"] = "superseded"
+            await store.set_item(key, record, if_match=claimed.etag)
+            raise ValueError("Assessment was superseded while creating the draft; no notification sent.")
+        result = AgentResult.model_validate(record["result"])
+        notification = card([
+            text("Documentation draft ready", weight="Bolder", size="Medium"),
+            text(f"Merged PR #{record['request']['pull_request_id']}"),
+            text(f"Findings: {len(result.findings)}; missing facts: {len(result.missing_information)}."),
+            text(f"Publish target: {self.policy.write_target}. The published page has not changed."),
+        ], [
+            {"type": "Action.OpenUrl", "title": "Draft page", "url": bundle.page.uri},
+            {"type": "Action.OpenUrl", "title": "Changes",
+             "url": bundle.notes.uri if bundle.notes else bundle.page.uri},
+            {"type": "Action.Submit", "title": "Review", "associatedInputs": "none",
+             "data": {"interface_version": "1.0.0", "action": "review_push", "event_id": key}},
+        ])
+        record["state"] = "notifying"
+        claimed = await store.set_item(key, record, if_match=claimed.etag)
+        try:
+            recipient = Recipient.model_validate(record["recipient"])
+            await self.notify(ConversationReference.model_validate(recipient.reference), notification)
+        except Exception as exc:
+            LOGGER.error("Wiki draft notification %s uncertain (%s); no automatic retry.", key, type(exc).__name__)
+            record.update(state="notification_unknown", error_type=type(exc).__name__)
+            await store.set_item(key, record, if_match=claimed.etag)
+            raise
+        record["state"] = "notified"
+        await store.set_item(key, record, if_match=claimed.etag)
+        return {"event_id": key, "state": "notified", "duplicate": False}
+
     async def publish_draft(self, published: DraftPublished) -> dict[str, Any]:
         self.require_caller()
-        if not self.policy.merged_pr_drafts or self.read_draft is None:
+        if not self.policy.merged_pr_drafts or self.policy.draft_storage != "git_branch" or self.read_draft is None:
             raise ValueError("Draft publication is not enabled.")
         key = str(published.event_id)
         store = await self.store()
@@ -461,6 +527,16 @@ class PushFlow:
             return {"event_id": key, "state": "notified", "duplicate": False}
 
     def render_review(self, pending: PendingCall, record: dict[str, Any]) -> dict[str, Any]:
+        if record.get("wiki_draft"):
+            bundle = WikiDraftBundle.model_validate(record["wiki_draft"])
+            result = AgentResult.model_validate(record["result"])
+            return linked_review_card(
+                pending, bundle.page.uri,
+                pull_request_url(self.policy.repository_url, record["request"]["pull_request_id"]),
+                self.policy.write_target, len(result.findings), len(result.missing_information),
+                matches_draft=pending.arguments[self.teams.agent.policy.content_parameter] == bundle.page.content,
+                page_update=True, notes_link=bundle.notes.uri if bundle.notes else None, wiki_draft=True,
+            )
         if not record.get("draft"):
             return review_card(pending, self.teams.agent.policy.content_parameter)
         draft = VerifiedDraft.model_validate(record["draft"])
@@ -490,7 +566,10 @@ class PushFlow:
             record = await store.get_item(lineage.value["event_id"])
             if record is None:
                 raise ValueError("Proposal origin is unavailable; cannot render draft review.")
-            return self.render_review(pending, record.value)
+            values = {**record.value}
+            if lineage.value.get("wiki_draft"):
+                values["wiki_draft"] = lineage.value["wiki_draft"]
+            return self.render_review(pending, values)
 
     async def open_review(self, activity: Activity, event_id: UUID) -> dict[str, Any]:
         binding = self.reviewer(activity)
@@ -514,11 +593,18 @@ class PushFlow:
             if record["state"] == "opened":
                 await self.teams.check_binding(UUID(record["pending_id"]), binding)
                 pending = await self.teams.record(UUID(record["pending_id"]), binding)
-                return self.render_review(pending, record)
+                return await self.render_pending(pending)
             if record["state"] not in {"notified", "notification_unknown", "notifying"}:
                 raise ValueError("Review is not ready or was already claimed; inspect status before retrying.")
             result = AgentResult.model_validate(record["result"])
             if not result.proposed_changes:
+                if record.get("wiki_draft"):
+                    return card([
+                        text("Review completed - no write proposed", weight="Bolder"),
+                        text("The published page is unchanged. Read the findings in the draft review."),
+                    ], [{"type": "Action.OpenUrl", "title": "View findings",
+                         "url": record["wiki_draft"]["notes"]["uri"] if record["wiki_draft"].get("notes")
+                         else record["wiki_draft"]["page"]["uri"]}])
                 if record.get("draft"):
                     return card([
                         text("Review completed - no write proposed", weight="Bolder", size="Medium"),
@@ -533,9 +619,19 @@ class PushFlow:
                 ])
             proposal = ProposeCall(
                 action="propose", run_id=result.request_id,
-                content=record["draft_content"] if record.get("draft") else report_content(result),
+                content=(
+                    record["draft_content"]
+                    if record.get("draft") or record.get("wiki_draft") else report_content(result)
+                ),
                 evidence=result.evidence,
                 expected_wiki_etag=record.get("wiki_base", {}).get("etag"),
+                review_draft=(
+                    WikiSnapshot.model_validate(record["wiki_draft"]["page"]) if record.get("wiki_draft") else None
+                ),
+                review_notes=(
+                    WikiSnapshot.model_validate(record["wiki_draft"]["notes"])
+                    if record.get("wiki_draft", {}).get("notes") else None
+                ),
             )
             record["state"] = "opening"
             claimed = await store.set_item(str(event_id), record, if_match=item.etag)
@@ -569,9 +665,41 @@ class PushFlow:
                 ):
                     raise ValueError("Automation policy changed; this stored proposal is no longer eligible.")
 
-    async def inherit_event(self, previous: UUID, replacement: UUID) -> None:
+    async def revision_draft(self, pending: PendingCall, content: str) -> WikiDraftBundle | None:
+        if self.policy.draft_storage != "wiki":
+            return None
+        store = await self.store()
+        async with store:
+            mapping = await store.get_item(f"pending:{pending.pending_id}")
+            if mapping is None:
+                raise ValueError("Wiki draft revision requires an existing automation review.")
+            event = await store.get_item(mapping.value["event_id"])
+            if event is None or self.wiki_publisher is None:
+                raise ValueError("Original review is unavailable.")
+            from .wiki_page import review_notes
+
+            base = WikiSnapshot.model_validate(event.value["wiki_base"])
+            result = AgentResult.model_validate(event.value["result"])
+            notes = "# Reviewer-edited revision\n\n" + review_notes(base, content, result)
+            return await self.wiki_publisher.publish(
+                UUID(event.value["event_id"]), event.value["request"]["pull_request_id"],
+                content, notes, revision_id=uuid4(),
+            )
+
+    async def inherit_event(
+        self, previous: UUID, replacement: UUID, bundle: WikiDraftBundle | None = None,
+    ) -> None:
         store = await self.store()
         async with store:
             event = await store.get_item(f"pending:{previous}")
             if event:
-                await store.create_item(f"pending:{replacement}", event.value)
+                values = {**event.value}
+                if bundle is not None:
+                    values["wiki_draft"] = bundle.model_dump(mode="json")
+                await store.create_item(f"pending:{replacement}", values)
+                original = await store.get_item(event.value["event_id"])
+                if original is not None and original.value.get("pending_id") == str(previous):
+                    await store.set_item(
+                        event.value["event_id"], {**original.value, "pending_id": str(replacement)},
+                        if_match=original.etag,
+                    )
