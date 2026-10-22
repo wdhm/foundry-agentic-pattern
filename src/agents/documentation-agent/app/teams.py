@@ -144,15 +144,23 @@ class TeamsApproval:
             if submitted.action == "edit":
                 return review_card(record, self.agent.policy.content_parameter, view="edit")
             if submitted.action == "modify":
+                bundle = (
+                    await self.push_flow.revision_draft(record, submitted.content or "")
+                    if self.push_flow is not None else None
+                )
                 modify_command = json.dumps({
                     "action": "modify", "pending_id": str(record.pending_id),
                     "content": submitted.content, "feedback": submitted.feedback,
+                    **({
+                        "review_draft": bundle.page.model_dump(mode="json"),
+                        "review_notes": bundle.notes.model_dump(mode="json") if bundle.notes else None,
+                    } if bundle is not None else {}),
                 })
                 response = await self.agent.execute(modify_command, session)
                 approval = next(item for item in response if item.type == "function_approval_request")
                 replacement = await self.record(UUID(approval.id or ""), binding)
                 if self.push_flow is not None:
-                    await self.push_flow.inherit_event(record.pending_id, replacement.pending_id)
+                    await self.push_flow.inherit_event(record.pending_id, replacement.pending_id, bundle)
                 await self.save_binding(replacement, binding)
                 return await self.render(replacement)
             # Ignore all client-supplied tool arguments. Reconstitute the native
@@ -219,6 +227,7 @@ def create_teams_server(agent: ToolApprovalAgent) -> TeamsResponsesHost:
         from .draft_reader import ToolboxDraftReader
         from .push_flow import PushFlow, PushPolicy, PushPreflight, PushRequest, ReviewAction
         from .settings import AssessmentSettings
+        from .wiki_drafts import WikiDraftPublisher
 
         policy = PushPolicy.from_environment()
         read_toolbox = os.environ.get("DOCUMENTATION_PUSH_READ_TOOLBOX")
@@ -247,12 +256,20 @@ def create_teams_server(agent: ToolApprovalAgent) -> TeamsResponsesHost:
                 raise ValueError("Activity adapter is not configured.")
             await adapter.continue_conversation(app_id, reference.get_continuation_activity(), send)
 
-        draft_reader = ToolboxDraftReader(settings) if policy.merged_pr_drafts else None
+        draft_reader = (
+            ToolboxDraftReader(settings) if policy.merged_pr_drafts and policy.draft_storage == "git_branch" else None
+        )
+        wiki_publisher = None
+        if policy.draft_storage == "wiki":
+            if agent.wiki_reader is None:
+                raise ValueError("Wiki draft publication requires the existing-page reader.")
+            wiki_publisher = WikiDraftPublisher(agent.policy, agent.wiki_reader)
         flow = PushFlow(
             policy, handler, AssessmentAgent(settings), notify,
             read_draft=draft_reader,
             read_notes=draft_reader.read_notes if draft_reader is not None else None,
             read_wiki=agent.wiki_reader,
+            wiki_publisher=wiki_publisher,
         )
         handler.push_flow = flow
 

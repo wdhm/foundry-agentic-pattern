@@ -140,6 +140,8 @@ def section_updates(target: str, content: str) -> list[tuple[str, str]]:
 
 def compose_page(snapshot: WikiSnapshot, result: AgentResult) -> str:
     current = snapshot.content
+    if len(current) > 16000:
+        raise ValueError("Existing wiki page exceeds the supported composition limit.")
     parsed = headings(current)
     if sum(h.level == 1 for h in parsed) > 1:
         raise ValueError("Multiple page titles require manual composition.")

@@ -1,7 +1,7 @@
 # Exact-call Toolbox approval (#15)
 
 **Sandbox runtime is deployed; conditional real-page extension is not yet live-accepted.**
-Current local package is `0.8.0`, approval runtime `0.6.0`; the assessment implementation continues to report
+Current local package is `0.8.1`, approval runtime `0.6.0`; the assessment implementation continues to report
 `0.4.0` in assessment provenance. This is an explicitly
 enabled runtime in the existing hosted application, not another dummy-receipt
 demo. It consumes an existing Foundry Toolbox through the official SDK and can
@@ -183,6 +183,12 @@ Stale prechecks cause no dispatch; tool/readback failures after the claim remain
 non-retryable uncertain outcomes. Successful receipts include `wiki_readback`.
 Records created by this engine use runtime version 0.6.0; old 0.5.0 records can
 still be parsed, but changed policies require fresh approvals.
+
+With `review_draft_prefix: "/Drafts/Order Sync"`, a proposal must additionally
+carry the exact draft snapshot matching its content. Review notes, when present,
+must be the same revision's `-review` page. Approval reads both back and rejects
+any content/ETag change. Teams Modify publishes a new draft revision before
+creating a replacement approval, retaining the destination's original ETag.
 
 See [actual page updates](PUSH_FLOW.md#actual-integration-page-updates-local-implementation-rollout-pending)
 for composition and required live conditional-write/deletion-race verification.

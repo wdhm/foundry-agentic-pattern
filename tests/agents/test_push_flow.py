@@ -17,7 +17,7 @@ from microsoft_agents.activity import Activity, ResourceResponse
 
 from contracts.drafts import DraftPublished, content_hash
 from contracts.v1 import AgentResult, Evidence
-from contracts.wiki import WikiSnapshot
+from contracts.wiki import WikiDraftBundle, WikiSnapshot
 
 TENANT = "00000000-0000-4000-8000-000000000001"
 USER = "00000000-0000-4000-8000-000000000002"
@@ -614,10 +614,10 @@ def test_draft_without_proposed_changes_has_no_write_buttons(harness, monkeypatc
     asyncio.run(run())
 
 
-def page_snapshot(content):
+def page_snapshot(content, path="/Order Sync/Overview"):
     raw = content.encode()
     etag = hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
-    return WikiSnapshot(path="/Order Sync/Overview", content=content, etag=etag, uri="https://dev.azure.com/test/wiki")
+    return WikiSnapshot(path=path, content=content, etag=etag, uri="https://dev.azure.com/test/wiki")
 
 
 def page_flow(harness):
@@ -719,6 +719,125 @@ def test_real_page_review_notes_are_verified_not_trusted_from_publisher(harness,
                 interface_version="1.0.0", action="draft_published",
                 event_id=prepared["event_id"], draft_commit="b" * 40,
             ))
+        notify.assert_not_called()
+
+    asyncio.run(run())
+
+
+def wiki_mode(harness):
+    flow, teams, _, _, _, _ = harness
+    current = page_flow(harness)
+    pages = {}
+    flow.policy.draft_storage = "wiki"
+    teams.agent.policy.review_draft_prefix = "/Drafts/Order Sync"
+
+    async def read(path):
+        return current[0] if path == "/Order Sync/Overview" else pages[path]
+
+    async def publish(event, pr_id, content, notes, *, revision_id=None):
+        tail = f"-revision-{revision_id}" if revision_id else ""
+        path = f"/Drafts/Order Sync/PR-{pr_id}-{event}{tail}"
+        pages[path] = page_snapshot(content, path)
+        review = None
+        if notes is not None:
+            pages[path + "-review"] = page_snapshot(notes, path + "-review")
+            review = pages[path + "-review"]
+        return WikiDraftBundle(page=pages[path], notes=review)
+
+    flow.read_wiki = AsyncMock(side_effect=read)
+    teams.agent.wiki_reader = flow.read_wiki
+    flow.wiki_publisher = type("Publisher", (), {})()
+    flow.wiki_publisher.publish = AsyncMock(side_effect=publish)
+    return current, pages
+
+
+def test_automatic_wiki_draft_then_human_approval_copies_exact_page(harness, monkeypatch):
+    async def run():
+        flow, teams, _, notify, connection, stores = harness
+        current, pages = wiki_mode(harness)
+        before = current[0]
+        event = await register_and_send(harness, monkeypatch, push().model_copy(update={"pull_request_id": 12}))
+        assert event["state"] == "notified"
+        assert len(pages) == 2
+        assert current[0] == before
+        connection.invoke_once.assert_not_called()
+        notice = notify.call_args.args[1]
+        assert [a["title"] for a in notice["actions"]] == ["Draft page", "Changes", "Review"]
+        with platform():
+            review = await flow.open_review(activity(), UUID(event["event_id"]))
+            approval = button(review, "Approve")
+            stored = await stores[STORE_NAME].get_item(approval["pending_id"])
+            assert stored.value["review_draft"]["path"].startswith("/Drafts/Order Sync/PR-12-")
+            assert stored.value["review_notes"]["path"].endswith("-review")
+            expected = stored.value["arguments"]["content"]
+            await teams.handle(activity(value=approval))
+            assert current[0].content == expected
+            assert len(pages) == 2  # Draft pages are retained after approval.
+        connection.invoke_once.assert_awaited_once()
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("changed", ["draft", "notes", "destination"])
+def test_changed_wiki_draft_notes_or_destination_prevents_approval(harness, monkeypatch, changed):
+    async def run():
+        flow, teams, _, _, connection, _ = harness
+        current, pages = wiki_mode(harness)
+        event = await register_and_send(harness, monkeypatch, push().model_copy(update={"pull_request_id": 12}))
+        with platform():
+            review = await flow.open_review(activity(), UUID(event["event_id"]))
+            if changed == "destination":
+                current[0] = page_snapshot("Concurrent change to published wiki")
+            else:
+                path = next(p for p in pages if p.endswith("-review") == (changed == "notes"))
+                pages[path] = page_snapshot("Edited after review card", path)
+            with pytest.raises(ValueError, match="changed"):
+                await teams.handle(activity(value=button(review, "Approve")))
+            connection.invoke_once.assert_not_called()
+
+    asyncio.run(run())
+
+
+def test_wiki_modify_publishes_new_review_draft_and_requires_fresh_decision(harness, monkeypatch):
+    async def run():
+        flow, teams, _, _, connection, _ = harness
+        current, pages = wiki_mode(harness)
+        original_page = current[0]
+        event = await register_and_send(harness, monkeypatch, push().model_copy(update={"pull_request_id": 12}))
+        with platform():
+            review = await flow.open_review(activity(), UUID(event["event_id"]))
+            edit = await teams.handle(activity(value=button(review, "Modify")))
+            replacement = await teams.handle(activity(value={
+                **button(edit, "New proposal"),
+                "content": "# Complete revised page\n\nReviewer content.", "feedback": "Clarify wording",
+            }))
+            assert len(pages) == 4
+            assert current[0] == original_page
+            assert "Draft page" in json.dumps(replacement)
+            with pytest.raises(ValueError, match="no longer pending"):
+                await teams.handle(activity(value=button(review, "Approve")))
+            await teams.handle(activity(value=button(replacement, "Approve")))
+            assert current[0].content == "# Complete revised page\n\nReviewer content."
+            assert len(pages) == 4
+            connection.invoke_once.assert_awaited_once()
+
+    asyncio.run(run())
+
+
+def test_uncertain_wiki_draft_publication_is_not_repeated(harness, monkeypatch):
+    async def run():
+        flow, _, _, notify, connection, stores = harness
+        wiki_mode(harness)
+        flow.wiki_publisher.publish.side_effect = TimeoutError("Unknown draft creation outcome")
+        request = push().model_copy(update={"pull_request_id": 12})
+        with pytest.raises(TimeoutError):
+            await register_and_send(harness, monkeypatch, request)
+        key = event_key(flow.policy, request.commit_sha)
+        assert (await stores[STORE].get_item(key)).value["state"] == "draft_publication_unknown"
+        with platform(CALLER), pytest.raises(ValueError, match="incomplete"):
+            await flow.process(request)
+        flow.wiki_publisher.publish.assert_awaited_once()
+        connection.invoke_once.assert_not_called()
         notify.assert_not_called()
 
     asyncio.run(run())
