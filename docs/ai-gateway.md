@@ -144,6 +144,75 @@ support. It is **not** a Foundry portal-native AI gateway association, which
 requires an eligible **v2** instance. Do not try to associate this Developer
 instance with the project or enable wider native project routing.
 
+### Native Foundry UI: separate v2 association and project activation
+
+The user subsequently approved a **new Basic v2** gateway for native Foundry
+visibility. This does not convert the classic Developer deployment or authorize
+deleting it. Microsoft's [v2 overview](https://learn.microsoft.com/azure/api-management/v2-service-tiers-overview)
+states that upgrading a classic instance to v2 is unavailable. The
+[regional availability table](https://learn.microsoft.com/azure/api-management/api-management-region-availability)
+lists Basic v2 in Sweden Central; actual subscription capacity must still pass
+preflight. Budget for ordinary Basic v2 charges (the reviewed estimate was
+approximately USD 197/month) **plus** the retained Developer, model usage and log
+ingestion. Do not assume that a Foundry free allowance waives these charges.
+
+Use the [documented native Foundry workflow](https://learn.microsoft.com/azure/foundry/configuration/enable-ai-api-management-gateway-portal),
+not a generic project connection or our `/documentation-model/` API:
+
+1. Complete preparation, validation and source review before paid execution.
+   Confirm the same approved subscription/tenant and a signed-in **New Foundry**
+   browser. If browser access is unavailable, hold creation rather than provision
+   another standalone service that cannot satisfy native UI acceptance.
+2. In **Manage > AI Gateway > Add AI Gateway**, choose the **Foundry resource**
+   `foundry-agentic-R8N3LD`. Select **Create new** for the documented Basic v2
+   creation path, or **Use existing** for a separately prepared eligible v2
+   instance. The proposed separate name is `apim-foundry-agentic-v2-r8n3ld`;
+   recheck availability at execution time.
+3. Select **Add** and verify the correct resource's gateway actually appears
+   **Enabled** in the UI. Capture resource IDs, SKU, location, association and
+   provisioning evidence locally. An APIM ARM deployment alone does not prove
+   native association or UI visibility.
+4. Open its project list and verify existing `proj-agentic` remains **Disabled**.
+   **Do not select Add project to gateway** under the resource-visibility-only
+   authorization. Existing-project enablement is a separate model-routing switch;
+   new projects inherit gateway enablement by default, so do not create a test
+   project as an acceptance shortcut.
+
+The official guide requires Contributor/Owner to create APIM, appropriate
+APIM Service Contributor/Owner access to reuse it, and Foundry **Manage** access.
+Those examples are permission prerequisites, not authorization to grant new roles.
+Inspect any proposed identity/role changes before confirming them. A browser
+handoff must explicitly pause the automation writer; do not run competing portal
+and ARM writers.
+
+As of the bounded 2026-10-22 review, the native guide documents a portal operation,
+not a public association REST/CLI contract. The public CognitiveServices schema's
+`ApiManagement` and `ModelGateway` connection categories do not establish such a
+contract. Do not invent connection metadata or use a different
+`Microsoft.ApiManagement/aigateways` resource as a substitute. This is a
+**documented-workflow/browser-access dependency**, not proof that programmatic
+association is technically impossible. Revisit only with an official supported
+contract or a signed-in native workflow.
+
+Before any later project activation, inventory native-created APIs, operations,
+policies, backend authentication, identities and all diagnostic sinks. Preserve
+zero request/response body bytes, empty logged headers, `logClientIp=false`,
+Azure Monitor information/100% sampling and **GatewayLogs-only** export to the
+existing workspace. Review default-deny inheritance and explicit route overrides:
+our monitor module **owns/replaces** the global policy, while native setup may
+install its own policies. Do not blindly reapply it over native-managed resources
+or assume native routes satisfy the standalone exact-caller/model/schema guards.
+Resolve any compatibility gap through reviewed source before routing traffic;
+never weaken admission, privacy or approval semantics to make the UI work.
+
+Resource-level UI visibility can be accepted with project traffic still disabled.
+That result does **not** establish inference, tool or agent governance through the
+new service. Keep existing hosted serving/image/model and direct settings
+unchanged; tools, agent ingress, Teams and approved writes stay direct. Project
+activation, bounded inference acceptance, and retirement of the old service each
+require their own explicit execution decision. Disabling a project does not stop
+APIM charges.
+
 ## Three different traffic paths
 
 | Path | Opt-in integration | What it does not cover |
