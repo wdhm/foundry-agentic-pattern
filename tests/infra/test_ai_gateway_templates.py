@@ -29,7 +29,8 @@ def templates(gateway_build):
     cli, directory = gateway_build
     result = {}
     for name in (
-        "main", "bootstrap-public-developer", "managed-insights-logger", "azure-monitor-diagnostics", "agent-ingress",
+        "main", "bootstrap-public-developer", "bootstrap-public-v2",
+        "managed-insights-logger", "azure-monitor-diagnostics", "agent-ingress",
     ):
         output = directory / (name + ".json")
         subprocess.run(
@@ -186,6 +187,37 @@ def test_separate_managed_logger_has_only_component_scoped_telemetry_grant(templ
     )
     assert set(template["outputs"]) == {"loggerResourceId"}
     assert not any("ConnectionString" in str(output) for output in template["outputs"].values())
+
+
+def test_public_v2_bootstrap_has_only_service_and_reviewed_monitoring(templates):
+    template = templates["bootstrap-public-v2"]
+    resources = {resource["type"]: resource for resource in template["resources"]}
+    assert set(resources) == {"Microsoft.ApiManagement/service", "Microsoft.Resources/deployments"}
+    service = resources["Microsoft.ApiManagement/service"]
+    developer = templates["bootstrap-public-developer"]["resources"][0]
+    assert service["apiVersion"] == "2024-05-01"
+    assert service["sku"] == {"name": "BasicV2", "capacity": 1}
+    assert service["identity"] == {"type": "SystemAssigned"}
+    assert service["properties"] == developer["properties"]
+    assert set(template["parameters"]) == {
+        "apimName", "location", "publisherName", "publisherEmail", "logAnalyticsWorkspaceName",
+    }
+    for parameter in template["parameters"].values():
+        assert parameter["minLength"] >= 1
+        assert "defaultValue" not in parameter
+    monitor = resources["Microsoft.Resources/deployments"]
+    assert monitor["dependsOn"] == ["[resourceId('Microsoft.ApiManagement/service', parameters('apimName'))]"]
+    assert monitor["properties"]["mode"] == "Incremental"
+    assert monitor["properties"]["parameters"] == {
+        "apimName": {"value": "[parameters('apimName')]"},
+        "logAnalyticsWorkspaceName": {"value": "[parameters('logAnalyticsWorkspaceName')]"},
+    }
+    nested = monitor["properties"]["template"]
+    # Exercise the exact shared baseline, including logger dependency and global deny.
+    assert nested["resources"] == templates["azure-monitor-diagnostics"]["resources"]
+    assert set(template["outputs"]) == {
+        "apimResourceId", "gatewayUrl", "apimPrincipalId", "loggerResourceId",
+    }
 
 
 def test_azure_monitor_uses_existing_workspace_without_roles_or_payload_categories(templates):
