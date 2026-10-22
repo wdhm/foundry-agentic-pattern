@@ -1,5 +1,12 @@
 # GitHub Actions
 
+[`agent-evaluation-loop.yml`](agent-evaluation-loop.yml) is a separate opt-in
+evaluation/improvement demo, not a replacement for the release workflow below.
+Relevant main pushes and PRs run offline checks; only approved main runs can use
+an explicitly isolated project for fresh model outputs and up to five candidates.
+It never deploys, promotes, or continues to Teams. See
+[isolated CI setup and bounds](../../evals/ISOLATED_CI.md).
+
 [`agent-release.yml`](agent-release.yml) targets hosted **`documentation-agent`**.
 It is the single platform-first MVP workflow
 for the offline/code portion of #25/#26/#27. It is **manual dispatch only**.
