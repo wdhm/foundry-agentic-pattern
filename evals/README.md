@@ -291,3 +291,9 @@ information-missing correctness). No recall target, evaluator threshold, CI gate
 or automatic promotion/rollback is implemented by this dataset package.
 
 **Owner:** P3 (AgentOps & platform): Louise ([@llandinl](https://github.com/llandinl))
+
+## Isolated CI demo
+
+See [isolated evaluation and improvement CI](ISOLATED_CI.md) for the separate
+five-candidate GitHub Actions demo. Offline checks do not assert changed-agent
+quality; real evaluation requires an explicitly approved isolated environment.
