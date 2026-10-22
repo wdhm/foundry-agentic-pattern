@@ -106,7 +106,7 @@ async def loop(
                 "number": number, "instructions_sha256": digest(candidate),
                 "parent": number - 1 if number > 1 else None, "passed": passed, "rank": score,
             })
-            if score > best:
+            if passed or score > best:
                 best = score
                 decision["best_attempt"] = number
                 (output / "best-instructions.txt").write_text(candidate, encoding="utf-8")
@@ -298,7 +298,9 @@ class LiveDemo:
                 result=assemble_result(payload.request, analysis, provenance), execution=record,
             )
             save(output / f"{case['id']}-evaluation.json", report.model_dump(mode="json"))
-            row = evaluator_row(case, payload, report, {"environment_variables": self.config.settings})
+            # Status mismatch is quality feedback, not a source-validation failure.
+            source_case = {**case, "expected_status": report.result.documentation_status}
+            row = evaluator_row(source_case, payload, report, {"environment_variables": self.config.settings})
             groups[case["mode"]].append(row)
             deterministic.append({
                 "case_id": case["id"], "status_matches": analysis.documentation_status == case["expected_status"],

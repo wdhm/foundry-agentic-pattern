@@ -90,6 +90,21 @@ def test_cycle_stops_instead_of_rerunning(tmp_path):
     assert len(result["attempts"]) == 2
 
 
+def test_passing_candidate_replaces_higher_ranked_failure(tmp_path):
+    async def evaluate(candidate, output):
+        return (True, 0.6, {}) if candidate else (False, 0.9, {})
+
+    async def improve(candidate, feedback):
+        return "Passing guidance."
+
+    output = tmp_path / "run"
+    result = asyncio.run(loop(evaluate, improve, output))
+    assert result["status"] == "passed"
+    assert result["best_attempt"] == 2
+    assert (output / "best-instructions.txt").read_text() == "Passing guidance."
+    assert json.loads((output / "decision.json").read_text())["best_attempt"] == 2
+
+
 def test_operational_error_never_calls_optimizer(tmp_path):
     async def evaluate(candidate, output):
         raise ValueError("auth or schema failure")
@@ -138,7 +153,7 @@ def test_serving_project_rejected_before_source_or_network(tmp_path):
         LiveDemo(config, None)
 
 
-@pytest.mark.parametrize("failure", [None, "budget", "replay"])
+@pytest.mark.parametrize("failure", [None, "budget", "replay", "wrong-status", "schema", "source", "auth"])
 def test_actual_agent_sdk_path_uses_new_guidance_and_bounded_fresh_calls(monkeypatch, tmp_path, failure):
     """Offline transport double; this test does not assert semantic agent quality."""
     from agent_framework import (
@@ -149,6 +164,8 @@ def test_actual_agent_sdk_path_uses_new_guidance_and_bounded_fresh_calls(monkeyp
         FunctionInvocationLayer,
         Message,
     )
+
+    from tools.hosted_evaluation import evaluator_row
 
     settings = {
         "DOCUMENTATION_PROJECT_ENDPOINT": "https://example.services.ai.azure.com/api/projects/isolated",
@@ -187,21 +204,38 @@ def test_actual_agent_sdk_path_uses_new_guidance_and_bounded_fresh_calls(monkeyp
             assert options["max_tokens"] == 4096
             assert options["store"] is False
             observed.append(str(messages))
+            answer = {
+                "documentation_status": "insufficient_information",
+                "findings": [], "proposed_changes": [],
+                "missing_information": [{"description": "Unknown.", "expected_source": "wiki"}],
+                "evidence": [], "confidence": 0.5, "requires_human_review": True,
+            }
+            payload = json.loads(next(message.text for message in messages if message.role == "user"))
+            if failure in {"wrong-status", "source"} and payload.get("source_mode") == "supplied_sources":
+                source = payload["sources"][0]
+                answer.update(
+                    documentation_status="up_to_date", missing_information=[],
+                    evidence=[{
+                        "id": "source", "source": source["source"], "uri": source["uri"],
+                        "version": source["version"],
+                        "excerpt": "not in source" if failure == "source" else source["content"][:100],
+                    }],
+                )
             return ChatResponse(
-                messages=[Message("assistant", [Content.from_text(json.dumps({
-                    "documentation_status": "insufficient_information",
-                    "findings": [], "proposed_changes": [],
-                    "missing_information": [{"description": "Unknown.", "expected_source": "wiki"}],
-                    "evidence": [], "confidence": 0.5, "requires_human_review": True,
-                }))])],
+                messages=[Message("assistant", [Content.from_text(
+                    "invalid JSON" if failure == "schema" else json.dumps(answer),
+                )])],
                 response_id="same" if failure == "replay" else str(uuid4()), model="agent", finish_reason="stop",
             )
 
     def row(case, payload, report, definition):
         assert definition["environment_variables"] == settings
-        assert "Do not infer facts." in report.execution.instructions
+        if failure != "wrong-status":
+            assert "Do not infer facts." in report.execution.instructions
         assert report.execution.model_calls[0]["status"] == "completed"
         reports.append(report)
+        if failure in {"wrong-status", "source"} and case["mode"] == "supplied_sources":
+            return evaluator_row(case, payload, report, definition)
         return {"case_id": case["id"]}
 
     def evaluate(rows, thresholds, deployment, output, mode):
@@ -215,19 +249,42 @@ def test_actual_agent_sdk_path_uses_new_guidance_and_bounded_fresh_calls(monkeyp
             for i in range(len(rows))
         ]
 
-    monkeypatch.setattr("azure.identity.aio.AzureCliCredential", Resource)
+    class Credential(Resource):
+        async def __aenter__(self):
+            if failure == "auth":
+                raise ValueError("auth failure")
+            return self
+
+    monkeypatch.setattr("azure.identity.aio.AzureCliCredential", Credential)
     monkeypatch.setattr("azure.ai.projects.aio.AIProjectClient", Resource)
     monkeypatch.setattr("agent_framework_foundry_hosting.FoundryToolbox", Resource)
     monkeypatch.setattr("agent_framework.foundry.FoundryChatClient", Transport)
     monkeypatch.setattr("tools.hosted_evaluation.evaluator_row", row)
     demo = LiveDemo(config, SimpleNamespace(model_version=lambda _: "1", evaluate=evaluate))
-    if failure:
+    if failure and failure != "wrong-status":
         if failure == "budget":
             demo.calls = 100
-        with pytest.raises(ValueError, match="budget exhausted|Replayed model"):
+        with pytest.raises(
+            ValueError, match="budget exhausted|Replayed model|Invalid JSON|supplied content|auth failure",
+        ):
             asyncio.run(demo.evaluate("Do not infer facts.", tmp_path))
         if failure == "budget":
             assert not observed
+        return
+    if failure == "wrong-status":
+        expectations = [case["expected_status"] for case in demo.cases]
+        improvements = []
+
+        async def improve(candidate, feedback):
+            improvements.append(feedback)
+            assert all(not item["status_matches"] for item in feedback["deterministic"][2:])
+            assert set(feedback["judges"]) == {"live_sources", "supplied_sources"}
+            return ""
+
+        result = asyncio.run(loop(demo.evaluate, improve, tmp_path / "wrong-status"))
+        assert result["status"] == "no_safe_improvement"
+        assert len(improvements) == 1
+        assert [case["expected_status"] for case in demo.cases] == expectations
         return
     asyncio.run(demo.evaluate("Do not infer facts.", tmp_path))
     assert len(reports) == 5

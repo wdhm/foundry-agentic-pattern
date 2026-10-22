@@ -33,7 +33,8 @@ latter fails immediately rather than asking the optimizer to repair credentials.
 
 ## Triggers and approvals
 
-Agent source, contracts, evaluator adapters, dataset, knowledge, dependency manifest
+Agent source, contracts, shared tools (including the existing ADO MCP
+`requirements.txt`), dataset, knowledge, dependency manifest
 and this workflow trigger offline checks on PRs and main pushes. PRs, including
 forks, never receive Azure credentials. Automatic model execution occurs only on
 main with `EVAL_LOOP_ENABLED=true` and approval through the protected
@@ -114,7 +115,8 @@ before enabling; request/iteration bounds are not a guaranteed monetary ceiling.
 Artifacts contain per-attempt actual execution captures, scores, feedback,
 instruction hashes/diffs, parent lineage, final decision, best guidance and a
 workflow summary. "Best" means highest minimum normalized judge score, with
-status-mismatch candidates ranked zero; it is not promotion eligibility.
+status-mismatch candidates ranked zero, but a passing candidate always takes
+precedence over every failing candidate; it is not promotion eligibility.
 No claimed historical baseline or independently verified CI credentials are supplied.
 Future production continuation should consume a separately reviewed immutable
 passing candidate; it must not automatically continue to Teams from this demo.
