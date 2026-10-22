@@ -1,0 +1,117 @@
+name: Isolated agent evaluation loop
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/agents/documentation-agent/**"
+      - "src/contracts/**"
+      - "src/tools/eval_loop.py"
+      - "src/tools/hosted_evaluation.py"
+      - "src/tools/release.py"
+      - "src/tools/release_sources.py"
+      - "evals/datasets/**"
+      - "data/knowledge/**"
+      - "pyproject.toml"
+      - "tests/release/test_eval_loop.py"
+      - ".github/workflows/agent-evaluation-loop.yml"
+  pull_request:
+    paths:
+      - "src/agents/documentation-agent/**"
+      - "src/contracts/**"
+      - "src/tools/eval_loop.py"
+      - "src/tools/hosted_evaluation.py"
+      - "src/tools/release.py"
+      - "src/tools/release_sources.py"
+      - "evals/datasets/**"
+      - "data/knowledge/**"
+      - "pyproject.toml"
+      - "tests/release/test_eval_loop.py"
+      - ".github/workflows/agent-evaluation-loop.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: isolated-eval-${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install '.[agent,prompt,dev]'
+      - run: python -m pytest tests/release/test_eval_loop.py tests/agents/test_hosted_evaluation.py tests/evals -q
+      - run: python -m ruff check src/tools/eval_loop.py tests/release/test_eval_loop.py
+      - run: python -m mypy src/tools/eval_loop.py
+      - name: Explain scope
+        run: echo 'Offline checks only. Changed-agent quality requires the separately approved isolated job.' >> "$GITHUB_STEP_SUMMARY"
+
+  isolated:
+    needs: offline
+    # Never give PR code (including same-repository PRs) cloud credentials.
+    if: >-
+      github.event_name != 'pull_request' &&
+      github.ref == 'refs/heads/main' &&
+      vars.EVAL_LOOP_ENABLED == 'true'
+    environment: isolated-agent-evaluation
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install '.[agent,prompt,dev]'
+      - name: Require explicitly reviewed isolated configuration
+        env:
+          LOOP_CONFIG: ${{ vars.EVAL_LOOP_CONFIG }}
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+          from tools.eval_loop import LoopConfig
+          value = LoopConfig.model_validate_json(os.environ["LOOP_CONFIG"])
+          Path("loop-config.json").write_text(value.model_dump_json(), encoding="utf-8")
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Fresh candidate evaluations and bounded instruction improvements
+        env:
+          EVAL_LOOP_APPROVED: "true"
+        run: >-
+          timeout --signal=TERM --kill-after=10s 50m
+          python -m tools.eval_loop --config loop-config.json
+          --output evals/results/isolated-loop --execute-approved-isolated
+      - name: Report interrupted or unconfigured evaluation
+        if: always()
+        shell: bash
+        run: |
+          if ! test -f evals/results/isolated-loop/summary.md; then
+            echo '## Isolated evaluation loop' >> "$GITHUB_STEP_SUMMARY"
+            echo 'No completed gate result: setup failed or execution was interrupted. No promotion.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Retain approved restricted diagnostics
+        if: always() && vars.EVAL_LOOP_ARTIFACTS_APPROVED == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: isolated-eval-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: evals/results/isolated-loop/
+          retention-days: 3
+          if-no-files-found: warn
