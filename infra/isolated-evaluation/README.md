@@ -42,6 +42,8 @@ Container App, registry, APIM resource or production assignment. It has no
 Verify that the proposed names are unused before creation; never adopt or
 overwrite an existing unrelated resource. Use incremental deployment only.
 No existing resource or role assignment is deleted.
+Project creation precedes model deployment, and the three model writes are
+serialized because Cognitive Services rejects concurrent parent-account writes.
 
 ## Least-privilege role payload
 

@@ -41,6 +41,7 @@ resource project 'Microsoft.CognitiveServices/accounts/projects@2025-10-01-previ
   }
 }
 
+@batchSize(1)
 resource models 'Microsoft.CognitiveServices/accounts/deployments@2025-10-01-preview' = [for model in [
   { name: 'eval-candidate', capacity: 50 }
   { name: 'eval-judge', capacity: 50 }
@@ -48,6 +49,7 @@ resource models 'Microsoft.CognitiveServices/accounts/deployments@2025-10-01-pre
 ]: {
   parent: account
   name: model.name
+  dependsOn: [project]
   sku: { name: 'GlobalStandard', capacity: model.capacity }
   properties: {
     model: { format: 'OpenAI', name: 'gpt-5.4-mini', version: '2026-03-17' }
