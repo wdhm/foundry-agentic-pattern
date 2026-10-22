@@ -1,6 +1,6 @@
 targetScope = 'resourceGroup'
 
-@description('Existing, separately provisioned APIM instance. Uses its built-in azuremonitor logger.')
+@description('Existing, separately provisioned APIM instance. Creates its credential-free Azure Monitor logger and default-deny policy.')
 @minLength(1)
 param apimName string
 
@@ -16,7 +16,35 @@ resource workspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' existin
   name: logAnalyticsWorkspaceName
 }
 
-var monitorLoggerId = resourceId('Microsoft.ApiManagement/service/loggers', apimName, 'azuremonitor')
+resource defaultDeny 'Microsoft.ApiManagement/service/policies@2024-05-01' = {
+  parent: apim
+  name: 'policy'
+  properties: {
+    format: 'rawxml'
+    value: '''
+<policies>
+  <inbound>
+    <return-response>
+      <set-status code="403" reason="Gateway route not enabled" />
+    </return-response>
+  </inbound>
+  <backend />
+  <outbound />
+  <on-error />
+</policies>
+'''
+  }
+}
+
+resource monitorLogger 'Microsoft.ApiManagement/service/loggers@2024-05-01' = {
+  parent: apim
+  name: 'azuremonitor'
+  properties: {
+    loggerType: 'azureMonitor'
+    description: 'Credential-free Azure Monitor gateway diagnostics.'
+  }
+  dependsOn: [defaultDeny]
+}
 
 resource gatewayLogs 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
   scope: apim
@@ -32,13 +60,14 @@ resource gatewayLogs 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' 
     ]
     metrics: []
   }
+  dependsOn: [defaultDeny]
 }
 
 resource monitorDefaults 'Microsoft.ApiManagement/service/diagnostics@2024-05-01' = {
   parent: apim
   name: 'azuremonitor'
   properties: {
-    loggerId: monitorLoggerId
+    loggerId: monitorLogger.id
     alwaysLog: 'allErrors'
     logClientIp: false
     verbosity: 'error'
@@ -55,4 +84,4 @@ resource monitorDefaults 'Microsoft.ApiManagement/service/diagnostics@2024-05-01
   dependsOn: [gatewayLogs]
 }
 
-output loggerResourceId string = monitorLoggerId
+output loggerResourceId string = monitorLogger.id

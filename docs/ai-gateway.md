@@ -36,7 +36,7 @@ route configuration independently reviewable:
 | Step | Template and inputs | Scope |
 |---|---|---|
 | Public demo bootstrap | [`bootstrap-public-developer.bicep`](../infra/ai-gateway/bootstrap-public-developer.bicep): required `apimName`, `location`, `publisherName`, `publisherEmail` | Creates only one public Developer unit with a system-assigned identity. No API routes, logger, role assignments or runtime opt-ins. |
-| Existing-workspace telemetry | [`azure-monitor-diagnostics.bicep`](../infra/ai-gateway/azure-monitor-diagnostics.bicep): required `apimName`, `logAnalyticsWorkspaceName` | Uses the built-in `azuremonitor` logger, global zero-body/empty-header defaults and **GatewayLogs only** to the existing workspace's resource-specific table. No role assignment, connection string, new workspace or generative-AI payload log category. |
+| Existing-workspace telemetry and admission baseline | [`azure-monitor-diagnostics.bicep`](../infra/ai-gateway/azure-monitor-diagnostics.bicep): required `apimName`, `logAnalyticsWorkspaceName` | Installs global default-deny, explicitly creates credential-free logger `azuremonitor` of type `azureMonitor`, then global zero-body/empty-header diagnostics and **GatewayLogs only** to the existing workspace's resource-specific table. No role assignment, connection string, new workspace or generative-AI payload log category. |
 | Model-only configuration | [`main.bicep`](../infra/ai-gateway/main.bicep): required `apimName`, `projectEndpoint`, `tenantId`, `callerObjectId`, `loggerResourceId`, `modelDeployment`, `tokensPerMinute`, `dailyTokenQuota`; explicitly set `diagnosticType=azuremonitor` and `enableToolRouting=false`, omit both toolbox inputs | Creates only the model API/policy, model/common named values and zero-body/empty-header Azure Monitor API diagnostics. No tool API/operations/policy/diagnostics/counter/rate values; no agent ingress deployment or runtime change. |
 
 `loggerResourceId` comes from the Azure Monitor module output, not the bootstrap.
@@ -87,6 +87,45 @@ az deployment group create --subscription ac021984-29ca-42e6-9c21-36e599814543 `
   --template-file .\infra\ai-gateway\main.bicep `
   --parameters '@.azure/apim-model.parameters.json'
 ```
+
+### Fresh-service recovery and default-deny gate
+
+On 2026-10-22 the operator reported that the Developer service was provisioned,
+but monitor setup failed with **`Logger Id 'azuremonitor' does not exist`**.
+The workspace export setting succeeded independently; that partial success is
+not a working logger/global diagnostic or permission to deploy model routes.
+The earlier PowerShell example retrieved an existing logger and did not
+establish that a fresh service creates it automatically.
+
+The corrected monitor template explicitly creates `service/loggers/azuremonitor`
+with **`loggerType: 'azureMonitor'`**, without credentials, target resource ID,
+keys or grants. The [2024-05-01 Logger Create Or Update contract](https://learn.microsoft.com/rest/api/apimanagement/logger/create-or-update?view=rest-apimanagement-2024-05-01)
+documents the PUT API, the `azureMonitor` enum and optional credentials.
+The global diagnostic references the declared logger's ID, making logger
+creation an ARM dependency. Re-run the corrected **monitor template only** with
+the same reviewed service/workspace parameters after new validation/what-if.
+Its stable resource names also update the already-created GatewayLogs setting;
+do not recreate the paid service or switch to Application Insights key auth.
+
+The provider also seeded a subscription-protected Echo API despite the
+service-only template declaring no APIs. Setup now installs a **global inbound
+403 `return-response` policy before logger/export configuration**, without
+deleting Echo or changing its subscription setting. The supported
+[`return-response` policy](https://learn.microsoft.com/azure/api-management/return-response-policy)
+cancels pipeline execution, preventing inherited/unconfigured routes from
+forwarding, including a newly created model API before its API policy exists.
+The reviewed model policy deliberately omits `<base/>` in every section and is
+the explicit JWT-authenticated override, retaining all its original controls.
+
+Inspect effective policies at product/API/operation scopes, including seeded
+Echo, and verify denied requests do not reach a backend. A pre-existing policy
+that omits inheritance can override a global rule; this is not proof against
+arbitrary administrator-created routes. This template owns/replaces the
+service-global policy, so review conflicts before using it on a shared instance.
+Keep the service-only bootstrap unchanged. Require **complete** setup success,
+confirmed logger type, default-deny/effective-policy checks and the existing
+privacy/ingestion acceptance before model configuration/traffic; a failed or
+partially successful setup remains closed to rollout.
 
 Before bootstrap, verify/register `Microsoft.ApiManagement` in that exact
 subscription through the approved operator workflow; do not change CLI defaults.
@@ -281,7 +320,9 @@ The [official Azure Monitor tutorial](https://learn.microsoft.com/azure/api-mana
 supports Developer resource logs, resource-specific `ApiManagementGatewayLogs`,
 and individual API diagnostic overrides. The
 [official API-scope PowerShell example](https://learn.microsoft.com/powershell/module/az.apimanagement/new-azapimanagementdiagnostic?view=azps-16.4.0#example-2-create-a-diagnostic-at-api-scope)
-uses the existing **`azuremonitor`** logger and diagnostic ID. Our templates
+uses an existing **`azuremonitor`** logger and diagnostic ID. A fresh instance
+may not have it, so setup explicitly creates the supported `azureMonitor` logger
+before global diagnostics, as described above. Our templates
 explicitly set **zero** body bytes and **empty** header lists, rather than copying
 that example's payload logging. The resource setting selects only `GatewayLogs`
 and `logAnalyticsDestinationType=Dedicated` for **`log-foundry-agentic`**.
@@ -377,7 +418,9 @@ with `BICEP_CLI` (or `bicep` on PATH), checking conditional tool resources/confi
 outputs, explicit limits, model diagnostic dependencies, model-only/legacy
 parameter shapes, public single-unit service-only bootstrap,
 existing-workspace GatewayLogs-only Azure Monitor settings without roles or
-payload categories, plus the alternative Insights logger's scoped telemetry role.
+payload categories, explicit credential-free logger creation/dependency and
+global default-deny with the existing authenticated model-policy override,
+plus the alternative Insights logger's scoped telemetry role.
 
 No Azure provisioning, ARM validation, paid model call, policy enforcement,
 runtime Toolbox/APIM compatibility, live streaming/session or cost attribution

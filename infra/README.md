@@ -31,7 +31,8 @@ tool configuration. The separate [public Developer bootstrap](ai-gateway/bootstr
 creates only a paid single-unit demo service with explicit publisher/location
 inputs, no APIs, logger or grants. Initial telemetry uses
 [Azure Monitor diagnostics](ai-gateway/azure-monitor-diagnostics.bicep) with
-the built-in logger and GatewayLogs-only export to existing `log-foundry-agentic`,
+an explicitly created credential-free `azureMonitor` logger, global default-deny
+admission policy and GatewayLogs-only export to existing `log-foundry-agentic`,
 zero bodies/empty headers and no new identity grants. Set
 `diagnosticType=azuremonitor` in `main.bicep`. The alternative
 [managed-identity logger module](ai-gateway/managed-insights-logger.bicep) requires
