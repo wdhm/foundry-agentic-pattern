@@ -130,8 +130,13 @@ def evaluator_row(
     from documentation_agent.settings import AssessmentSettings
 
     record = report.execution
-    settings = AssessmentSettings.from_environment(definition["environment_variables"])
-    allowed_tools = read_tools(settings)
+    settings = (
+        AssessmentSettings.from_environment(definition["environment_variables"])
+        if payload.source_mode == "live_sources" else None
+    )
+    allowed_tools = read_tools(settings) if settings is not None else []
+    if settings is None and (record.tool_calls or record.tool_schemas):
+        raise ValueError("Supplied-source evaluation cannot contain tools.")
     schemas: dict[str, dict[str, Any]] = {}
     for schema in record.tool_schemas:
         name = schema.get("name")
@@ -199,6 +204,8 @@ def evaluator_row(
                     if model is record.model_calls[-1]:
                         final_text.append(item["text"])
                 elif item.get("type") == "function_call":
+                    if settings is None:
+                        raise ValueError("Supplied-source evaluation cannot invoke tools.")
                     name, call_id = item.get("name"), item.get("call_id")
                     args = arguments(item.get("arguments"))
                     if name not in schemas or not isinstance(call_id, str) or not call_id or call_id in seen_ids:
