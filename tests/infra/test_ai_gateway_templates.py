@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
+from xml.etree import ElementTree
 
 import pytest
 
@@ -189,6 +190,8 @@ def test_azure_monitor_uses_existing_workspace_without_roles_or_payload_categori
     assert set(resources) == {
         "Microsoft.Insights/diagnosticSettings",
         "Microsoft.ApiManagement/service/diagnostics",
+        "Microsoft.ApiManagement/service/loggers",
+        "Microsoft.ApiManagement/service/policies",
     }
     sink = resources["Microsoft.Insights/diagnosticSettings"]
     assert sink["scope"] == "[format('Microsoft.ApiManagement/service/{0}', parameters('apimName'))]"
@@ -201,8 +204,16 @@ def test_azure_monitor_uses_existing_workspace_without_roles_or_payload_categori
         "metrics": [],
     }
     defaults = resources["Microsoft.ApiManagement/service/diagnostics"]["properties"]
-    assert defaults["loggerId"] == "[variables('monitorLoggerId')]"
-    assert "'azuremonitor'" in template["variables"]["monitorLoggerId"]
+    logger = resources["Microsoft.ApiManagement/service/loggers"]
+    assert logger["name"] == "[format('{0}/{1}', parameters('apimName'), 'azuremonitor')]"
+    assert logger["properties"] == {
+        "loggerType": "azureMonitor",
+        "description": "Credential-free Azure Monitor gateway diagnostics.",
+    }
+    logger_id = "[resourceId('Microsoft.ApiManagement/service/loggers', parameters('apimName'), 'azuremonitor')]"
+    assert defaults["loggerId"] == logger_id
+    assert logger_id in resources["Microsoft.ApiManagement/service/diagnostics"]["dependsOn"]
+    assert template["outputs"]["loggerResourceId"]["value"] == logger_id
     assert defaults["logClientIp"] is False
     for side in ("frontend", "backend"):
         for direction in ("request", "response"):
@@ -210,3 +221,25 @@ def test_azure_monitor_uses_existing_workspace_without_roles_or_payload_categori
     assert set(template["outputs"]) == {"loggerResourceId"}
     assert "ConnectionString" not in json.dumps(template)
     assert "listKeys" not in json.dumps(template)
+
+
+def test_setup_denies_unconfigured_routes_before_telemetry_and_owned_policy_overrides(templates):
+    template = templates["azure-monitor-diagnostics"]
+    resources = {resource["type"]: resource for resource in template["resources"]}
+    deny = resources["Microsoft.ApiManagement/service/policies"]
+    assert deny["name"] == "[format('{0}/{1}', parameters('apimName'), 'policy')]"
+    assert deny["properties"]["format"] == "rawxml"
+    policy = ElementTree.fromstring(deny["properties"]["value"])
+    assert [node.tag for node in policy.find("inbound")] == ["return-response"]
+    assert policy.find("inbound/return-response/set-status").attrib == {
+        "code": "403", "reason": "Gateway route not enabled",
+    }
+    assert all(len(policy.find(section)) == 0 for section in ("backend", "outbound", "on-error"))
+    assert policy.find(".//forward-request") is None
+    deny_id = "[resourceId('Microsoft.ApiManagement/service/policies', parameters('apimName'), 'policy')]"
+    for resource_type in ("Microsoft.ApiManagement/service/loggers", "Microsoft.Insights/diagnosticSettings"):
+        assert deny_id in resources[resource_type]["dependsOn"]
+    model = ElementTree.parse(ROOT / "infra" / "ai-gateway" / "model-policy.xml").getroot()
+    assert model.find(".//base") is None
+    assert model.find("inbound")[0].tag == "validate-jwt"
+    assert model.find("backend/forward-request") is not None
