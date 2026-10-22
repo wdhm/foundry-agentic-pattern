@@ -1,0 +1,12 @@
+{
+  "subject": {
+    "repo": "https://dev.azure.com/foundry-agentic/integration-team/_git/8321c788-67e4-473c-9ad0-9f8847d077e1",
+    "commit_sha": "97990d1a6bb17282509680b36a34f0ae11cb2478",
+    "changed_paths": ["README.md", "src/order_sync.py", "config/settings.json"]
+  },
+  "context": {
+    "wiki_page_paths": ["/Order Sync/Overview"],
+    "work_item_ids": [1]
+  },
+  "documentation_standard_ref": "https://github.com/wdhm/foundry-agentic-pattern/blob/main/data/knowledge/documentation-standard.md"
+}

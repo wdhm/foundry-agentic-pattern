@@ -21,6 +21,7 @@ from starlette.responses import JSONResponse, Response
 from contracts.models import ContractModel, NonBlank
 
 from .approval import COMMAND, InspectCall, PendingCall, ProposeCall, ProposeResult, ToolApprovalAgent
+from .conversation import ConversationRouter, ConversationService, structured_command
 from .teams_card import CARD_TYPE, card, review_card, text
 
 if TYPE_CHECKING:
@@ -57,9 +58,12 @@ class ChannelBinding(ContractModel):
 
 
 class TeamsApproval:
-    def __init__(self, agent: ToolApprovalAgent, tenant_id: UUID) -> None:
+    def __init__(
+        self, agent: ToolApprovalAgent, tenant_id: UUID, conversation: ConversationService | None = None,
+    ) -> None:
         self.agent = agent
         self.tenant_id = tenant_id
+        self.conversation = conversation
         self.push_flow: PushFlow | None = None
 
     def binding(self, activity: Activity) -> ChannelBinding:
@@ -121,7 +125,7 @@ class TeamsApproval:
             return await self.push_flow.render_pending(record)
         return review_card(record, self.agent.policy.content_parameter)
 
-    async def handle(self, activity: Activity) -> dict[str, Any]:
+    async def handle(self, activity: Activity) -> dict[str, Any] | str:
         binding = self.binding(activity)
         session = AgentSession(session_id=binding.platform_session_id)
         if activity.value is not None:
@@ -176,18 +180,36 @@ class TeamsApproval:
                 text("Documentation approval", weight="Bolder", size="Medium"),
                 text("Review a proposed tool call, then Approve, Modify or Reject. Opening a card never writes."),
                 text(
-                    "For this workshop, submit a structured propose/propose_result command from the assessment caller, "
-                    "or type: show <pending-id> to reopen a card created in this Teams conversation."
+                    (
+                        "Ask a question about the configured sources, such as: What does Order Sync do? "
+                        "Chat is read-only; publishing still requires the review card. "
+                        "Use show <pending-id> to reopen a card."
+                    ) if self.conversation is not None else (
+                        "For this workshop, submit a structured propose/propose_result command "
+                        "from the assessment caller, "
+                        "or type: show <pending-id> to reopen a card created in this Teams conversation."
+                    )
                 ),
                 *(
                     [text("For repository notifications, send connect repo once in this personal chat.")]
                     if self.push_flow is not None else []
                 ),
             ])
+        pending_id = None
         if message.startswith("show "):
-            pending_id = UUID(message.removeprefix("show ").strip())
+            try:
+                pending_id = UUID(message.removeprefix("show ").strip())
+            except ValueError:
+                if self.conversation is None:
+                    raise
+        if pending_id is not None:
             await self.check_binding(pending_id, binding)
             return await self.render(await self.record(pending_id, binding))
+        if self.conversation is not None and not structured_command(message):
+            return await self.conversation.answer(
+                message, owner=binding.owner, session_id=binding.platform_session_id,
+                channel=f"teams:{binding.tenant_id}:{binding.aad_object_id}:{binding.conversation_id}",
+            )
         try:
             command = COMMAND.validate_json(message)
         except ValidationError:
@@ -211,15 +233,18 @@ class PushTeamsHost(InvocationAgentServerHost, TeamsResponsesHost):
     """Explicit opt-in pipeline route; existing Teams/Responses routes retained."""
 
 
-def create_teams_server(agent: ToolApprovalAgent) -> TeamsResponsesHost:
+def create_teams_server(
+    agent: ToolApprovalAgent, *, conversation: ConversationService | None = None,
+) -> TeamsResponsesHost:
     if os.environ.get("DOCUMENTATION_ENABLE_TEAMS") != "true":
         raise ValueError("Teams requires explicit DOCUMENTATION_ENABLE_TEAMS=true.")
     tenant = os.environ.get("DOCUMENTATION_TEAMS_TENANT_ID")
     if not tenant:
         raise ValueError("Teams requires DOCUMENTATION_TEAMS_TENANT_ID.")
-    handler = TeamsApproval(agent, UUID(tenant))
+    handler = TeamsApproval(agent, UUID(tenant), conversation)
     enabled = os.environ.get("DOCUMENTATION_ENABLE_PUSH_FLOW") == "true"
-    host = (PushTeamsHost if enabled else TeamsResponsesHost)(agent=agent, history_source="agent")
+    responses_agent = ConversationRouter(agent, conversation) if conversation is not None else agent
+    host = (PushTeamsHost if enabled else TeamsResponsesHost)(agent=responses_agent, history_source="agent")
     if enabled:
         from microsoft_agents.activity import ConversationReference
 
@@ -313,6 +338,7 @@ def create_teams_server(agent: ToolApprovalAgent) -> TeamsResponsesHost:
         try:
             activity = context.activity
             flow = handler.push_flow
+            output: dict[str, Any] | str
             if flow is not None and (activity.text or "").strip().lower() == "connect repo" and activity.value is None:
                 output = await flow.register(activity)
             elif (
@@ -327,7 +353,9 @@ def create_teams_server(agent: ToolApprovalAgent) -> TeamsResponsesHost:
                 output = await handler.handle(activity)
         except ValidationError:
             LOGGER.warning("Teams approval request failed schema validation.")
-            await context.send_activity("Request rejected: invalid proposal or card data. Contact the operator.")
+            await context.send_activity(
+                "Request rejected: invalid message, proposal or card data. Contact the operator."
+            )
             return
         except ValueError as exc:
             LOGGER.warning("Teams approval request not completed: %s", type(exc).__name__)
@@ -336,11 +364,14 @@ def create_teams_server(agent: ToolApprovalAgent) -> TeamsResponsesHost:
                 "If this followed Approve, use show <pending-id> to check the persisted outcome before any retry."
             )
             return
-        await context.send_activity(Activity(
-            type="message",
-            text="Documentation approval",
-            attachments=[Attachment(content_type=CARD_TYPE, content=output)],
-        ))
+        if isinstance(output, str):
+            await context.send_activity(Activity(type="message", text=output))
+        else:
+            await context.send_activity(Activity(
+                type="message",
+                text="Documentation approval",
+                attachments=[Attachment(content_type=CARD_TYPE, content=output)],
+            ))
 
     @host.agent_app.error
     async def on_error(context: TurnContext, error: Exception) -> None:

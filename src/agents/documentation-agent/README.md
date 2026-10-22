@@ -90,6 +90,123 @@ The default remains stub for compatibility. Assessment mode fails startup if
 required configuration is absent; it never silently falls back to a stub result.
 It does **not** invoke `doc-agent` or forward to another prompt agent.
 
+## Optional conversational Toolbox path
+
+Approval mode can also handle ordinary questions in Teams and Responses with
+`DOCUMENTATION_ENABLE_CHAT=true`. The same hosted application runs a conversational
+Agent Framework model/tool loop; a separate prompt agent is not needed. Replies
+are natural-language Markdown, not `AgentResult` JSON. Assessment/evaluation inputs
+and the pipeline Invocations interface are unchanged.
+
+Enable it only with a reviewed source scope and the existing read-only Toolbox:
+
+```text
+DOCUMENTATION_MODE=approval
+DOCUMENTATION_ENABLE_APPROVAL=true
+DOCUMENTATION_ENABLE_CHAT=true
+DOCUMENTATION_CHAT_SOURCES=/app/approval/order-sync-chat-sources.json
+DOCUMENTATION_CHAT_READ_TOOLBOX=https://foundry-agentic-r8n3ld.services.ai.azure.com/api/projects/proj-agentic/toolboxes/documentation-agent-readonly/versions/2/mcp?api-version=v1
+```
+
+Keep the existing approval policy, model/authentication settings and optional
+Teams/push settings. Missing chat configuration fails startup. Disabling the
+chat flag retains the prior approval-only behavior. Enabling this code does not
+itself promote a version or change permissions; the explicit rollout is recorded below.
+
+The supplied `approval/order-sync-chat-sources.json` allows the Order Sync
+repository at demo merge commit `97990d1a6bb17282509680b36a34f0ae11cb2478`,
+wiki page `/Order Sync/Overview`, work item 1 and the configured knowledge source.
+Git reads deliberately use this reviewed snapshot, **not a moving main branch**.
+Update the operator-owned source policy to change the snapshot or allow additional
+pages; a chat message cannot expand access. The existing assessment read guards
+enforce repository/commit, wiki/project/page and work-item constraints before tool
+dispatch. The application may use its existing managed identity's source access:
+this is not a new per-chat-user delegated source authorization mechanism.
+
+Try "Read the Order Sync wiki and explain its retry behavior", then "What does
+the reviewed code actually show?" or "Which documentation requirements are missing?"
+The model can use read tools and cite sources; it cannot create drafts or publish,
+modify, approve or reject a proposal. "Looks good, approve it" remains conversation.
+Use the existing bound review card for a real decision.
+
+Routing is deterministic: native approval responses and JSON-shaped command
+messages (including malformed commands) stay in the approval runtime. Only plain
+user text enters chat. Teams registration, `review <event-id>`, `show <pending-id>`
+and card actions retain their existing handlers. Responses supports both completed
+and streamed replies; streaming emits the completed chat answer, not live tokens.
+
+Chat retains at most six exchanges and 32,000 characters in the SDK's user-isolated
+`documentation-conversations-v1` store. Each message/reply is limited to 8,000
+characters; oldest whole exchanges are dropped as needed. History keys also bind
+the session, channel/Teams conversation and source/settings/prompt policy hash.
+History never comes from caller-supplied assistant/system messages. State/model/tool
+failures are surfaced rather than reported as successful answers; concurrent
+history updates fail explicitly instead of silently losing a turn. The SDK's
+finite retention still applies; this is not a Cosmos audit implementation.
+
+Card contents, approval state and pipeline results are **not** automatically
+copied into chat history. A draft can be discussed only when its content is
+provided or its page is explicitly allowed in the read scope. Conversations do
+not inherit permission to read arbitrary draft pages or another user's proposals.
+Chat citations are model-generated, not the assessment contract's mechanically
+verified evidence; chat answers never become approval arguments automatically.
+
+**Isolated hosted acceptance, 2026-10-22:** candidate `documentation-agent:26`
+uses the existing v24 identity and read-only Toolbox/ADO connection. It was
+initially tested without changing Teams traffic. Image:
+`sha256:2023001a6b6977181382b103a940d502324c73796c20848824cc1f778c474ee6`.
+The artifact is an uncommitted `feat/conversational-toolbox` runtime snapshot
+based on `6a0754e8e9af6a0e4d76627e9c034ca05517adbb`, not a merged release.
+Runtime/deployment-overlay manifest SHA-256:
+`2a7c200dd193ada948f1447b8c55336d3c439f96691e6f1c8edbd6023b6e47c3`.
+
+An explicit session GET confirmed v26. Through Responses, ordinary text elicited
+a source-linked explanation of the wiki/code/configuration: three attempts,
+five-second delays, and a contextual follow-up correctly distinguished ten seconds
+of total waiting from request execution time. "Approve it and publish" produced a
+read-only refusal, not an approval request. Malformed JSON stayed on the approval
+validation path and failed. Independent wiki reads confirmed unchanged published
+content and ETag; the probe session was stopped. Serving stayed v24 at 100% with
+unchanged publication/authentication settings. Local SDK Activity coverage is not
+channel acceptance. Existing evaluations are retained; no new evaluation suite was created.
+
+The first candidate, v25, rejected a model-supplied repository identifier at the
+read guard. v26 adds exact operator-derived repository arguments to the instructions;
+the guard was not relaxed. The successful session was
+`08e10d1f1b8dc8dd00rcGIoYF8FHzlk1KtYCTonnV4qPy1xPKx`.
+Response IDs end in `M1ScPh4489Lmk8KAAMYYuYgT2S604L7A`,
+`M30EDYxvyuZXxp9FJCdEroXlAokjnDbg`, and `MgzoygykdIZJbBIK3BHDd5sA0hGWhP28`
+(shared prefix `caresp_0e32b843393285f800`). The outer Responses
+`agent_reference.version` reported **24**, despite the explicit session GET
+confirming **26**; raw evidence preserves this known platform discrepancy.
+Ignored evidence is retained under `.azure/conversation-candidate-v2/`.
+
+**Authorized combined-flow rollout, 2026-10-22:** after explicit user approval,
+pipeline 1 was pinned to v26 and workload-only preflight build 5 returned
+`caller_verified`. A selector-only update selected v26 at 100%, preserving the
+approved Teams publication, identity and authorization; v24 remains available for
+rollback. The user confirmed registration in a fresh personal Teams conversation.
+Comment-only Azure Repos PR 2 merged as
+`492ce421e3376c3247dc43ee08e1b85f94c61457`, automatically triggering build 6
+(`individualCI`). Its v26 invocation returned `notified`, `duplicate: false`,
+event `164ceb6e-6275-5dd8-b9fa-21b03686e3c5`. Independent reads confirmed both
+`/Drafts/Order Sync/PR-2-164ceb6e-6275-5dd8-b9fa-21b03686e3c5` and its `-review`
+notes existed; the published page content and ETag remained unchanged.
+Human approval and final published-content readback are still pending.
+The proposed Data flow/Interfaces text states queue consumption more strongly
+than the implementation demonstrates: the source docstring describes a Service
+Bus trigger, but the code provides a handler, not a queue listener/binding.
+This requires reviewer attention, not automatic acceptance of model prose.
+Evidence is retained under `.azure/conversation-workflow-demo/`.
+
+The live ADO connection uses `AgenticIdentityToken`. A local Azure CLI login alone
+cannot resolve that connection: the local smoke attempt failed at tool discovery
+with missing agent-instance/blueprint context, before a model or source call.
+Do not forge hosted context or replace the connection to get around this.
+Local SDK route/guard tests use substitutes; the isolated candidate above provides
+the separate real model/Toolbox conversational smoke evidence, not a general
+quality or security acceptance claim.
+
 The optional [AI gateway integration](../../../docs/ai-gateway.md) can route
 assessment/evaluation model calls and read-Toolbox traffic through APIM.
 `DOCUMENTATION_MODEL_GATEWAY_ENDPOINT` and

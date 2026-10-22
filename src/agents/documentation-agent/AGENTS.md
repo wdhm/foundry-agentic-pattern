@@ -4,6 +4,11 @@ answering questions about foundry agents, read the microsoft-foundry skill first
 Keep assessment mode read-only. The #1 approval spike is a separate experiment
 with a dummy state receipt, not authorization to enable real wiki writes.
 
+Conversational chat is also read-only and separately opt-in. Reuse the reviewed
+source guards; chat history or natural-language agreement never authorizes a
+proposal, source-scope expansion or write. Keep structured and native approval
+inputs out of the conversational model.
+
 The #15 approval mode is separately opt-in and requires an operator-reviewed
 tool/target policy. Never broaden assessment tools or automatically retry a
 claimed external write. See TOOL_APPROVAL.md for uncertainty and persistence limits.
