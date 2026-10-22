@@ -20,7 +20,15 @@ from .gateway import route_model_client
 from .settings import AssessmentSettings
 
 
-def supplied_instructions(settings: AssessmentSettings) -> str:
+class SuppliedDomain(Protocol):
+    @property
+    def ado_project(self) -> str: ...
+
+    @property
+    def ado_wiki(self) -> str: ...
+
+
+def supplied_instructions(settings: SuppliedDomain) -> str:
     policy = (APP_DIR / "policies" / "documentation-analysis-v1.txt").read_text(encoding="utf-8").strip()
     return (
         "Assess documentation using ONLY the source bundle in the user message. No tools are available. "

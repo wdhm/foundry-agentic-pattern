@@ -9,6 +9,7 @@ on:
       - "src/tools/**"
       - "evals/datasets/**"
       - "data/knowledge/**"
+      - "infra/isolated-evaluation/**"
       - "pyproject.toml"
       - "tests/release/test_eval_loop.py"
       - ".github/workflows/agent-evaluation-loop.yml"
@@ -19,10 +20,19 @@ on:
       - "src/tools/**"
       - "evals/datasets/**"
       - "data/knowledge/**"
+      - "infra/isolated-evaluation/**"
       - "pyproject.toml"
       - "tests/release/test_eval_loop.py"
       - ".github/workflows/agent-evaluation-loop.yml"
   workflow_dispatch:
+    inputs:
+      evaluation_mode:
+        description: "Explicit coverage; supplied-only is never a full-suite pass"
+        type: choice
+        options:
+          - full_suite
+          - supplied_sources_only
+        default: full_suite
 
 permissions:
   contents: read
@@ -50,6 +60,7 @@ jobs:
         run: echo 'Offline checks only. Changed-agent quality requires the separately approved isolated job.' >> "$GITHUB_STEP_SUMMARY"
 
   isolated:
+    name: isolated (${{ inputs.evaluation_mode || vars.EVAL_LOOP_MODE || 'full_suite' }})
     needs: offline
     # Never give PR code (including same-repository PRs) cloud credentials.
     if: >-
@@ -74,13 +85,21 @@ jobs:
       - name: Require explicitly reviewed isolated configuration
         env:
           LOOP_CONFIG: ${{ vars.EVAL_LOOP_CONFIG }}
+          EXPECTED_MODE: ${{ inputs.evaluation_mode || vars.EVAL_LOOP_MODE || 'full_suite' }}
         shell: python
         run: |
           import os
           from pathlib import Path
-          from tools.eval_loop import LoopConfig
+          from tools.eval_loop import LoopConfig, runtime_settings
           value = LoopConfig.model_validate_json(os.environ["LOOP_CONFIG"])
+          assert value.mode == os.environ["EXPECTED_MODE"], "Requested coverage differs from approved config"
+          runtime_settings(value)
           Path("loop-config.json").write_text(value.model_dump_json(), encoding="utf-8")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write(f"Selected evaluation mode: **{value.mode}**\n\n")
+              if value.mode == "supplied_sources_only":
+                  summary.write("Partial coverage only. Excluded: order-sync-retry, "
+                                "order-sync-information-missing. Tool-call accuracy not evaluated.\n\n")
       - uses: azure/login@v2
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
@@ -105,7 +124,7 @@ jobs:
         if: always() && vars.EVAL_LOOP_ARTIFACTS_APPROVED == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: isolated-eval-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: isolated-eval-${{ inputs.evaluation_mode || vars.EVAL_LOOP_MODE || 'full_suite' }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: evals/results/isolated-loop/
           retention-days: 3
           if-no-files-found: warn

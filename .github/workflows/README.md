@@ -6,6 +6,10 @@ Relevant main pushes and PRs run offline checks; only approved main runs can use
 an explicitly isolated project for fresh model outputs and up to five candidates.
 It never deploys, promotes, or continues to Teams. See
 [isolated CI setup and bounds](../../evals/ISOLATED_CI.md).
+The separately selected `supplied_sources_only` mode runs only the three existing
+tools-disabled cases, needs no toolbox/source credentials, and can report only
+`partial_passed` with `full_suite_passed=false`. Full mode remains the default;
+manual selection must match the reviewed environment configuration.
 
 [`agent-release.yml`](agent-release.yml) targets hosted **`documentation-agent`**.
 It is the single platform-first MVP workflow

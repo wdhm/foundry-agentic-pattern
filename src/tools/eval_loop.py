@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Literal
 from uuid import uuid4
 
+from documentation_agent.settings import AssessmentSettings
 from pydantic import BaseModel, ConfigDict, Field
 
 from tools.release import METRICS, FoundryEvaluation, save
@@ -33,6 +34,7 @@ ROOT = Path.cwd()
 class LoopConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     settings: dict[str, str]
+    mode: Literal["full_suite", "supplied_sources_only"] = "full_suite"
     observed_model: str = Field(min_length=1)
     evaluator_deployment: str = Field(min_length=1)
     evaluator_version: str = Field(min_length=1)
@@ -41,6 +43,27 @@ class LoopConfig(BaseModel):
     isolation_review_reference: str = Field(min_length=1)
     # Must differ from the serving project. No serving credentials or selector are accepted.
     serving_project_endpoint: str = Field(pattern=r"^https://[^/?#]+/api/projects/[^/?#]+/?$")
+
+
+class SuppliedSettings(BaseModel):
+    """No toolbox, source credential or gateway setting is accepted in partial mode."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    project_endpoint: str = Field(
+        alias="DOCUMENTATION_PROJECT_ENDPOINT", pattern=r"^https://[^/?#]+/api/projects/[^/?#]+$",
+    )
+    model: str = Field(alias="AZURE_AI_MODEL_DEPLOYMENT_NAME", min_length=1)
+    model_version: str = Field(alias="DOCUMENTATION_MODEL_VERSION", min_length=1)
+    ado_project: str = Field(alias="DOCUMENTATION_ADO_PROJECT", min_length=1)
+    ado_wiki: str = Field(alias="DOCUMENTATION_ADO_WIKI", min_length=1)
+    auth_mode: Literal["azure_cli"] = Field(alias="DOCUMENTATION_AUTH_MODE")
+
+
+def runtime_settings(config: LoopConfig) -> AssessmentSettings | SuppliedSettings:
+    return (
+        SuppliedSettings.model_validate(config.settings)
+        if config.mode == "supplied_sources_only" else AssessmentSettings.from_environment(config.settings)
+    )
 
 
 def digest(value: str) -> str:
@@ -91,6 +114,8 @@ async def loop(
     decision: dict[str, Any] = {
         "status": "running", "promoted": False, "promotion_eligible": False,
         "attempts": [], "validation": "no independent held-out dataset; demo gate only",
+        "coverage": (manifest or {}).get("coverage", {"mode": "full_suite"}),
+        "full_suite_passed": False,
     }
     save(output / "decision.json", decision)
     candidate, seen, best = "", {digest("")}, -1.0
@@ -112,7 +137,9 @@ async def loop(
                 (output / "best-instructions.txt").write_text(candidate, encoding="utf-8")
             save(output / "decision.json", decision)
             if passed:
-                decision["status"] = "passed"
+                full = decision["coverage"]["mode"] == "full_suite"
+                decision["status"] = "passed" if full else "partial_passed"
+                decision["full_suite_passed"] = full
                 break
             if number == 5:
                 decision["status"] = "exhausted"
@@ -139,6 +166,9 @@ async def loop(
             "## Isolated evaluation loop", f"Status: **{decision['status']}**",
             f"Evaluated candidates: {len(decision['attempts'])}/5",
             f"Best attempt: {decision.get('best_attempt', 'none')}",
+            f"Coverage: **{decision['coverage']['mode']}**",
+            f"Excluded cases: {', '.join(decision['coverage'].get('excluded_case_ids', [])) or 'none'}",
+            f"Full-suite pass: **{decision['full_suite_passed']}**",
             "No promotion, deployment, Teams message, or independent held-out validation.",
             "| Attempt | Passed | Minimum normalized score | Instruction hash |",
             "|---|---|---|---|",
@@ -156,20 +186,35 @@ class LiveDemo:
     """Execute checkout code in-process against only an explicitly reviewed isolated project."""
 
     def __init__(self, config: LoopConfig, cloud: FoundryEvaluation) -> None:
-        from documentation_agent.settings import AssessmentSettings
-
         self.config, self.cloud = config, cloud
-        self.settings = AssessmentSettings.from_environment(config.settings)
+        self.settings = runtime_settings(config)
         if (
             self.settings.project_endpoint.rstrip("/").lower() == config.serving_project_endpoint.rstrip("/").lower()
             or self.settings.auth_mode != "azure_cli"
-            or self.settings.model_gateway_endpoint or self.settings.toolbox_gateway_endpoint
-            or not self.settings.toolbox_endpoint.startswith(self.settings.project_endpoint.rstrip("/") + "/toolboxes/")
+            or (
+                isinstance(self.settings, AssessmentSettings) and (
+                    self.settings.model_gateway_endpoint or self.settings.toolbox_gateway_endpoint
+                    or not self.settings.toolbox_endpoint.startswith(
+                        self.settings.project_endpoint.rstrip("/") + "/toolboxes/",
+                    )
+                )
+            )
         ):
             raise ValueError("Require a separate isolated project/toolbox, Azure CLI auth, and no production gateway.")
         self.suite, self.cases = load_cases(ROOT / "evals/datasets/suite.json", ROOT)
         if {case["id"] for case in self.cases} != set(SCOPES):
             raise ValueError("Unexpected suite.")
+        excluded = []
+        if config.mode == "supplied_sources_only":
+            excluded = [case["id"] for case in self.cases if case["mode"] == "live_sources"]
+            self.cases = [case for case in self.cases if case["mode"] == "supplied_sources"]
+            if len(self.cases) != 3 or len(excluded) != 2:
+                raise ValueError("Partial demo requires the unchanged three supplied-source cases.")
+        self.coverage = {
+            "mode": config.mode, "selected_case_ids": [case["id"] for case in self.cases],
+            "excluded_case_ids": excluded,
+            "tool_call_accuracy": "not_evaluated" if excluded else "two_live_cases_only",
+        }
         self.seen_response_ids: set[str] = set()
         self.calls = 0
 
@@ -185,16 +230,15 @@ class LiveDemo:
     async def evaluate(self, candidate: str, output: Path) -> tuple[bool, float, dict[str, Any]]:
         from agent_framework import Agent, ChatContext
         from agent_framework.foundry import FoundryChatClient
-        from agent_framework_foundry_hosting import FoundryToolbox
         from azure.ai.projects.aio import AIProjectClient
         from azure.identity.aio import AzureCliCredential
-        from documentation_agent.assessment import AssessmentAgent, run_with_repair
+        from documentation_agent.assessment import APP_DIR, APP_VERSION, AssessmentAgent, run_with_repair
         from documentation_agent.evaluation import supplied_check, supplied_instructions, verify_snapshots
         from documentation_agent.execution import CaptureModel, messages_data
         from documentation_agent.read_policy import ReadOnlyPolicy, parse_read_result, read_tools
 
         from contracts.evaluation import EvaluationResponse, ExecutionRecord
-        from contracts.v1 import AnalysisOutput, assemble_result
+        from contracts.v1 import CONTRACT_VERSION, AnalysisOutput, Provenance, assemble_result
         from tools.hosted_evaluation import evaluation_request, evaluator_row
 
         owner = self
@@ -217,13 +261,15 @@ class LiveDemo:
                 owner.seen_response_ids.add(response_id)
 
         await asyncio.to_thread(self.verify_models)
-        groups: dict[str, list[dict[str, Any]]] = {"live_sources": [], "supplied_sources": []}
+        groups: dict[str, list[dict[str, Any]]] = {}
         deterministic = []
         for case in self.cases:
             payload = evaluation_request(case, SCOPES[case["id"]])
             live = case["mode"] == "live_sources"
-            base = AssessmentAgent(self.settings)
-            instructions = (base.instructions if live else supplied_instructions(self.settings))
+            base = AssessmentAgent(self.settings) if isinstance(self.settings, AssessmentSettings) else None
+            if live and base is None:
+                raise ValueError("Live evaluation requires full assessment settings.")
+            instructions = base.instructions if live and base is not None else supplied_instructions(self.settings)
             if candidate:
                 instructions += "\n\nAdditional evaluation-candidate guidance:\n" + candidate
             record = ExecutionRecord(
@@ -231,7 +277,10 @@ class LiveDemo:
                 correlation_id=payload.request.correlation_id, source_mode=payload.source_mode,
                 instructions=instructions, sources=payload.sources, standard=payload.standard,
             )
-            guard = ReadOnlyPolicy(payload.request, self.settings, record)
+            guard = (
+                ReadOnlyPolicy(payload.request, self.settings, record)
+                if live and isinstance(self.settings, AssessmentSettings) else None
+            )
             async with (
                 asyncio.timeout(180),
                 AzureCliCredential() as credential,
@@ -239,7 +288,7 @@ class LiveDemo:
             ):
                 async def run(
                     tools: list[Any], record: ExecutionRecord, live: bool,
-                    instructions: str, guard: ReadOnlyPolicy, message: str,
+                    instructions: str, guard: ReadOnlyPolicy | None, message: str,
                     check: Callable[[str], list[str]],
                 ) -> str:
                     client = FoundryChatClient(
@@ -255,7 +304,7 @@ class LiveDemo:
                     async with client.client:
                         agent = Agent(
                             client=client, instructions=instructions, tools=tools,
-                            middleware=[guard] if live else [],
+                            middleware=[guard] if guard is not None else [],
                             default_options={
                                 "store": False, "response_format": AnalysisOutput, "max_tokens": 4096,
                                 **({} if live else {"tool_choice": "none"}),
@@ -267,6 +316,10 @@ class LiveDemo:
                         return str(response.text)
 
                 if live:
+                    from agent_framework_foundry_hosting import FoundryToolbox
+
+                    if base is None or guard is None or not isinstance(self.settings, AssessmentSettings):
+                        raise ValueError("Live source execution is not configured.")
                     async with FoundryToolbox(
                         credential, url=self.settings.toolbox_endpoint, allowed_tools=read_tools(self.settings),
                         tool_name_prefix="", approval_mode="never_require", parse_tool_results=parse_read_result,
@@ -293,7 +346,14 @@ class LiveDemo:
             if not live:
                 verify_snapshots(analysis, payload)
             record.status = "completed"
-            provenance = base.provenance.model_copy(update={"prompt_version": "sha256:" + digest(instructions)})
+            provenance = Provenance(
+                contract_version=CONTRACT_VERSION, agent_name="documentation-agent", agent_version=APP_VERSION,
+                model=self.settings.model, model_version=self.settings.model_version,
+                prompt_version="sha256:" + digest(instructions),
+                policy_version="sha256:" + digest(
+                    (APP_DIR / "policies/documentation-analysis-v1.txt").read_text(encoding="utf-8").strip(),
+                ),
+            )
             report = EvaluationResponse(
                 result=assemble_result(payload.request, analysis, provenance), execution=record,
             )
@@ -301,11 +361,12 @@ class LiveDemo:
             # Status mismatch is quality feedback, not a source-validation failure.
             source_case = {**case, "expected_status": report.result.documentation_status}
             row = evaluator_row(source_case, payload, report, {"environment_variables": self.config.settings})
-            groups[case["mode"]].append(row)
+            groups.setdefault(case["mode"], []).append(row)
             deterministic.append({
                 "case_id": case["id"], "status_matches": analysis.documentation_status == case["expected_status"],
             })
-        feedback: dict[str, Any] = {"deterministic": deterministic, "judges": {}}
+        feedback: dict[str, Any] = {"deterministic": deterministic, "judges": {}, "coverage": self.coverage}
+        save(output / "coverage.json", self.coverage)
         passed = all(item["status_matches"] for item in deterministic)
         ranks = []
         for mode, rows in groups.items():
@@ -330,7 +391,10 @@ class LiveDemo:
 
         data = json.dumps({
             "immutable_base_instructions": {
-                "live_sources": AssessmentAgent(self.settings).instructions,
+                **(
+                    {"live_sources": AssessmentAgent(self.settings).instructions}
+                    if isinstance(self.settings, AssessmentSettings) else {}
+                ),
                 "supplied_sources": supplied_instructions(self.settings),
             },
             "current_guidance": candidate, "failures": feedback,
@@ -370,9 +434,7 @@ def main(argv: list[str] | None = None) -> int:
         config = LoopConfig.model_validate_json(args.config.read_text(encoding="utf-8"))
         from azure.ai.projects import AIProjectClient
         from azure.identity import AzureCliCredential
-        from documentation_agent.settings import AssessmentSettings
-
-        settings = AssessmentSettings.from_environment(config.settings)
+        settings = runtime_settings(config)
         commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
         subprocess.run(
             ["git", "diff", "--exit-code", "HEAD", "--", "src", "evals/datasets", "data/knowledge", "pyproject.toml"],
@@ -394,13 +456,14 @@ def main(argv: list[str] | None = None) -> int:
             project.get_openai_client(timeout=180, max_retries=0) as client,
         ):
             demo = LiveDemo(config, FoundryEvaluation(project, client))
+            manifest["coverage"] = demo.coverage
 
             async def execute() -> dict[str, Any]:
                 async with asyncio.timeout(3000):
                     return await loop(demo.evaluate, demo.improve, args.output, manifest)
 
             decision = asyncio.run(execute())
-        return 0 if decision["status"] == "passed" else 1
+        return 0 if decision["status"] in {"passed", "partial_passed"} else 1
     except Exception as exc:
         print(f"eval-loop blocked: {type(exc).__name__}: {exc}", file=sys.stderr)
         if not args.output.exists():

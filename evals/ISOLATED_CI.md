@@ -6,6 +6,31 @@ merges code, writes a wiki, or sends Teams messages. It executes the checked-out
 assessment code locally on the runner, using real model calls and the read-only
 evaluation adapters. It does not score saved captures as if they were new outputs.
 
+## Explicit partial demo mode
+
+The default `mode=full_suite` is unchanged. A separately approved
+`mode=supplied_sources_only` runs exactly the three existing supplied-source cases
+with unchanged inputs, expected statuses and thresholds. It excludes
+`order-sync-retry` and `order-sync-information-missing`; tool-call accuracy is
+**not evaluated**. A successful partial gate reports `partial_passed` and
+`full_suite_passed=false`, never full-suite quality approval or promotion.
+
+In partial mode no toolbox endpoint or source credentials are accepted or used:
+tools are disabled, no toolbox is imported/constructed/discovered, and only the
+isolated model/project and judge APIs are called. ADO project/wiki names are
+domain labels for the unchanged instructions, not remote connection settings.
+Artifacts, feedback, decision and summary identify selected/excluded cases.
+The runner still evaluates at most five candidates and fails fast on operational,
+schema, source-integrity and authentication errors.
+
+Set repository `EVAL_LOOP_MODE=supplied_sources_only` for automatic main runs.
+Manual dispatch must select that same mode; mismatch with the approved config
+fails before login. Mode changes are operator-reviewed configuration, not a
+fallback when the full suite fails. Keep full mode blocked until genuine
+read-only upstream access exists. See the
+[isolated model/project/IAM proposal](../infra/isolated-evaluation/README.md)
+and [partial configuration](../infra/isolated-evaluation/supplied-demo-config.json).
+
 ## Loop contract
 
 1. Freeze the checkout SHA, source/data hashes, model versions and three thresholds.
@@ -37,7 +62,7 @@ Agent source, contracts, shared tools (including the existing ADO MCP
 `requirements.txt`), dataset, knowledge, dependency manifest
 and this workflow trigger offline checks on PRs and main pushes. PRs, including
 forks, never receive Azure credentials. Automatic model execution occurs only on
-main with `EVAL_LOOP_ENABLED=true` and approval through the protected
+main with `EVAL_LOOP_ENABLED=true` through the trusted-main-only
 `isolated-agent-evaluation` GitHub environment. Manual dispatch on main uses the
 same gates. A disabled live job means **quality not evaluated**, not a passing eval.
 Superseded runs on the same branch are cancelled. No workflow dispatch is required
@@ -55,8 +80,11 @@ environment-scoped variables before admission. Configure the environment separat
   Use a separate Foundry project and read-only toolbox. This implementation
   provisions nothing and grants no roles. Never use serving21/latest or the
   live gateway. The serving endpoint is a deny target, not an invocation target.
-- Required environment reviewers and main-branch restrictions. These protections
-  are external prerequisites, not created by the YAML.
+- Exact `main` branch restriction, with no tags and no required per-run reviewer.
+  The user approved automatic paid bounded evaluation; source and setup review
+  remain required before activation. These settings apply only to the isolated
+  evaluation environment; preserve existing release/production protections.
+  They are external prerequisites, not created by the YAML.
 - Optional `EVAL_LOOP_ARTIFACTS_APPROVED=true` only after reviewing source-data
   publication and repository artifact access. Artifacts can contain model outputs,
   source excerpts and tool results. Retention is three days.
@@ -111,6 +139,9 @@ limited to eight iterations and twelve function calls per case. Judge jobs use t
 existing 20-minute poll deadline. Foundry's managed judge API does not expose an
 aggregate token/dollar cap here: configure isolated deployment quotas/budgets
 before enabling; request/iteration bounds are not a guaranteed monetary ceiling.
+In partial mode the smaller dataset limits execution to 15 case evaluations,
+five judge-group submissions and 30 case-level judge results; the same five
+candidate and four optimizer-call maximums apply. No live-tool score is invented.
 
 Artifacts contain per-attempt actual execution captures, scores, feedback,
 instruction hashes/diffs, parent lineage, final decision, best guidance and a

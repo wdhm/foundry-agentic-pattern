@@ -1,5 +1,6 @@
 import asyncio
 import json
+from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -44,7 +45,8 @@ def test_malformed_judges_fail_early(mutation):
 
 
 @pytest.mark.parametrize("pass_at,expected,calls", [(1, "passed", 1), (3, "passed", 3), (9, "exhausted", 5)])
-def test_five_total_candidates_and_real_revisions(tmp_path, pass_at, expected, calls):
+@pytest.mark.parametrize("mode", ["full_suite", "supplied_sources_only"])
+def test_five_total_candidates_and_real_revisions(tmp_path, pass_at, expected, calls, mode):
     evaluated, optimized = [], []
 
     async def evaluate(candidate, output):
@@ -56,8 +58,10 @@ def test_five_total_candidates_and_real_revisions(tmp_path, pass_at, expected, c
         return candidate + "Better instructions.\n"
 
     output = tmp_path / "run"
-    result = asyncio.run(loop(evaluate, improve, output))
-    assert result["status"] == expected
+    result = asyncio.run(loop(evaluate, improve, output, {"coverage": {"mode": mode}}))
+    assert result["status"] == (
+        "partial_passed" if expected == "passed" and mode == "supplied_sources_only" else expected
+    )
     assert len(evaluated) == calls
     assert len(set(evaluated)) == calls
     assert len(optimized) == calls - 1
@@ -65,6 +69,7 @@ def test_five_total_candidates_and_real_revisions(tmp_path, pass_at, expected, c
     assert result["promotion_eligible"] is False
     assert json.loads((output / "decision.json").read_text()) == result
     assert (output / "best-instructions.txt").read_text() == evaluated[-1]
+    assert result["full_suite_passed"] == (expected == "passed" and mode == "full_suite")
 
 
 @pytest.mark.parametrize("revised", ["", "   ", "x" * 12001])
@@ -154,7 +159,8 @@ def test_serving_project_rejected_before_source_or_network(tmp_path):
 
 
 @pytest.mark.parametrize("failure", [None, "budget", "replay", "wrong-status", "schema", "source", "auth"])
-def test_actual_agent_sdk_path_uses_new_guidance_and_bounded_fresh_calls(monkeypatch, tmp_path, failure):
+@pytest.mark.parametrize("mode", ["full_suite", "supplied_sources_only"])
+def test_actual_agent_sdk_path_uses_new_guidance_and_bounded_fresh_calls(monkeypatch, tmp_path, failure, mode):
     """Offline transport double; this test does not assert semantic agent quality."""
     from agent_framework import (
         BaseChatClient,
@@ -174,7 +180,10 @@ def test_actual_agent_sdk_path_uses_new_guidance_and_bounded_fresh_calls(monkeyp
         "DOCUMENTATION_ADO_PROJECT": "demo", "DOCUMENTATION_ADO_WIKI": "demo",
         "DOCUMENTATION_AUTH_MODE": "azure_cli",
     }
+    if mode == "supplied_sources_only":
+        del settings["TOOLBOX_ENDPOINT"]
     config = LoopConfig(
+        mode=mode,
         observed_model="agent",
         settings=settings, evaluator_deployment="judge", evaluator_version="1",
         optimizer_deployment="optimizer", optimizer_version="1",
@@ -234,7 +243,9 @@ def test_actual_agent_sdk_path_uses_new_guidance_and_bounded_fresh_calls(monkeyp
             assert "Do not infer facts." in report.execution.instructions
         assert report.execution.model_calls[0]["status"] == "completed"
         reports.append(report)
-        if failure in {"wrong-status", "source"} and case["mode"] == "supplied_sources":
+        if (mode == "supplied_sources_only" or failure in {"wrong-status", "source"}) and (
+            case["mode"] == "supplied_sources"
+        ):
             return evaluator_row(case, payload, report, definition)
         return {"case_id": case["id"]}
 
@@ -255,9 +266,16 @@ def test_actual_agent_sdk_path_uses_new_guidance_and_bounded_fresh_calls(monkeyp
                 raise ValueError("auth failure")
             return self
 
+    class NeverToolbox:
+        def __init__(self, *args, **kwargs):
+            pytest.fail("Supplied-only mode must not construct or discover a toolbox.")
+
     monkeypatch.setattr("azure.identity.aio.AzureCliCredential", Credential)
     monkeypatch.setattr("azure.ai.projects.aio.AIProjectClient", Resource)
-    monkeypatch.setattr("agent_framework_foundry_hosting.FoundryToolbox", Resource)
+    monkeypatch.setattr(
+        "agent_framework_foundry_hosting.FoundryToolbox",
+        NeverToolbox if mode == "supplied_sources_only" else Resource,
+    )
     monkeypatch.setattr("agent_framework.foundry.FoundryChatClient", Transport)
     monkeypatch.setattr("tools.hosted_evaluation.evaluator_row", row)
     demo = LiveDemo(config, SimpleNamespace(model_version=lambda _: "1", evaluate=evaluate))
@@ -277,8 +295,11 @@ def test_actual_agent_sdk_path_uses_new_guidance_and_bounded_fresh_calls(monkeyp
 
         async def improve(candidate, feedback):
             improvements.append(feedback)
-            assert all(not item["status_matches"] for item in feedback["deterministic"][2:])
-            assert set(feedback["judges"]) == {"live_sources", "supplied_sources"}
+            supplied = feedback["deterministic"] if mode == "supplied_sources_only" else feedback["deterministic"][2:]
+            assert all(not item["status_matches"] for item in supplied)
+            assert set(feedback["judges"]) == (
+                {"supplied_sources"} if mode == "supplied_sources_only" else {"live_sources", "supplied_sources"}
+            )
             return ""
 
         result = asyncio.run(loop(demo.evaluate, improve, tmp_path / "wrong-status"))
@@ -287,11 +308,16 @@ def test_actual_agent_sdk_path_uses_new_guidance_and_bounded_fresh_calls(monkeyp
         assert [case["expected_status"] for case in demo.cases] == expectations
         return
     asyncio.run(demo.evaluate("Do not infer facts.", tmp_path))
-    assert len(reports) == 5
-    assert 5 <= len(observed) == demo.calls <= 10  # Includes the existing one-shot evidence repair.
+    count = 3 if mode == "supplied_sources_only" else 5
+    assert len(reports) == count
+    assert count <= len(observed) == demo.calls <= count * 2  # Includes existing one-shot evidence repair.
     assert len(demo.seen_response_ids) == demo.calls
-    assert len({r.execution.execution_id for r in reports}) == 5
-    assert len(list(tmp_path.glob("*-evaluation.json"))) == 5
+    assert len({r.execution.execution_id for r in reports}) == count
+    assert len(list(tmp_path.glob("*-evaluation.json"))) == count
+    if mode == "supplied_sources_only":
+        assert demo.coverage["excluded_case_ids"] == ["order-sync-retry", "order-sync-information-missing"]
+        assert demo.coverage["tool_call_accuracy"] == "not_evaluated"
+        assert not (tmp_path / "live_sources-inputs.json").exists()
 
 
 def test_cancellation_records_failure(tmp_path):
@@ -330,3 +356,59 @@ def test_optimizer_is_a_bounded_model_call_not_a_file_editor():
     assert calls[0]["store"] is False
     assert "Never alter evaluator rules" in calls[0]["instructions"]
     assert json.loads(calls[0]["input"])["current_guidance"] == "old"
+
+
+def test_partial_pass_never_claims_full_suite_quality(tmp_path):
+    async def evaluate(candidate, output):
+        return True, 1.0, {}
+
+    async def improve(candidate, feedback):
+        pytest.fail("passing partial demo must stop")
+
+    coverage = {
+        "mode": "supplied_sources_only",
+        "selected_case_ids": [
+            "order-sync-version-isolation", "order-sync-dead-letter-stub", "order-sync-wiki-unavailable",
+        ],
+        "excluded_case_ids": ["order-sync-retry", "order-sync-information-missing"],
+        "tool_call_accuracy": "not_evaluated",
+    }
+    result = asyncio.run(loop(evaluate, improve, tmp_path / "partial", {"coverage": coverage}))
+    assert result["status"] == "partial_passed"
+    assert result["full_suite_passed"] is False
+    assert result["coverage"] == coverage
+    summary = (tmp_path / "partial" / "summary.md").read_text()
+    assert "supplied_sources_only" in summary
+    assert all(case in summary for case in coverage["excluded_case_ids"])
+
+
+@pytest.mark.parametrize("unexpected", ["TOOLBOX_ENDPOINT", "DOCUMENTATION_MODEL_GATEWAY_ENDPOINT", "GITHUB_TOKEN"])
+def test_partial_settings_reject_unused_source_credentials_and_endpoints(unexpected):
+    from tools.eval_loop import SuppliedSettings
+
+    with pytest.raises(ValueError):
+        SuppliedSettings.model_validate({
+            "DOCUMENTATION_PROJECT_ENDPOINT": "https://isolated.services.ai.azure.com/api/projects/eval",
+            "AZURE_AI_MODEL_DEPLOYMENT_NAME": "candidate",
+            "DOCUMENTATION_MODEL_VERSION": "2026-03-17",
+            "DOCUMENTATION_ADO_PROJECT": "domain-only", "DOCUMENTATION_ADO_WIKI": "domain-only",
+            "DOCUMENTATION_AUTH_MODE": "azure_cli", unexpected: "not-allowed",
+        })
+
+
+def test_reviewed_partial_configuration_needs_no_toolbox():
+    from tools.eval_loop import SuppliedSettings, runtime_settings
+
+    config = LoopConfig.model_validate_json(
+        Path("infra/isolated-evaluation/supplied-demo-config.json").read_text(),
+    )
+    assert config.mode == "supplied_sources_only"
+    settings = runtime_settings(config)
+    assert isinstance(settings, SuppliedSettings)
+    assert "TOOLBOX_ENDPOINT" not in config.settings
+    assert settings.project_endpoint != config.serving_project_endpoint
+    assert settings.model_version == config.evaluator_version == config.optimizer_version == "2026-03-17"
+    assert config.observed_model == "gpt-5.4-mini-2026-03-17"
+    assert config.model_copy(update={"mode": "full_suite"}).mode == "full_suite"
+    with pytest.raises(ValueError, match="toolbox_endpoint"):
+        runtime_settings(config.model_copy(update={"mode": "full_suite"}))
