@@ -52,17 +52,17 @@ backup recording aligned with actual results.
 
 Use the [40-minute P2 presenter guide](p2-presenter-guide.md) for the run order,
 fallbacks and hard stops. Foundry IQ and Toolbox are demoed in the Foundry
-playground on the read-only prompt agent **`p2-demo-agent`** (toolbox
-`p2-demo-toolbox`: Foundry IQ + GitHub). Each answer is followed by the Foundry
-view behind it: the knowledge base, then the toolboxes. The hosted
-**`documentation-agent`** keeps its **own** identity and agent user for Azure DevOps.
+playground on the hosted **`documentation-agent`** (v26, read-only chat over
+toolbox `documentation-agent-readonly:2`), running as its **own** identity and
+agent user. Each answer is followed by the Foundry view behind it: the knowledge
+base, then the toolboxes.
 
 | Time | Feature | F | Type | Content |
 |---|---|---|---|---|
 | 10:30–10:32 | Framing | F8 | Slide | One sentence: all demos run on a fictional Order Sync integration with planted drifts ([data](../../data/README.md)) |
-| 10:32–10:45 | Foundry IQ | F3 | Playground demo | Ask `p2-demo-agent` what the standard requires for error handling and drift → `knowledge_base_retrieve`, cites DS-14/DS-30/DS-31; then the knowledge base `kb-doc-agent` in Foundry ([guide](foundry-iq-guide.md)) |
-| 10:45–10:58 | Toolbox (MCP · DevOps · GitHub) | F1 | Playground demo | Ask which rules PR #62 now requires → GitHub PR + files + knowledge in one answer; then Toolboxes in Foundry: `p2-demo-toolbox`, `documentation-agent-readonly` and `documentation-agent-write` ([GitHub guide](github-mcp-guide.md)) |
-| 10:58–11:06 | Agent identity | – | Demo | ADO accepts only the documentation agent's identity, which is why the demo toolbox has no ADO; Entra Agent ID and the agent user ([guide](agent-identity-guide.md)); the wiki commit from John's Teams Approve is authored by the agent user. Name the security debt: the agent user is Basic + Contributors for the write path ([#22](https://github.com/wdhm/foundry-agentic-pattern/issues/22)) |
+| 10:32–10:45 | Foundry IQ | F3 | Playground demo | Ask `documentation-agent` what the standard requires for error handling and drift → cites DS-14/DS-30/DS-31 with links to the standard; then the knowledge base `kb-doc-agent` in Foundry ([guide](foundry-iq-guide.md)) |
+| 10:45–10:58 | Toolbox (MCP · DevOps · GitHub) | F1 | Playground demo | Ask it to compare the Order Sync code with the wiki page and work item 1 → one answer from ADO repo (pinned commit), wiki, work item and the standard, gaps per rule ID; then Toolboxes in Foundry: `documentation-agent-readonly` and `documentation-agent-write` |
+| 10:58–11:06 | Agent identity | – | Demo | The ADO reads just shown ran as the agent's own identity; ADO accepts no other caller. Entra Agent ID and the agent user ([guide](agent-identity-guide.md)); the wiki commit from John's Teams Approve is authored by the agent user. Name the security debt: the agent user is Basic + Contributors for the write path ([#22](https://github.com/wdhm/foundry-agentic-pattern/issues/22)) |
 | 11:06–11:10 | *Agent 365* | – | Slide | Fleet governance across M365 ([#46](https://github.com/wdhm/foundry-agentic-pattern/issues/46)). Work IQ ([#47](https://github.com/wdhm/foundry-agentic-pattern/issues/47)) and PDF/SharePoint ([#48](https://github.com/wdhm/foundry-agentic-pattern/issues/48)) are backup slides |
 
 ## 11:10–11:50 · P3 · AgentOps & platform · Louise
@@ -92,7 +92,7 @@ How to fork the repo, swap in your own sources and documentation standard, and p
 - [ ] Prepare the retained hosted trace lookup for the presentation; portal UI and all-presenter access still need verification
 - [ ] Demonstrate the full five-case good/bad evaluation gate, or clearly label the unverified showcase
 - [x] Real approved wiki write and Teams delivery demonstrated on v13 by P1 (2026-10-20, [evidence](../../src/agents/documentation-agent/TEAMS_APPROVAL.md)); assessment stays read-only. Second-user Teams test pending ([#31](https://github.com/wdhm/foundry-agentic-pattern/issues/31))
-- [x] P2 40-minute presenter run order, fallbacks and evidence prepared ([guide](p2-presenter-guide.md)); live PR #62 assessment still to be rehearsed
+- [x] P2 40-minute presenter run order, fallbacks and evidence prepared ([guide](p2-presenter-guide.md)); playground questions on `documentation-agent:26` verified 2026-10-22; portal rehearsal pending
 - [ ] Obtain separate routing approval and demonstrate timed rollback with new named-path sessions; two deployed versions or a pin alone do not pass
 - [x] P3 primary evidence content, AI Gateway explanatory fallback and 40-minute presenter run order prepared; four existing next-step slides retained
 - [ ] Assemble the source slides into the shared deck and review story, visual layout, evidence dates and captures with all presenters
