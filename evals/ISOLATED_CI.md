@@ -62,7 +62,7 @@ Agent source, contracts, shared tools (including the existing ADO MCP
 `requirements.txt`), dataset, knowledge, dependency manifest
 and this workflow trigger offline checks on PRs and main pushes. PRs, including
 forks, never receive Azure credentials. Automatic model execution occurs only on
-main with `EVAL_LOOP_ENABLED=true` and approval through the protected
+main with `EVAL_LOOP_ENABLED=true` through the trusted-main-only
 `isolated-agent-evaluation` GitHub environment. Manual dispatch on main uses the
 same gates. A disabled live job means **quality not evaluated**, not a passing eval.
 Superseded runs on the same branch are cancelled. No workflow dispatch is required
@@ -80,8 +80,11 @@ environment-scoped variables before admission. Configure the environment separat
   Use a separate Foundry project and read-only toolbox. This implementation
   provisions nothing and grants no roles. Never use serving21/latest or the
   live gateway. The serving endpoint is a deny target, not an invocation target.
-- Required environment reviewers and main-branch restrictions. These protections
-  are external prerequisites, not created by the YAML.
+- Exact `main` branch restriction, with no tags and no required per-run reviewer.
+  The user approved automatic paid bounded evaluation; source and setup review
+  remain required before activation. These settings apply only to the isolated
+  evaluation environment; preserve existing release/production protections.
+  They are external prerequisites, not created by the YAML.
 - Optional `EVAL_LOOP_ARTIFACTS_APPROVED=true` only after reviewing source-data
   publication and repository artifact access. Artifacts can contain model outputs,
   source excerpts and tool results. Retention is three days.

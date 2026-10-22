@@ -19,7 +19,7 @@ source review and the prepare -> validate -> deploy handoff.
 | Federation | Only `https://token.actions.githubusercontent.com`, audience `api://AzureADTokenExchange`, exact immutable repository/environment subject below |
 | Project identity | New system-assigned project MI, inference-only role on the new account |
 | CI RBAC | New narrow custom role on the new account, detailed below |
-| GitHub environment | New `isolated-agent-evaluation`, custom branch policy matching only `main` (no tags); required reviewer `wdhm` (ID `253040606`), prevent self-review and disable admin bypass |
+| GitHub environment | New `isolated-agent-evaluation`, custom branch policy matching only `main` (no tags); no required per-run reviewer |
 | GitHub variables | New environment variables for UAMI client/tenant/subscription and `EVAL_LOOP_CONFIG`; repository `EVAL_LOOP_MODE=supplied_sources_only`; `EVAL_LOOP_ENABLED=true` only after isolation verification |
 | Artifact publication | Leave `EVAL_LOOP_ARTIFACTS_APPROVED` unset unless publication of diagnostic output is separately approved; summary remains available |
 
@@ -31,8 +31,10 @@ repo:wdhm@253040606/foundry-agentic-pattern@1407061088:environment:isolated-agen
 
 The environment's main-only branch policy and the workflow's main/non-PR check
 are both required: an environment OIDC subject does not encode the branch.
-The reviewer must approve the environment deployment through GitHub; automation
-must not bypass that protection. This may leave the first run awaiting approval.
+The user explicitly approved automatic paid bounded evaluation, so this isolated
+evaluation-only environment has no required per-run reviewer. Source and setup
+review remain required before activation. Existing release and production
+environment protections must not be changed.
 
 `main.bicep` creates no toolbox, connection, Search, storage, hosted agent,
 Container App, registry, APIM resource or production assignment. It has no
@@ -80,15 +82,15 @@ The existing five-candidate, request/token and wall-clock bounds still apply.
 4. Read back the account's Entra-only auth, project/MI IDs, all three concrete
    model versions/SKUs/capacities, exact federated subject and custom role scopes.
    Confirm the new project has no connections, toolboxes or source grants.
-5. Create the isolated GitHub environment, reviewer and main-only branch policy;
+5. Create the isolated GitHub environment with no required per-run reviewer and a main-only/no-tags branch policy;
    read those protections back. Preserve `p3-agent-release` and its variables.
 6. Set client/tenant/subscription variables and the reviewed
    `supplied-demo-config.json` (replace the review reference with the actual
    reviewed PR/approval evidence). Set repository `EVAL_LOOP_MODE`; set
    `EVAL_LOOP_ENABLED` last. Do not add source credentials.
 7. Dispatch the merged workflow on `main` with
-   `evaluation_mode=supplied_sources_only`, obtain required environment approval,
-   and report its actual outcome and exact run/SHA/candidate/model lineage.
+   `evaluation_mode=supplied_sources_only` and report its actual outcome and exact
+   run/SHA/candidate/model lineage.
 
 `supplied-demo-config.json` requires **no toolbox endpoint**. ADO project/wiki
 names are instruction-domain labels only, not connection targets or credentials.
