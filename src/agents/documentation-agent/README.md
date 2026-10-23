@@ -105,7 +105,7 @@ DOCUMENTATION_MODE=approval
 DOCUMENTATION_ENABLE_APPROVAL=true
 DOCUMENTATION_ENABLE_CHAT=true
 DOCUMENTATION_CHAT_SOURCES=/app/approval/order-sync-chat-sources.json
-DOCUMENTATION_CHAT_READ_TOOLBOX=https://foundry-agentic-r8n3ld.services.ai.azure.com/api/projects/proj-agentic/toolboxes/documentation-agent-readonly/versions/2/mcp?api-version=v1
+DOCUMENTATION_CHAT_READ_TOOLBOX=https://foundry-agentic-r8n3ld.services.ai.azure.com/api/projects/proj-agentic/toolboxes/documentation-agent-readonly/versions/4/mcp?api-version=v1
 ```
 
 Keep the existing approval policy, model/authentication settings and optional

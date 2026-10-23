@@ -78,12 +78,14 @@ if ($existing -and -not $NewVersion) {
     } else {
         @(
             @{ label = 'knowledge'; connection = $KnowledgeConnection; names = @('knowledge_base_retrieve')
-               description = 'Documentation standard knowledge base (Foundry IQ). Retrieve rules by query.' }
+               description = 'Foundry IQ knowledge base kb-doc-agent: the Integration Documentation Standard (DS-xx rules), ' +
+                   'indexed in Azure AI Search from data/knowledge/ in GitHub. Called with the project managed identity.' }
             @{ label = 'github'; connection = $GitHubConnection; names = @('get_file_contents')
-               description = 'GitHub repository files at an exact commit (read-only).' }
+               description = 'GitHub read-only MCP server: repository file contents at an exact commit.' }
             @{ label = 'ado'; connection = $AdoConnection
                names = @('wiki', 'wit_work_item') + $(if ($AzureRepos) { @('repo_file') } else { @() })
-               description = 'Azure DevOps wiki, work items and optional commit-pinned repository files (read only).' }
+               description = 'Azure DevOps through the agent gateway ca-doc-agent-mcp, called as the agent''s own identity: ' +
+                   "$(if ($AzureRepos) { 'wiki pages, work items and repository files at a pinned commit' } else { 'wiki pages and work items' }). Read tools only." }
         )
     }
     $tools = $sources | ForEach-Object {
@@ -100,13 +102,20 @@ if ($existing -and -not $NewVersion) {
     $description = if ($Write) {
         'Approval-gated wiki write for the hosted documentation-agent: only Azure DevOps wiki_upsert_page.'
     } else {
-        'Read-only sources for the hosted documentation-agent: documentation standard (Foundry IQ), GitHub file at commit, Azure DevOps wiki page and work item; optional Azure Repos file reads.'
+        'Read-only tools for the hosted documentation-agent, one endpoint for every source it reads: the documentation ' +
+        'standard (Foundry IQ), GitHub files at a commit, and Azure DevOps ' +
+        $(if ($AzureRepos) { 'wiki pages, work items and repository files at a pinned commit' } else { 'wiki pages and work items' }) +
+        '. Chat, push reviews and ' +
+        'assessments use it. Writes are in documentation-agent-write, used only after approval on the Teams card.'
     }
     $body = @{ description = $description; tools = @($tools) } | ConvertTo-Json -Depth 10
     $created = Invoke-RestMethod -Method Post "$ProjectEndpoint/toolboxes/$ToolboxName/versions?api-version=$Api" `
         -Headers $headers -Body $body -ContentType 'application/json'
     $version = $created.version
-    Write-Host "Created toolbox '$ToolboxName' version $version." -ForegroundColor Green
+    # The default version is what Foundry tools list; the runtime always pins an explicit version.
+    Invoke-RestMethod -Method Patch "$ProjectEndpoint/toolboxes/$($ToolboxName)?api-version=$Api" -Headers $headers `
+        -Body (@{ default_version = $version } | ConvertTo-Json) -ContentType 'application/json' | Out-Null
+    Write-Host "Created toolbox '$ToolboxName' version $version (default)." -ForegroundColor Green
 }
 
 Write-Host "TOOLBOX_ENDPOINT=$ProjectEndpoint/toolboxes/$ToolboxName/versions/$version/mcp?api-version=$Api"

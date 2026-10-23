@@ -4,7 +4,7 @@
 
 **Storyline:** *where the agent's facts come from, and who it is when it reads and writes them.* Stable rules come from Foundry IQ, live facts come through a versioned toolbox, and every read and write runs as the agent's own identity. John's block already showed the hosted agent, the output contract and the Teams approval card; this block opens the hood on the sources and the identity behind them.
 
-**Recorded runtime (2026-10-21):** hosted `documentation-agent:13` serves 100%. Assessment uses toolbox `documentation-agent-readonly:1`; only the approval runtime uses `documentation-agent-write:1` (`ado___wiki_upsert_page` only). Re-check serving before delivery; if it changed, update this line rather than presenting stale versions.
+**Recorded runtime (2026-10-23):** hosted `documentation-agent:30` serves with read-only chat enabled. Chat, push reviews and assessment read through toolbox `documentation-agent-readonly:4` (the default version); only the approval runtime uses `documentation-agent-write:1` (`ado___wiki_upsert_page` only). Chat may read only the sources in [`order-sync-chat-sources.json`](../../src/agents/documentation-agent/approval/order-sync-chat-sources.json): the Order Sync repo at commit `97990d1`, wiki page `/Order Sync/Overview` and work item 1. Re-check serving before delivery; if it changed, update this line rather than presenting stale versions.
 
 ## Slides
 
@@ -15,10 +15,12 @@
 | Time | Minutes | Slide → demo | Fallback / stop point |
 |---|---|---|---|
 | 10:30-10:32 | 2 | **Framing** (slide 1). One sentence on data: *everything runs on a fictional Order Sync integration with three planted drifts, so we can show real calls safely* ([data](../../data/README.md)). | Slide only |
-| 10:32-10:45 | 13 | **Foundry IQ (F3)** (slide 2). Run `demo-foundry-iq.ps1`: the knowledge base returns DS-14 Error handling and DS-30 Drift as references. Then in the Foundry portal open knowledge base `kb-doc-agent` → source `ks-doc-knowledge` → index `doc-knowledge`, and the MCP connection `kb-doc-agent-mcp` (project managed identity). Close on *stable rules are indexed; code, wiki and work items are read live* ([guide](foundry-iq-guide.md), [ADR 0011](../adr/0011-knowledge-foundry-iq-and-toolbox.md)) | Show the [standard](../../data/knowledge/documentation-standard.md) and the guide's diagram. Do not re-index or change the knowledge base live |
-| 10:45-10:58 | 13 | **Toolbox (F1)** (slide 3). Run `demo-toolbox.ps1`: `documentation-agent-readonly` (four read tools over three connections) next to `documentation-agent-write` (one tool). Show the same in the Foundry portal. Then the PR #62 assessment → `gaps_found` with pinned evidence and findings citing DS-30 | Assessment live only if it passed at rehearsal (see below). Otherwise the recorded result ([GitHub guide](github-mcp-guide.md#the-result), [gate evidence](evaluation-release-guide.md#live-gate-evidence-2026-10-20)). Never enable write tools in an assessment |
-| 10:58-11:06 | 8 | **Agent identity** (slide 4). Run `demo-toolbox.ps1 -TryAsMe`: Foundry IQ and GitHub answer, but ADO refuses a person because the connection only accepts the agent's identity. In Entra Agent ID show the agent identity and the agent user. Open the wiki history of `/Workshop/Approval-Sandbox`: John's Teams Approve commit is authored by **documentation-agent (agent user)** ([guide](agent-identity-guide.md), [identity table](resource-organization-guide.md#identities-who-authenticates-where)) | Use the slide's table. Wiki history is a read; no new write. Name the security debt below |
+| 10:32-10:45 | 13 | **Foundry IQ (F3)** (slide 2). In the playground of `documentation-agent` ask: *"What does our documentation standard require for error handling and for drift between code and docs? Cite the rule IDs."* About 20 s; the answer cites DS-14, DS-30 and DS-31 with links to the standard. **Proof:** Agents → **Traces** → the newest trace → span `execute_tool knowledge___knowledge_base_retrieve`. Then Knowledge → Knowledge bases → `kb-doc-agent`: the description (what is indexed, from where, why), retrieval instructions, model `eval-gpt-5.4-mini` and effort `low`; then source `ks-doc-knowledge` → index `doc-knowledge`, and search for DS-14. Close on *stable rules are indexed once and cited every time* ([guide](foundry-iq-guide.md), [ADR 0011](../adr/0011-knowledge-foundry-iq-and-toolbox.md)) | Show the [standard](../../data/knowledge/documentation-standard.md) and the guide's diagram. Do not re-index or change the knowledge base live |
+| 10:45-10:58 | 13 | **Toolbox (F1)** (slide 3). New chat: *"Compare the Order Sync code and config with the wiki page /Order Sync/Overview and work item 1. Which rules in our documentation standard does the wiki not cover yet? Cite rule IDs and where each fact comes from."* 35–55 s: while it runs, show the toolbox definitions in VS Code → Foundry Toolkit → Toolboxes (`documentation-agent-readonly` v4: knowledge, GitHub and ADO, each with a description of what it reads and how; `documentation-agent-write`: one tool, used only after Teams approval). The answer is a gap table per rule (for example DS-10 to DS-17 and DS-20; the exact set varies) with links to the code and `settings.json` at the pinned commit, the wiki page and the work item: four sources, one toolbox. **Proof:** Agents → **Traces** → the newest trace: `tools/list documentation-agent-readonly:4` (toolbox and version), then `execute_tool ado___repo_file`, `ado___wiki`, `ado___wit_work_item` and `knowledge___knowledge_base_retrieve` | Open the wiki page and the standard side by side. Do not edit toolboxes live |
+| 10:58-11:06 | 8 | **Agent identity** (slide 4). Same chat: *"Looks good. Update the wiki page /Order Sync/Overview with these gaps now, I approve."* The agent refuses: publishing needs the Approve button on the Teams review card. **Proof of who read ADO:** Azure portal → Container App `ca-doc-agent-mcp` → Log stream: each ADO call logs `authorized caller oid=ea9e8fb5-…`. In Entra → Agent ID, the same id is `…-documentation-agent-AgentIdentity`; show its agent user. The ADO connection accepts no other caller (another agent gets `AADSTS501051`). Open the wiki history of `/Workshop/Approval-Sandbox`: John's Teams Approve commit is authored by **documentation-agent (agent user)** ([guide](agent-identity-guide.md), [identity table](resource-organization-guide.md#identities-who-authenticates-where)) | Use the slide's table. Wiki history is a read; no new write. Name the security debt below |
 | 11:06-11:10 | 4 | **Agent 365** (slide 5): registry, access, security, lifecycle ([source](slides/agent-365.md), [#46](https://github.com/wdhm/foundry-agentic-pattern/issues/46)). Hand over to Louise | Slide only |
+
+Start the gateway Log stream before the toolbox demo, so the identity demo shows the ADO calls from that chat.
 
 Total: **2 + 13 + 13 + 8 + 4 = 40 minutes**. Keep questions for the shared 11:50 Q&A. If a view fails, switch to its fallback at once; do not debug access on stage.
 
@@ -28,24 +30,21 @@ Total: **2 + 13 + 13 + 8 + 4 = 40 minutes**. Keep questions for the shared 11:50
 
 Do this the day before and again 30 minutes before the slot. Every step is read-only.
 
-1. **Sign in** with `az login` as the tenant admin (the scripts use `az account get-access-token`).
-2. **Foundry IQ script:** `./infra/scripts/demo-foundry-iq.ps1 -SearchService srch-foundry-agentic-r8n3ld`. Pass: DS-14 and DS-30 among the references. Use `-Query "..."` to ask a different question live.
-3. **Toolbox script:** `./infra/scripts/demo-toolbox.ps1 -ProjectEndpoint https://foundry-agentic-r8n3ld.services.ai.azure.com/api/projects/proj-agentic`, then again with `-TryAsMe`. Pass: two toolboxes listed; with `-TryAsMe`, the ADO source is refused (`-32007`, `AgenticIdentityToken`).
+1. **Sign in** to the Foundry portal as the tenant admin.
+2. **Playground:** in `documentation-agent`, ask the three questions above once. Pass: the Foundry IQ answer cites DS-14; the comparison answer links the repo at `97990d1`, the wiki page and work item 1; the update request is refused. Screenshot each answer and its trace as a backup.
+3. **Proof views:** Agents → Traces shows both traces with the spans named above; Knowledge → Knowledge bases lists `kb-doc-agent` (via project connection `srch-foundry-agentic-r8n3ld`, Entra ID); the gateway Log stream shows `authorized caller oid=ea9e8fb5-…`; VS Code Foundry Toolkit lists both toolboxes.
 4. **Browser tabs**, in demo order:
-   - [Foundry portal](https://ai.azure.com) → project `proj-agentic` → knowledge base `kb-doc-agent`, then the two toolboxes.
-   - [Microsoft Entra admin center](https://entra.microsoft.com) → Agent ID → the `documentation-agent` agent identity, and Users → `documentation-agent@…` (the agent user).
+   - [Foundry portal](https://ai.azure.com) → project `proj-agentic` → Agents → `documentation-agent` → Playground (new chat), then Agents → Traces, then Knowledge.
+   - VS Code → Foundry Toolkit → `proj-agentic` → Toolboxes.
+   - [Azure portal](https://portal.azure.com) → Container App `ca-doc-agent-mcp` → Monitoring → Log stream.
+   - [Microsoft Entra admin center](https://entra.microsoft.com) → Agent ID → `foundry-agentic-R8N3LD-proj-agentic-documentation-agent-AgentIdentity` (`ea9e8fb5-…`), and Users → `documentation-agent@…` (the agent user).
    - [Wiki page `/Workshop/Approval-Sandbox`](https://dev.azure.com/foundry-agentic/integration-team/_wiki/wikis/integration-team.wiki?pagePath=/Workshop/Approval-Sandbox) → History. Commits `d3ddedec71` (Teams Approve, 2026-10-20) and `ca622ad0cf` are by the agent user.
-   - [PR #62](https://github.com/wdhm/foundry-agentic-pattern/pull/62) and the recorded fallback result.
-5. **Rehearse the PR #62 assessment** once (next section) and record the run and session IDs.
-6. **Open the deck** in presenter view; the notes hold the talk track.
-## Live assessment: rehearse first
+   - [Wiki page `/Order Sync/Overview`](https://dev.azure.com/foundry-agentic/integration-team/_wiki/wikis/integration-team.wiki?pagePath=/Order%20Sync/Overview) (fallback).
+5. **Open the deck** in presenter view; the notes hold the talk track.
 
-The live toolbox demo is one read-only assessment of PR #62 on the serving version. It is allowed live only if the same request passed at the rehearsal on the same serving version:
+## Chat on the hosted agent
 
-- **Request:** [`examples/assessment-request.json`](../../src/agents/documentation-agent/examples/assessment-request.json) (GitHub, PR #62) with fresh request/correlation IDs. The Azure Repos variant is [`azure-repos-request.json`](../../src/agents/documentation-agent/examples/azure-repos-request.json).
-- **Path:** the hosted CLI ([guide](cli-trigger-guide.md)) or the Foundry portal, whichever passed at rehearsal. The CLI needs a reviewed artifact JSON for the serving version; v13 was built from a working tree, so confirm with John that its provenance check passes before relying on it.
-- **Pass:** `gaps_found`; findings cover retry/backoff, ERP timeout and dead-letter queue; Git evidence at `ad623147fbb1eeb9a6423d437df199c91db15a9e`; no write tool called.
-- **Cost:** each run creates a session and uses model/tool calls. Record the run and session IDs at rehearsal.
+Chat is read-only: "approve it" in chat stays conversation, and real decisions use the Teams card. Citations in chat are model-generated, not the assessment contract's verified evidence ([agent README](../../src/agents/documentation-agent/README.md)). The chat reply does not list tool calls; Agents → Traces does. Every chat turn is traced through the project's Application Insights `appi-foundry-agentic`, so the trace is the evidence that Foundry IQ and the toolbox were used. Traces can take a minute or two to appear; if the new one is missing, open the rehearsal trace. GitHub PR #62 is outside the chat source scope.
 
 ## Evidence to have ready without making new calls
 
@@ -66,6 +65,6 @@ Simplicity first, hardening last ([next steps §9](../next-steps.md#9-production
 
 ## Presenter handoff and outstanding work
 
-- **Before rehearsal:** confirm serving version, run the live assessment once and record IDs, open all tabs (GitHub PR #62, ADO wiki + history, work item 1, Foundry portal toolboxes, Entra Agent ID), and verify presenter access to each.
+- **Before rehearsal:** ask both playground questions once and screenshot the tool calls, open all tabs (Foundry playground, knowledge base, toolboxes, ADO wiki + history, Entra Agent ID), and verify presenter access to each.
 - **Teams:** the Teams card is John's demo. The app is now installed for everyone in the tenant (2026-10-21); propagation can take up to 24 hours. A second-user Teams test is tracked on [#31](https://github.com/wdhm/foundry-agentic-pattern/issues/31).
 - **Shared deck:** John copies the slide sources into the deck ([#39](https://github.com/wdhm/foundry-agentic-pattern/issues/39)); all three rehearse ([#40](https://github.com/wdhm/foundry-agentic-pattern/issues/40)).
