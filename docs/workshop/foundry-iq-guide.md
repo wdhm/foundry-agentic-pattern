@@ -30,7 +30,7 @@ flowchart LR
 |---|---|
 | **Stable knowledge in Foundry IQ, live data through tools** ([ADR 0011](../adr/0011-knowledge-foundry-iq-and-toolbox.md)) | The standard rarely changes, so it suits an index. The wiki and work items change all the time, so the agent reads them live through Azure DevOps MCP. An indexed copy would go stale. |
 | **Search index knowledge source** ([how-to](https://learn.microsoft.com/azure/search/agentic-knowledge-source-how-to-search-index)) | Fewest moving parts: no storage account, indexer or embedding model. We upload one document per `##` section. |
-| **Minimal retrieval reasoning effort** ([how-to](https://learn.microsoft.com/azure/search/agentic-retrieval-how-to-set-retrieval-reasoning-effort)) | No LLM in the knowledge base. The agent's own model plans the query, and semantic ranking finds the right section. |
+| **Low retrieval reasoning effort with retrieval instructions** ([how-to](https://learn.microsoft.com/azure/search/agentic-retrieval-how-to-set-retrieval-reasoning-effort)) | The knowledge base plans its own subqueries with `gpt-5.4-mini`, shared with the evaluator (deployment `eval-gpt-5.4-mini`), following retrieval instructions that say what the source is for. Retrieval instructions require a model; `minimal` has none. Changed from `minimal` on 2026-10-23. |
 | **Rule IDs instead of a new evidence type** | The standard is the rulebook, not evidence about the integration. Findings cite `DS-xx` rule IDs, and the agent's output schema stays unchanged. |
 
 ## Setup
@@ -45,9 +45,9 @@ One idempotent script runs all of it: [`infra/scripts/setup-foundry-iq.ps1`](../
 | Step | What | Reference |
 |---|---|---|
 | 1 | Azure AI Search, **Basic** tier, system-assigned identity, Entra auth, free semantic ranker | [Create a search service](https://learn.microsoft.com/azure/search/search-create-service-portal) |
-| 2 | Roles: you get **Search Service Contributor** and **Search Index Data Contributor**; the **project managed identity** gets **Search Index Data Reader** | [Search RBAC](https://learn.microsoft.com/azure/search/search-security-rbac) |
+| 2 | Roles: you get **Search Service Contributor** and **Search Index Data Contributor**; the **project managed identity** gets **Search Index Data Reader**; the **search service identity** gets **Cognitive Services User** on the Foundry account for query planning | [Search RBAC](https://learn.microsoft.com/azure/search/search-security-rbac) |
 | 3 | Index `doc-knowledge` with a default semantic configuration; upload `data/knowledge/*.md` | [Agentic retrieval index](https://learn.microsoft.com/azure/search/agentic-retrieval-how-to-create-index) |
-| 4 | Knowledge source `ks-doc-knowledge` (`searchIndex`) and knowledge base `kb-doc-agent` (`minimal`, `extractiveData`) | [Search index knowledge source](https://learn.microsoft.com/azure/search/agentic-knowledge-source-how-to-search-index) |
+| 4 | Knowledge source `ks-doc-knowledge` (`searchIndex`) and knowledge base `kb-doc-agent` (`low`, model `eval-gpt-5.4-mini`, retrieval instructions, `extractiveData`). Both descriptions say what is indexed, where it comes from and why | [Search index knowledge source](https://learn.microsoft.com/azure/search/agentic-knowledge-source-how-to-search-index) |
 | 5 | Project connection `kb-doc-agent-mcp`: `RemoteTool`, `ProjectManagedIdentity`, audience `https://search.azure.com/` | [Create a project connection](https://learn.microsoft.com/azure/foundry/agents/how-to/foundry-iq-connect#create-a-project-connection) |
 | 6 | New agent version: MCP tool `knowledge` with `allowed_tools: [knowledge_base_retrieve]` and `require_approval: never`, plus one line in the instructions | [Create an agent with the MCP tool](https://learn.microsoft.com/azure/foundry/agents/how-to/foundry-iq-connect#create-an-agent-with-the-mcp-tool) |
 
