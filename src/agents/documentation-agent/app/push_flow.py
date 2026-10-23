@@ -23,6 +23,9 @@ from contracts.wiki import WikiDraftBundle, WikiSnapshot
 
 from .approval import PendingCall, ProposeCall, WikiRead
 from .approval_common import canonical_hash
+from .channel_policy import SharedReviewScope
+from .channel_reviews import MemberCheck
+from .conversation import ConversationService
 from .teams import ChannelBinding, TeamsApproval
 from .teams_card import card, linked_review_card, review_card, text
 from .wiki_drafts import WikiDraftPublisher
@@ -106,7 +109,11 @@ class Assessment(Protocol):
     async def assess(self, request: AgentRequest) -> AgentResult: ...
 
 
-Notify = Callable[[ConversationReference, dict[str, Any]], Awaitable[None]]
+class Notify(Protocol):
+    async def __call__(
+        self, reference: ConversationReference, output: dict[str, Any],
+        channel_scope: SharedReviewScope | None = None,
+    ) -> SharedReviewScope | None: ...
 ReadDraft = Callable[[str, UUID, str], Awaitable[str]]
 
 
@@ -157,6 +164,8 @@ class PushFlow:
         self.read_notes = read_notes
         self.read_wiki = read_wiki
         self.wiki_publisher = wiki_publisher
+        if teams.channels is not None and policy.draft_storage != "wiki":
+            raise ValueError("Shared channel reviews require the complete-page wiki draft flow.")
         if policy.merged_pr_drafts and policy.draft_storage == "git_branch" and read_draft is None:
             raise ValueError("Merged-PR drafts require a commit-pinned draft reader.")
         if teams.agent.policy.fixed_arguments.get("path") != policy.write_target:
@@ -178,12 +187,17 @@ class PushFlow:
 
     def reviewer(self, activity: Activity) -> ChannelBinding:
         binding = self.teams.binding(activity)
+        if binding.shared_scope is not None and self.teams.channels is not None:
+            self.teams.channels.authorize(binding)
+            return binding
         if binding.aad_object_id != self.policy.reviewer_aad_id:
             raise ValueError("Only the configured reviewer can register or open push reviews.")
         return binding
 
-    async def register(self, activity: Activity) -> dict[str, Any]:
+    async def register(self, activity: Activity, *, member_check: MemberCheck | None = None) -> dict[str, Any]:
         binding = self.reviewer(activity)
+        if self.teams.channels is not None:
+            await self.teams.channels.verify_decision(binding, None, member_check)
         url = urlsplit(activity.service_url or "")
         if (
             url.scheme != "https" or url.hostname != "smba.trafficmanager.net" or url.port not in {None, 443}
@@ -196,21 +210,80 @@ class PushFlow:
         )
         store = await self.store()
         async with store:
-            existing = await store.get_item("recipient")
+            existing = await store.get_item(self.recipient_key())
             if existing is None:
-                await store.create_item("recipient", recipient.model_dump(mode="json"))
+                await store.create_item(self.recipient_key(), recipient.model_dump(mode="json"))
             else:
-                await store.set_item("recipient", recipient.model_dump(mode="json"), if_match=existing.etag)
+                await store.set_item(self.recipient_key(), recipient.model_dump(mode="json"), if_match=existing.etag)
         return card([
             text("Repository notifications connected", weight="Bolder", size="Medium"),
             text(f"Repository: {self.policy.repository_url}"),
             text(
+                "Merged pull requests will create review threads in this channel."
+                if binding.shared_scope else
                 "Merged pull requests will be assessed; draft links will be sent to this personal chat."
                 if self.policy.merged_pr_drafts else
                 "Main-branch changes will be assessed and sent to this personal chat."
             ),
-            text("Opening a review creates a new approval in your session. Automation never approves a write."),
+            text(
+                "Reviewers share one proposal per thread. The configured reviewer rule is checked on every decision. "
+                "Automation never approves a write."
+                if binding.shared_scope else
+                "Opening a review creates a new approval in your session. Automation never approves a write."
+            ),
         ])
+
+    def recipient_key(self) -> str:
+        channels = self.teams.channels
+        if channels is None:
+            return "recipient"
+        return "channel-recipient:" + canonical_hash({
+            "tenant": str(channels.policy.tenant_id), "team": channels.policy.team_id,
+            "team_aad_group_id": str(channels.policy.team_aad_group_id),
+            "channel": channels.policy.channel_id,
+        })
+
+    async def deliver(self, store: FoundryStateStore, record: dict[str, Any], output: dict[str, Any]) -> None:
+        recipient = Recipient.model_validate(record["recipient"])
+        reference = ConversationReference.model_validate(recipient.reference)
+        scope = (
+            await self.notify(reference, output, recipient.binding.shared_scope)
+            if recipient.binding.shared_scope is not None else await self.notify(reference, output)
+        )
+        if recipient.binding.shared_scope is not None:
+            channels = self.teams.channels
+            if channels is None or not isinstance(scope, SharedReviewScope):
+                raise ValueError("Channel delivery did not return a verified review thread.")
+            channels.policy.require_scope(scope)
+            record["shared_scope"] = scope.model_dump(mode="json")
+            await store.create_item("thread:" + canonical_hash(scope.model_dump(mode="json")), {
+                "event_id": record["event_id"],
+            })
+
+    async def channel_conversation(
+        self, binding: ChannelBinding, conversation: ConversationService,
+    ) -> ConversationService:
+        if self.teams.channels is None or binding.shared_scope is None:
+            raise ValueError("Channel discussion requires a configured scope.")
+        self.teams.channels.authorize(binding)
+        store = await self.store()
+        async with store:
+            mapping = await store.get_item("thread:" + canonical_hash(binding.shared_scope.model_dump(mode="json")))
+            if mapping is None:
+                return conversation
+            item = await store.get_item(mapping.value["event_id"])
+            if (
+                item is None or item.value.get("shared_scope") != binding.shared_scope.model_dump(mode="json")
+                or item.value["policy_hash"] != canonical_hash(self.policy.model_dump(mode="json"))
+            ):
+                raise ValueError("This thread's review context is unavailable or its policy changed.")
+            sources = conversation.sources.model_copy(deep=True)
+            sources.subject.commit_sha = item.value["request"]["commit_sha"]
+            bundle = WikiDraftBundle.model_validate(item.value["wiki_draft"])
+            for snapshot in (bundle.page, bundle.notes):
+                if snapshot is not None and snapshot.path not in sources.context.wiki_page_paths:
+                    sources.context.wiki_page_paths.append(snapshot.path)
+            return ConversationService(conversation.settings, sources, conversation.runner)
 
     def require_caller(self) -> None:
         context = get_request_context()
@@ -234,11 +307,18 @@ class PushFlow:
         key = event_key(self.policy, request.commit_sha)
         store = await self.store()
         async with store:
-            subscriber = await store.get_item("recipient")
+            subscriber = await store.get_item(self.recipient_key())
             if subscriber is None:
-                raise ValueError("Reviewer must send 'connect repo' in Teams before enabling the pipeline.")
+                raise ValueError(
+                    "Reviewer must enable notifications ('connect repo') in the configured Teams destination first."
+                )
             recipient = Recipient.model_validate(subscriber.value)
-            if recipient.binding.aad_object_id != self.policy.reviewer_aad_id:
+            if self.teams.channels is not None:
+                self.teams.channels.authorize(recipient.binding, decide=True)
+            elif (
+                recipient.binding.shared_scope is not None
+                or recipient.binding.aad_object_id != self.policy.reviewer_aad_id
+            ):
                 raise ValueError("Stored recipient differs from the configured reviewer.")
             previous = await store.get_item(key)
             if previous:
@@ -385,7 +465,7 @@ class PushFlow:
             record["state"] = "notifying"
             claimed = await store.set_item(key, record, if_match=claimed.etag)
             try:
-                await self.notify(ConversationReference.model_validate(recipient.reference), notification)
+                await self.deliver(store, record, notification)
             except Exception as exc:
                 LOGGER.error("Push notification %s uncertain (%s); no automatic retry.", key, type(exc).__name__)
                 record.update(state="notification_unknown", error_type=type(exc).__name__)
@@ -427,6 +507,13 @@ class PushFlow:
             record["state"] = "superseded"
             await store.set_item(key, record, if_match=claimed.etag)
             raise ValueError("Assessment was superseded while creating the draft; no notification sent.")
+        return await self.notify_wiki_draft(store, record, claimed.etag)
+
+    async def notify_wiki_draft(
+        self, store: FoundryStateStore, record: dict[str, Any], etag: str,
+    ) -> dict[str, Any]:
+        key = record["event_id"]
+        bundle = WikiDraftBundle.model_validate(record["wiki_draft"])
         result = AgentResult.model_validate(record["result"])
         notification = card([
             text("Documentation draft ready", weight="Bolder", size="Medium"),
@@ -441,10 +528,9 @@ class PushFlow:
              "data": {"interface_version": "1.0.0", "action": "review_push", "event_id": key}},
         ])
         record["state"] = "notifying"
-        claimed = await store.set_item(key, record, if_match=claimed.etag)
+        claimed = await store.set_item(key, record, if_match=etag)
         try:
-            recipient = Recipient.model_validate(record["recipient"])
-            await self.notify(ConversationReference.model_validate(recipient.reference), notification)
+            await self.deliver(store, record, notification)
         except Exception as exc:
             LOGGER.error("Wiki draft notification %s uncertain (%s); no automatic retry.", key, type(exc).__name__)
             record.update(state="notification_unknown", error_type=type(exc).__name__)
@@ -453,6 +539,55 @@ class PushFlow:
         record["state"] = "notified"
         await store.set_item(key, record, if_match=claimed.etag)
         return {"event_id": key, "state": "notified", "duplicate": False}
+
+    async def retry_channel_notification(
+        self, activity: Activity, event_id: UUID, *, member_check: MemberCheck | None = None,
+    ) -> dict[str, Any]:
+        """One human-requested delivery retry, never a rerun of assessment or writes."""
+        binding = self.reviewer(activity)
+        channels = self.teams.channels
+        if channels is None or binding.shared_scope is None or self.read_wiki is None:
+            raise ValueError("Retry requires a verified channel and wiki draft reader.")
+        await channels.verify_decision(binding, None, member_check)
+        store = await self.store()
+        async with store:
+            item = await store.get_item(str(event_id))
+            latest = await store.get_item("latest")
+            if item is None or latest is None or latest.value["event_id"] != str(event_id):
+                raise ValueError("Notification event is unknown or superseded.")
+            record = item.value
+            expected = Recipient.model_validate(record["recipient"]).binding.shared_scope
+            if expected is None or (
+                expected.tenant_id, expected.team_id, expected.channel_id, expected.team_aad_group_id
+            ) != (
+                binding.shared_scope.tenant_id, binding.shared_scope.team_id,
+                binding.shared_scope.channel_id, binding.shared_scope.team_aad_group_id,
+            ):
+                raise ValueError("Notification belongs to another destination.")
+            if (
+                record["policy_hash"] != canonical_hash(self.policy.model_dump(mode="json"))
+                or record["state"] != "notification_unknown" or record.get("shared_scope")
+                or record.get("notification_retry") or not record.get("wiki_draft")
+            ):
+                raise ValueError("Event is not eligible for a single notification retry; inspect its saved outcome.")
+            bundle = WikiDraftBundle.model_validate(record["wiki_draft"])
+            for snapshot in (bundle.page, bundle.notes):
+                if snapshot is not None and await self.read_wiki(snapshot.path) != snapshot:
+                    raise ValueError("Draft or notes changed; cannot retry this notification.")
+            if await self.read_wiki(self.policy.wiki_page) != WikiSnapshot.model_validate(record["wiki_base"]):
+                raise ValueError("Published page changed; cannot retry this old draft.")
+            await channels.verify_decision(binding, None, member_check)
+            # CAS before dispatch consumes the one explicit retry even if delivery
+            # is interrupted. Repeated commands never replay a side effect.
+            record["notification_retry"] = {
+                "requested_by": binding.owner, "aad_id": str(binding.aad_object_id),
+                "requested_at": datetime.now(UTC).isoformat(),
+            }
+            record["state"] = "notification_retrying"
+            claimed = await self.teams.agent.replace(store, str(event_id), record, item.etag)
+            await self.notify_wiki_draft(store, record, claimed.etag)
+        return card([text("Review notification posted", weight="Bolder"),
+                     text("Open the new review post. No wiki publication has been approved.")])
 
     async def publish_draft(self, published: DraftPublished) -> dict[str, Any]:
         self.require_caller()
@@ -515,8 +650,7 @@ class PushFlow:
             record["state"] = "notifying"
             claimed = await store.set_item(key, record, if_match=item.etag)
             try:
-                recipient = Recipient.model_validate(record["recipient"])
-                await self.notify(ConversationReference.model_validate(recipient.reference), notification)
+                await self.deliver(store, record, notification)
             except Exception as exc:
                 LOGGER.error("Draft notification %s uncertain (%s); do not resend blindly.", key, type(exc).__name__)
                 record.update(state="notification_unknown", error_type=type(exc).__name__)
@@ -585,7 +719,10 @@ class PushFlow:
             recipient = Recipient.model_validate(record["recipient"])
             # Allow a fresh platform session, but not a different person/chat.
             expected = recipient.binding
-            if (
+            if binding.shared_scope is not None:
+                if record.get("shared_scope") != binding.shared_scope.model_dump(mode="json"):
+                    raise ValueError("Review belongs to another channel or thread.")
+            elif expected.shared_scope is not None or (
                 binding.owner != expected.owner or binding.aad_object_id != expected.aad_object_id
                 or binding.tenant_id != expected.tenant_id or binding.conversation_id != expected.conversation_id
             ):
@@ -593,6 +730,8 @@ class PushFlow:
             if record["state"] == "opened":
                 await self.teams.check_binding(UUID(record["pending_id"]), binding)
                 pending = await self.teams.record(UUID(record["pending_id"]), binding)
+                if binding.shared_scope is not None and self.teams.channels is not None:
+                    return await self.teams.channels.render(pending, binding)
                 return await self.render_pending(pending)
             if record["state"] not in {"notified", "notification_unknown", "notifying"}:
                 raise ValueError("Review is not ready or was already claimed; inspect status before retrying.")
@@ -636,24 +775,31 @@ class PushFlow:
             record["state"] = "opening"
             claimed = await store.set_item(str(event_id), record, if_match=item.etag)
             try:
-                output = await self.teams.agent.execute(
-                    proposal.model_dump_json(), AgentSession(session_id=binding.platform_session_id),
-                )
-                approval = next(c for c in output if c.type == "function_approval_request")
-                pending = await self.teams.record(UUID(approval.id or ""), binding)
+                if binding.shared_scope is not None and self.teams.channels is not None:
+                    pending = await self.teams.channels.create(proposal, binding)
+                else:
+                    output = await self.teams.agent.execute(
+                        proposal.model_dump_json(), AgentSession(session_id=binding.platform_session_id),
+                    )
+                    approval = next(c for c in output if c.type == "function_approval_request")
+                    pending = await self.teams.record(UUID(approval.id or ""), binding)
                 await store.create_item(f"pending:{pending.pending_id}", {"event_id": str(event_id)})
                 await self.teams.save_binding(pending, binding)
                 record.update(state="opened", pending_id=str(pending.pending_id))
                 await store.set_item(str(event_id), record, if_match=claimed.etag)
+                if binding.shared_scope is not None and self.teams.channels is not None:
+                    return await self.teams.channels.render(pending, binding)
                 return self.render_review(pending, record)
             except Exception as exc:
                 LOGGER.error("Opening push review %s failed (%s); no automatic retry.", event_id, type(exc).__name__)
                 raise
 
-    async def require_current(self, pending_id: UUID) -> None:
+    async def require_current(self, pending_id: UUID, *, required: bool = False) -> None:
         store = await self.store()
         async with store:
             event = await store.get_item(f"pending:{pending_id}")
+            if required and event is None:
+                raise ValueError("Shared approval has no completed automation handoff; inspect before deciding.")
             if event:
                 latest = await store.get_item("latest")
                 if latest is None or latest.value["event_id"] != event.value["event_id"]:
@@ -700,6 +846,9 @@ class PushFlow:
                 original = await store.get_item(event.value["event_id"])
                 if original is not None and original.value.get("pending_id") == str(previous):
                     await store.set_item(
-                        event.value["event_id"], {**original.value, "pending_id": str(replacement)},
+                        event.value["event_id"], {
+                            **original.value, "pending_id": str(replacement),
+                            **({"wiki_draft": bundle.model_dump(mode="json")} if bundle is not None else {}),
+                        },
                         if_match=original.etag,
                     )

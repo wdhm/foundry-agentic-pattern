@@ -10,6 +10,7 @@ import pytest
 from azure.ai.agentserver.core import FoundryAgentRequestContext, reset_request_context, set_request_context
 from azure.ai.agentserver.core.storage import FoundryStateStore
 from documentation_agent.approval import STORE_NAME, ToolApprovalAgent, ToolApprovalPolicy
+from documentation_agent.channel_reviews import STORE as CHANNEL_STORE
 from documentation_agent.conversation import STORE as CHAT_STORE
 from documentation_agent.conversation import ConversationService, ConversationSources
 from documentation_agent.push_flow import STORE, PushFlow, PushPolicy, PushRequest, event_key
@@ -30,8 +31,8 @@ REPO = "https://dev.azure.com/test/project/_git/00000000-0000-4000-8000-00000000
 
 
 @contextmanager
-def platform(user=USER, session="teams-session"):
-    token = set_request_context(FoundryAgentRequestContext(user_id=user, session_id=session, call_id="opaque"))
+def platform(user=USER, session="teams-session", call_id="opaque"):
+    token = set_request_context(FoundryAgentRequestContext(user_id=user, session_id=session, call_id=call_id))
     try:
         yield
     finally:
@@ -78,12 +79,14 @@ def harness(tmp_path, monkeypatch):
     monkeypatch.delenv("FOUNDRY_HOSTING_ENVIRONMENT", raising=False)
     monkeypatch.setenv("AGENTSERVER_STATE_ROOT", str(tmp_path / "state"))
     stores = {
-        name: asyncio.run(FoundryStateStore.get_or_create(name, user_isolation=name != STORE))
-        for name in [STORE, STORE_NAME, BINDING_STORE, CHAT_STORE, "function_approvals", "agent_sessions"]
+        name: asyncio.run(FoundryStateStore.get_or_create(name, user_isolation=name not in {STORE, CHANNEL_STORE}))
+        for name in [
+            STORE, CHANNEL_STORE, STORE_NAME, BINDING_STORE, CHAT_STORE, "function_approvals", "agent_sessions",
+        ]
     }
 
     async def get_store(name, **kwargs):
-        assert kwargs["user_isolation"] == (name != STORE)
+        assert kwargs["user_isolation"] == (name not in {STORE, CHANNEL_STORE})
         return stores[name]
 
     monkeypatch.setattr(FoundryStateStore, "get_or_create", get_store)

@@ -28,6 +28,7 @@ from contracts.wiki import WikiETag, WikiSnapshot
 
 from .agent import request_text
 from .approval_common import ApprovalAgentBase, approval_decision, canonical_hash
+from .channel_policy import SharedReviewScope
 
 LOGGER = logging.getLogger(__name__)
 STORE_NAME = "documentation-tool-approvals-v1"
@@ -143,7 +144,7 @@ ARGUMENTS: TypeAdapter[dict[str, JsonValue]] = TypeAdapter(dict[str, JsonValue])
 
 class PendingCall(ContractModel):
     interface_version: Literal["1.0.0"] = "1.0.0"
-    runtime_version: Literal["0.5.0", "0.6.0"] = "0.6.0"
+    runtime_version: Literal["0.5.0", "0.6.0", "0.7.0"] = "0.6.0"
     pending_id: UUID = Field(default_factory=uuid4)
     call_id: UUID = Field(default_factory=uuid4)
     run_id: UUID
@@ -167,6 +168,9 @@ class PendingCall(ContractModel):
     replacement_id: UUID | None = None
     completed_at: datetime | None = None
     result: dict[str, Any] | None = None
+    shared_scope: SharedReviewScope | None = None
+    decided_by_aad_id: UUID | None = None
+    membership_checked_at: datetime | None = None
 
     def approval(self) -> Content:
         return Content.from_function_approval_request(
@@ -462,7 +466,8 @@ class ToolApprovalAgent(ApprovalAgentBase):
             return replacement.output()
 
     async def decide(
-        self, store: FoundryStateStore, decision: Content, actor: str, session_id: str
+        self, store: FoundryStateStore, decision: Content, actor: str, session_id: str,
+        *, authorize_shared: Callable[[PendingCall], Awaitable[None]] | None = None,
     ) -> list[Content]:
         if not isinstance(decision.id, str) or type(decision.approved) is not bool:
             raise ValueError("Malformed native approval response.")
@@ -470,7 +475,14 @@ class ToolApprovalAgent(ApprovalAgentBase):
         if item is None:
             raise ValueError("Unknown approval request.")
         record = PendingCall.model_validate(item.value)
-        self.check_owner(record.model_dump(), actor, session_id)
+        if authorize_shared is None:
+            if record.shared_scope is not None:
+                raise ValueError("Shared channel decisions require the verified Teams channel handler.")
+            self.check_owner(record.model_dump(), actor, session_id)
+        else:
+            # Only the channel adapter supplies this callback and a separate shared
+            # store. It checks current membership and the exact stored thread.
+            await authorize_shared(record)
         self.check_pending(record.model_dump())
         self.check_record(record)
         call = decision.function_call
@@ -509,6 +521,11 @@ class ToolApprovalAgent(ApprovalAgentBase):
                 await self.verify_wiki(record, after_write=False)
             if record.expires_at <= datetime.now(UTC):
                 raise ValueError("Approval expired during tool discovery; create a new proposal.")
+            if authorize_shared is not None:
+                # Membership can change while tool/schema/wiki reads are in flight.
+                await authorize_shared(record)
+                if record.expires_at <= datetime.now(UTC):
+                    raise ValueError("Approval expired during membership verification.")
             record.status = "executing"
             claimed = await self.replace(store, str(record.pending_id), record.model_dump(mode="json"), item.etag)
             try:
