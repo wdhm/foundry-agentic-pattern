@@ -1,8 +1,10 @@
 """Opt-in Activity adapter for personal Teams approvals; no model or tool bypass."""
 
+import asyncio
 import json
 import logging
 import os
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 from uuid import UUID
 
@@ -12,7 +14,7 @@ from azure.ai.agentserver.activity import ActivityAgentServerHost
 from azure.ai.agentserver.core import get_request_context
 from azure.ai.agentserver.core.storage import FoundryStateStore
 from azure.ai.agentserver.invocations import InvocationAgentServerHost
-from microsoft_agents.activity import Activity, Attachment
+from microsoft_agents.activity import Activity, Attachment, ResourceResponse
 from microsoft_agents.hosting.core import TurnContext, TurnState
 from pydantic import Field, ValidationError, model_validator
 from starlette.requests import Request
@@ -21,6 +23,8 @@ from starlette.responses import JSONResponse, Response
 from contracts.models import ContractModel, NonBlank
 
 from .approval import COMMAND, InspectCall, PendingCall, ProposeCall, ProposeResult, ToolApprovalAgent
+from .channel_policy import SharedReviewScope, TeamsChannelPolicy
+from .channel_reviews import ChannelReviews, MemberCheck
 from .conversation import ConversationRouter, ConversationService, structured_command
 from .teams_card import CARD_TYPE, card, review_card, text
 
@@ -49,22 +53,32 @@ class CardAction(ContractModel):
         return self
 
 
+class EnableChannelNotifications(ContractModel):
+    interface_version: Literal["1.0.0"]
+    action: Literal["enable_channel_notifications"]
+
+
 class ChannelBinding(ContractModel):
     tenant_id: UUID
     aad_object_id: UUID
     conversation_id: NonBlank
     platform_session_id: NonBlank
     owner: NonBlank
+    shared_scope: SharedReviewScope | None = None
 
 
 class TeamsApproval:
     def __init__(
         self, agent: ToolApprovalAgent, tenant_id: UUID, conversation: ConversationService | None = None,
+        channel_policy: TeamsChannelPolicy | None = None,
     ) -> None:
         self.agent = agent
         self.tenant_id = tenant_id
         self.conversation = conversation
         self.push_flow: PushFlow | None = None
+        if channel_policy is not None and channel_policy.tenant_id != tenant_id:
+            raise ValueError("Channel review policy must use the configured Teams tenant.")
+        self.channels = ChannelReviews(self, channel_policy) if channel_policy else None
 
     def binding(self, activity: Activity) -> ChannelBinding:
         platform = get_request_context()
@@ -80,7 +94,7 @@ class TeamsApproval:
         sender = activity.from_property
         if (
             conversation is None
-            or conversation.conversation_type != "personal"
+            or conversation.conversation_type not in {"personal", "channel"}
             or not conversation.id
             or sender is None
             or not sender.aad_object_id
@@ -93,15 +107,23 @@ class TeamsApproval:
             raise ValueError("Teams tenant does not match the configured tenant.")
         if conversation.tenant_id and UUID(conversation.tenant_id) != self.tenant_id:
             raise ValueError("Conversation tenant does not match the configured tenant.")
+        shared_scope = None
+        if conversation.conversation_type == "channel":
+            if self.channels is None:
+                raise ValueError("Channel reviews are not enabled; use a personal Teams chat.")
+            shared_scope = self.channels.policy.scope(activity)
         return ChannelBinding(
             tenant_id=self.tenant_id,
             aad_object_id=UUID(sender.aad_object_id),
             conversation_id=conversation.id,
             platform_session_id=platform.session_id,
             owner=self.agent.actor(),
+            shared_scope=shared_scope,
         )
 
     async def record(self, pending_id: UUID, binding: ChannelBinding) -> PendingCall:
+        if binding.shared_scope is not None and self.channels is not None:
+            return await self.channels.record(pending_id, binding)
         response = await self.agent.execute(
             InspectCall(action="inspect", pending_id=pending_id).model_dump_json(),
             AgentSession(session_id=binding.platform_session_id),
@@ -109,23 +131,108 @@ class TeamsApproval:
         return PendingCall.model_validate_json(response[0].text or "")
 
     async def save_binding(self, record: PendingCall, binding: ChannelBinding) -> None:
+        if binding.shared_scope is not None and self.channels is not None:
+            self.channels.authorize(binding, record)
+            return
         store = await FoundryStateStore.get_or_create(BINDING_STORE, user_isolation=True)
         async with store:
             await store.create_item(str(record.pending_id), binding.model_dump(mode="json"))
 
     async def check_binding(self, pending_id: UUID, binding: ChannelBinding) -> None:
+        if binding.shared_scope is not None and self.channels is not None:
+            await self.channels.record(pending_id, binding)
+            return
         store = await FoundryStateStore.get_or_create(BINDING_STORE, user_isolation=True)
         async with store:
             stored = await store.get_item(str(pending_id))
             if stored is None or ChannelBinding.model_validate(stored.value) != binding:
                 raise ValueError("This card belongs to another user, conversation or session, or predates Teams cards.")
 
+    async def verify_member(self, context: TurnContext, expected: ChannelBinding) -> None:
+        from microsoft_agents.hosting.core.connector import ConnectorClientBase, TeamsConnectorClient
+
+        if self.binding(context.activity) != expected:
+            raise ValueError("Teams member lookup context differs from the acting user or channel.")
+        sender = context.activity.from_property
+        conversation = context.activity.conversation
+        if sender is None or not sender.id or conversation is None or not conversation.id:
+            raise ValueError("Current channel membership cannot be verified without sender/conversation IDs.")
+        # The SDK registers this service under its abstract base-class key.
+        connector = context.services.get(ConnectorClientBase)  # type: ignore[type-abstract]
+        if connector is None:
+            raise ValueError("Teams membership service is unavailable; no decision can be authorized.")
+        async with asyncio.timeout(20):
+            if expected.shared_scope is None or not isinstance(connector, TeamsConnectorClient):
+                raise ValueError("Teams channel metadata service is unavailable; no decision can be authorized.")
+            scope = expected.shared_scope
+            channels = await connector.fetch_channel_list(scope.team_id)
+            matches = [channel for channel in channels if channel.id == scope.channel_id]
+            if len(matches) != 1:
+                raise ValueError("Configured channel was not uniquely confirmed by the Teams bot.")
+            kind = matches[0].type
+            # Teams documents that the General channel ID equals the team ID.
+            # Otherwise require an explicit standard-channel type from the service.
+            if (
+                kind is not None and kind.lower() != "standard"
+                or kind is None and scope.channel_id != scope.team_id
+            ):
+                raise ValueError("Approvals require a verified standard channel; channel type was not confirmed.")
+            member = await connector.conversations.get_conversation_member(conversation.id, sender.id)
+        if (
+            member.id != sender.id or not member.aad_object_id
+            or UUID(member.aad_object_id) != expected.aad_object_id
+        ):
+            raise ValueError("Teams roster does not confirm the acting user's current membership.")
+
+    async def resolve_channel_team(self, context: TurnContext) -> None:
+        """Fill only missing team metadata from the authenticated bot connector."""
+        from microsoft_agents.hosting.core.connector import ConnectorClientBase, TeamsConnectorClient
+
+        if self.channels is None or self.channels.policy.team_aad_group_id is None:
+            return
+        activity = context.activity
+        data = activity.channel_data
+        if not isinstance(data, dict):
+            raise ValueError("Teams channel metadata is missing.")
+        team, channel, tenant = (data.get(key) for key in ("team", "channel", "tenant"))
+        if not isinstance(team, dict) or not isinstance(channel, dict) or not isinstance(tenant, dict):
+            raise ValueError("Teams channel metadata has an invalid shape.")
+        if (
+            tenant.get("id") != str(self.tenant_id)
+            or channel.get("id") != self.channels.policy.channel_id
+            or not isinstance(team.get("id"), str) or not team["id"]
+        ):
+            raise ValueError("Team lookup is restricted to the configured tenant and channel.")
+        if team.get("aadGroupId"):
+            return  # A conflicting supplied value is rejected by binding, never overwritten.
+        platform = get_request_context()
+        if (
+            not os.environ.get("FOUNDRY_HOSTING_ENVIRONMENT") or not platform.user_id
+            or not platform.call_id or not platform.session_id or str(activity.channel_id) != "msteams"
+        ):
+            raise ValueError("Team lookup requires an authenticated Teams platform request.")
+        connector = context.services.get(ConnectorClientBase)  # type: ignore[type-abstract]
+        if not isinstance(connector, TeamsConnectorClient):
+            raise ValueError("Teams team metadata service is unavailable; cannot verify the channel.")
+        async with asyncio.timeout(20):
+            details = await connector.fetch_team_details(team["id"])
+        if (
+            details.id != team["id"] or not details.aad_group_id
+            or UUID(details.aad_group_id) != self.channels.policy.team_aad_group_id
+        ):
+            raise ValueError("The bot's team lookup does not match the configured Entra group.")
+        # Identity still comes from the signed turn. Only service-confirmed team
+        # metadata is filled; user/card fields never supply the missing group.
+        activity.channel_data = {**data, "team": {**team, "aadGroupId": details.aad_group_id}}
+
     async def render(self, record: PendingCall) -> dict[str, Any]:
         if self.push_flow is not None:
             return await self.push_flow.render_pending(record)
         return review_card(record, self.agent.policy.content_parameter)
 
-    async def handle(self, activity: Activity) -> dict[str, Any] | str:
+    async def handle(
+        self, activity: Activity, *, member_check: MemberCheck | None = None,
+    ) -> dict[str, Any] | str:
         binding = self.binding(activity)
         session = AgentSession(session_id=binding.platform_session_id)
         if activity.value is not None:
@@ -133,6 +240,8 @@ class TeamsApproval:
                 submitted = CardAction.model_validate(activity.value)
             except ValidationError:
                 raise ValueError("Invalid card action. Reopen the proposal and use its buttons.") from None
+            if binding.shared_scope is not None and self.channels is not None:
+                return await self.channels.handle(submitted, binding, member_check=member_check)
             await self.check_binding(submitted.pending_id, binding)
             record = await self.record(submitted.pending_id, binding)
             if record.args_hash != submitted.args_hash:
@@ -176,6 +285,15 @@ class TeamsApproval:
 
         message = (activity.text or "").strip()
         if message.lower() in {"", "help", "start", "hej", "hi"}:
+            actions = []
+            if (
+                binding.shared_scope is not None and self.channels is not None
+                and self.channels.policy.show_decisions(binding.aad_object_id)
+            ):
+                actions.append({
+                    "type": "Action.Submit", "title": "Enable channel notifications", "associatedInputs": "none",
+                    "data": {"interface_version": "1.0.0", "action": "enable_channel_notifications"},
+                })
             return card([
                 text("Documentation approval", weight="Bolder", size="Medium"),
                 text("Review a proposed tool call, then Approve, Modify or Reject. Opening a card never writes."),
@@ -191,10 +309,13 @@ class TeamsApproval:
                     )
                 ),
                 *(
+                    [text("Channel reviews: @mention me with enable notifications in the configured channel. "
+                          "The configured reviewer rule is checked before enabling notifications or deciding.")]
+                    if binding.shared_scope is not None else
                     [text("For repository notifications, send connect repo once in this personal chat.")]
                     if self.push_flow is not None else []
                 ),
-            ])
+            ], actions)
         pending_id = None
         if message.startswith("show "):
             try:
@@ -204,12 +325,25 @@ class TeamsApproval:
                     raise
         if pending_id is not None:
             await self.check_binding(pending_id, binding)
-            return await self.render(await self.record(pending_id, binding))
-        if self.conversation is not None and not structured_command(message):
-            return await self.conversation.answer(
-                message, owner=binding.owner, session_id=binding.platform_session_id,
-                channel=f"teams:{binding.tenant_id}:{binding.aad_object_id}:{binding.conversation_id}",
+            pending = await self.record(pending_id, binding)
+            return (
+                await self.channels.render(pending, binding) if binding.shared_scope and self.channels
+                else await self.render(pending)
             )
+        if self.conversation is not None and not structured_command(message):
+            conversation = self.conversation
+            if binding.shared_scope is not None and self.push_flow is not None:
+                conversation = await self.push_flow.channel_conversation(binding, conversation)
+            return await conversation.answer(
+                message, owner=binding.owner, session_id=binding.platform_session_id,
+                channel=(
+                    f"teams:{binding.tenant_id}:{binding.aad_object_id}:{binding.shared_scope.model_dump_json()}"
+                    if binding.shared_scope else
+                    f"teams:{binding.tenant_id}:{binding.aad_object_id}:{binding.conversation_id}"
+                ),
+            )
+        if binding.shared_scope is not None:
+            raise ValueError("Channel proposals come from merged-PR reviews, not pasted approval commands.")
         try:
             command = COMMAND.validate_json(message)
         except ValidationError:
@@ -235,20 +369,25 @@ class PushTeamsHost(InvocationAgentServerHost, TeamsResponsesHost):
 
 def create_teams_server(
     agent: ToolApprovalAgent, *, conversation: ConversationService | None = None,
+    channel_policy: TeamsChannelPolicy | None = None,
 ) -> TeamsResponsesHost:
     if os.environ.get("DOCUMENTATION_ENABLE_TEAMS") != "true":
         raise ValueError("Teams requires explicit DOCUMENTATION_ENABLE_TEAMS=true.")
     tenant = os.environ.get("DOCUMENTATION_TEAMS_TENANT_ID")
     if not tenant:
         raise ValueError("Teams requires DOCUMENTATION_TEAMS_TENANT_ID.")
-    handler = TeamsApproval(agent, UUID(tenant), conversation)
+    channel_policy = channel_policy or TeamsChannelPolicy.from_environment()
+    handler = TeamsApproval(agent, UUID(tenant), conversation, channel_policy)
     enabled = os.environ.get("DOCUMENTATION_ENABLE_PUSH_FLOW") == "true"
+    if channel_policy is not None and not enabled:
+        raise ValueError("Channel reviews require the merged-PR push flow.")
     responses_agent = ConversationRouter(agent, conversation) if conversation is not None else agent
     host = (PushTeamsHost if enabled else TeamsResponsesHost)(agent=responses_agent, history_source="agent")
     if enabled:
         from microsoft_agents.activity import ConversationReference
 
         from .assessment import AssessmentAgent
+        from .channel_delivery import create_channel_post
         from .draft_reader import ToolboxDraftReader
         from .push_flow import PushFlow, PushPolicy, PushPreflight, PushRequest, ReviewAction
         from .settings import AssessmentSettings
@@ -265,7 +404,10 @@ def create_teams_server(
         if settings.ado_organization != repo.organization or settings.ado_project != repo.project:
             raise ValueError("Push repository must match the assessment organization/project.")
 
-        async def notify(reference: ConversationReference, output: dict[str, Any]) -> None:
+        async def notify(
+            reference: ConversationReference, output: dict[str, Any],
+            channel_scope: SharedReviewScope | None = None,
+        ) -> SharedReviewScope | None:
             app_id = os.environ.get("FOUNDRY_AGENT_INSTANCE_CLIENT_ID")
             if not app_id:
                 raise ValueError("Foundry instance identity is required for proactive Teams delivery.")
@@ -279,7 +421,23 @@ def create_teams_server(
             adapter = host.adapter
             if adapter is None:
                 raise ValueError("Activity adapter is not configured.")
+            if reference.conversation is not None and reference.conversation.conversation_type == "channel":
+                if channel_policy is None or channel_scope is None:
+                    raise ValueError("Channel notifications require an explicit channel policy.")
+                channel_policy.require_scope(channel_scope)
+                result: SharedReviewScope | None = None
+
+                async def created(context: TurnContext) -> None:
+                    nonlocal result
+                    async with asyncio.timeout(60):
+                        result = await create_channel_post(context, channel_scope, output)
+
+                await adapter.continue_conversation(app_id, reference.get_continuation_activity(), created)
+                if result is None:
+                    raise ValueError("Channel notification outcome is unknown; inspect before any retry.")
+                return result
             await adapter.continue_conversation(app_id, reference.get_continuation_activity(), send)
+            return None
 
         draft_reader = (
             ToolboxDraftReader(settings) if policy.merged_pr_drafts and policy.draft_storage == "git_branch" else None
@@ -337,20 +495,64 @@ def create_teams_server(
         # invoke. A retried delivery still goes through the runtime's atomic claim.
         try:
             activity = context.activity
+            member_check: MemberCheck | None = None
+            if activity.conversation is not None and activity.conversation.conversation_type == "channel":
+                await handler.resolve_channel_team(context)
+                binding = handler.binding(activity)
+                scope = binding.shared_scope
+                if scope is None:
+                    raise ValueError("Channel thread identity is missing.")
+
+                async def thread_replies(
+                    turn: TurnContext, activities: list[Activity],
+                    send: Callable[[], Awaitable[list[ResourceResponse]]],
+                ) -> list[ResourceResponse]:
+                    # The SDK applies its own reply_to_id after send_activity.
+                    # This public send hook runs after that mapping.
+                    for outgoing in activities:
+                        outgoing.reply_to_id = scope.thread_id
+                    return await send()
+
+                context.on_send_activities(thread_replies)
+
+                async def current_member(expected: ChannelBinding) -> None:
+                    await handler.verify_member(context, expected)
+
+                member_check = current_member
+                # Teams delivers ordinary channel messages on @mention. Remove
+                # only this bot's mention, never infer identity from message text.
+                activity.text = TurnContext.remove_recipient_mention(activity)
             flow = handler.push_flow
             output: dict[str, Any] | str
-            if flow is not None and (activity.text or "").strip().lower() == "connect repo" and activity.value is None:
-                output = await flow.register(activity)
+            if (
+                flow is not None and (activity.text or "").strip().lower() in {"connect repo", "enable notifications"}
+                and activity.value is None
+            ):
+                output = await flow.register(activity, member_check=member_check)
+            elif (
+                flow is not None and isinstance(activity.value, dict)
+                and activity.value.get("action") == "enable_channel_notifications"
+            ):
+                EnableChannelNotifications.model_validate(activity.value)
+                if handler.channels is None or handler.binding(activity).shared_scope is None:
+                    raise ValueError("Enable channel notifications from the configured channel.")
+                output = await flow.register(activity, member_check=member_check)
             elif (
                 flow is not None and isinstance(activity.value, dict)
                 and activity.value.get("action") == "review_push"
             ):
                 review = ReviewAction.model_validate(activity.value)
                 output = await flow.open_review(activity, review.event_id)
+            elif (
+                flow is not None and activity.value is None
+                and (activity.text or "").strip().startswith("retry notification ")
+            ):
+                event_id = UUID((activity.text or "").strip().removeprefix("retry notification ").strip())
+                output = await flow.retry_channel_notification(activity, event_id, member_check=member_check)
             elif flow is not None and activity.value is None and (activity.text or "").startswith("review "):
                 output = await flow.open_review(activity, UUID((activity.text or "").removeprefix("review ").strip()))
             else:
-                output = await handler.handle(activity)
+                output = await handler.handle(activity, member_check=member_check)
         except ValidationError:
             LOGGER.warning("Teams approval request failed schema validation.")
             await context.send_activity(

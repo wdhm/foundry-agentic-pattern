@@ -92,6 +92,14 @@ It does **not** invoke `doc-agent` or forward to another prompt agent.
 
 ## Optional conversational Toolbox path
 
+Optional [shared channel reviews](TEAMS_APPROVAL.md#shared-channel-reviews)
+add channel-thread notifications, discussion and multi-person decisions using
+either live channel membership (the selected demo rule) or an explicit allowlist.
+They are separately disabled by default and require a reviewed channel policy.
+The authorized v32 rollout has demonstrated a merged PR, proactive channel card,
+one human approval and exact published-wiki readback. A second human reviewer
+and the slow Teams acknowledgement UX remain follow-up work; see the linked evidence.
+
 Approval mode can also handle ordinary questions in Teams and Responses with
 `DOCUMENTATION_ENABLE_CHAT=true`. The same hosted application runs a conversational
 Agent Framework model/tool loop; a separate prompt agent is not needed. Replies
