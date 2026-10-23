@@ -5,14 +5,16 @@
     exposed to a Foundry agent as an MCP tool. Idempotent.
 
 .DESCRIPTION
-    MVP setup (ADR 0022): a search index knowledge source, minimal retrieval effort, so no embedding or chat model is
-    needed. Automates the steps in docs/workshop/foundry-iq-guide.md.
+    A search index knowledge source and a knowledge base with low retrieval effort: the chat model (shared with the
+    evaluator, eval-gpt-5.4-mini) plans the query from the retrieval instructions. No embedding model is needed.
+    Automates the steps in docs/workshop/foundry-iq-guide.md.
 
       1. Creates the Azure AI Search service (Basic, system-assigned identity, Entra auth) if it doesn't exist.
       2. Assigns roles: you get Search Service Contributor + Search Index Data Contributor,
-         the Foundry project's managed identity gets Search Index Data Reader.
+         the Foundry project's managed identity gets Search Index Data Reader,
+         the search service's managed identity gets Cognitive Services User on the Foundry account (query planning).
       3. Creates the index and uploads data/knowledge/*.md, one document per '## ' section.
-      4. Creates the knowledge source (kind searchIndex) and the knowledge base (minimal effort, extractive data).
+      4. Creates the knowledge source (kind searchIndex) and the knowledge base (low effort, chat model, retrieval instructions, extractive data).
       5. Creates the project connection (RemoteTool, ProjectManagedIdentity) to the knowledge base MCP endpoint.
       6. If -AgentName is given: creates a new agent version with the knowledge_base_retrieve MCP tool added.
 
@@ -34,6 +36,8 @@ param(
     [string]$KnowledgeSource = 'ks-doc-knowledge',
     [string]$KnowledgeBase = 'kb-doc-agent',
     [string]$ConnectionName = 'kb-doc-agent-mcp',
+    [string]$ModelDeployment = 'eval-gpt-5.4-mini',
+    [string]$ModelName = 'gpt-5.4-mini',
     [string]$ContentPath = (Join-Path $PSScriptRoot '../../data/knowledge'),
     [string]$SourceUrlBase = 'https://github.com/wdhm/foundry-agentic-pattern/blob/main/data/knowledge'
 )
@@ -100,6 +104,8 @@ if (-not $projectPrincipal) { throw "Project $Project has no system-assigned man
 Set-Role $me 'User' 'Search Service Contributor' $search.id
 Set-Role $me 'User' 'Search Index Data Contributor' $search.id
 Set-Role $projectPrincipal 'ServicePrincipal' 'Search Index Data Reader' $search.id
+$foundryId = az cognitiveservices account show -g $ResourceGroup -n $FoundryAccount --query id -o tsv
+Set-Role $search.identity.principalId 'ServicePrincipal' 'Cognitive Services User' $foundryId
 
 $searchToken = Get-Token 'https://search.azure.com'
 
@@ -146,10 +152,26 @@ Invoke-Api POST "$searchEndpoint/indexes/$IndexName/docs/index?api-version=$Sear
 Done "uploaded $(@($docs).Count) sections"
 
 Step "4. Knowledge source '$KnowledgeSource' + knowledge base '$KnowledgeBase'"
+# Shown in the Foundry portal (Knowledge). Say what is indexed, where it comes from and why it is indexed.
+$sourceDescription = "Azure AI Search index '$IndexName'. Content: the Integration Documentation Standard " +
+    "(rules DS-01 to DS-31), from data/knowledge/*.md in the GitHub repo wdhm/foundry-agentic-pattern. " +
+    "setup-foundry-iq.ps1 pushes it into the index, one document per '## ' section with title, content, " +
+    "source file and a GitHub URL for citations. Push model, no indexer: re-run the script after changing the files."
+$kbDescription = 'Foundry IQ knowledge base for the Documentation Agent. It holds the Integration Documentation ' +
+    'Standard: the rules every integration wiki page must follow (required sections, evidence, freshness and drift). ' +
+    'The rules are written in data/knowledge/ in the GitHub repo and pushed into Azure AI Search by ' +
+    'setup-foundry-iq.ps1. They are indexed because they change rarely and every assessment cites them by rule ID. ' +
+    'Volatile facts (code, configuration, wiki pages, work items) are not indexed; the agent reads them live ' +
+    'through its toolbox (ADR 0011).'
+$retrievalInstructions = "Use $KnowledgeSource for questions about how integration documentation must be " +
+    'written: required wiki sections, evidence and citation rules, missing information, change log, freshness and ' +
+    'drift between code and docs. Return the matching rules with their rule IDs (DS-xx). The source holds rules, ' +
+    'not facts about a specific integration: never use it to answer what an integration does, how it is configured ' +
+    'or what its wiki page says.'
 Invoke-Api PUT "$searchEndpoint/knowledgesources/${KnowledgeSource}?api-version=$SearchApi" $searchToken @{
     name                  = $KnowledgeSource
     kind                  = 'searchIndex'
-    description           = 'Documentation standard and other stable knowledge for the Documentation Agent.'
+    description           = $sourceDescription
     searchIndexParameters = @{
         searchIndexName  = $IndexName
         sourceDataFields = @(@{ name = 'title' }, @{ name = 'source' }, @{ name = 'url' })
@@ -157,10 +179,19 @@ Invoke-Api PUT "$searchEndpoint/knowledgesources/${KnowledgeSource}?api-version=
 } | Out-Null
 Invoke-Api PUT "$searchEndpoint/knowledgebases/${KnowledgeBase}?api-version=$SearchApi" $searchToken @{
     name                     = $KnowledgeBase
-    description              = 'Stable knowledge for the Documentation Agent: the documentation standard.'
+    description              = $kbDescription
+    retrievalInstructions    = $retrievalInstructions
     knowledgeSources         = @(@{ name = $KnowledgeSource })
+    models                   = @(@{
+            kind                  = 'azureOpenAI'
+            azureOpenAIParameters = @{
+                resourceUri  = "https://$($FoundryAccount.ToLower()).openai.azure.com"
+                deploymentId = $ModelDeployment
+                modelName    = $ModelName
+            }
+        })
     outputMode               = 'extractiveData'
-    retrievalReasoningEffort = @{ kind = 'minimal' }
+    retrievalReasoningEffort = @{ kind = 'low' }
 } | Out-Null
 $mcpEndpoint = "$searchEndpoint/knowledgebases/$KnowledgeBase/mcp?api-version=$SearchApi"
 Done $mcpEndpoint
