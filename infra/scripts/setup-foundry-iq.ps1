@@ -146,10 +146,21 @@ Invoke-Api POST "$searchEndpoint/indexes/$IndexName/docs/index?api-version=$Sear
 Done "uploaded $(@($docs).Count) sections"
 
 Step "4. Knowledge source '$KnowledgeSource' + knowledge base '$KnowledgeBase'"
+# Shown in the Foundry portal (Knowledge). Say what is indexed, where it comes from and why it is indexed.
+$sourceDescription = "Azure AI Search index '$IndexName'. Content: the Integration Documentation Standard " +
+    "(rules DS-01 to DS-31), from data/knowledge/*.md in the GitHub repo wdhm/foundry-agentic-pattern. " +
+    "setup-foundry-iq.ps1 pushes it into the index, one document per '## ' section with title, content, " +
+    "source file and a GitHub URL for citations. Push model, no indexer: re-run the script after changing the files."
+$kbDescription = 'Foundry IQ knowledge base for the Documentation Agent. It holds the Integration Documentation ' +
+    'Standard: the rules every integration wiki page must follow (required sections, evidence, freshness and drift). ' +
+    'The rules are written in data/knowledge/ in the GitHub repo and pushed into Azure AI Search by ' +
+    'setup-foundry-iq.ps1. They are indexed because they change rarely and every assessment cites them by rule ID. ' +
+    'Volatile facts (code, configuration, wiki pages, work items) are not indexed; the agent reads them live ' +
+    'through its toolbox (ADR 0011).'
 Invoke-Api PUT "$searchEndpoint/knowledgesources/${KnowledgeSource}?api-version=$SearchApi" $searchToken @{
     name                  = $KnowledgeSource
     kind                  = 'searchIndex'
-    description           = 'Documentation standard and other stable knowledge for the Documentation Agent.'
+    description           = $sourceDescription
     searchIndexParameters = @{
         searchIndexName  = $IndexName
         sourceDataFields = @(@{ name = 'title' }, @{ name = 'source' }, @{ name = 'url' })
@@ -157,7 +168,7 @@ Invoke-Api PUT "$searchEndpoint/knowledgesources/${KnowledgeSource}?api-version=
 } | Out-Null
 Invoke-Api PUT "$searchEndpoint/knowledgebases/${KnowledgeBase}?api-version=$SearchApi" $searchToken @{
     name                     = $KnowledgeBase
-    description              = 'Stable knowledge for the Documentation Agent: the documentation standard.'
+    description              = $kbDescription
     knowledgeSources         = @(@{ name = $KnowledgeSource })
     outputMode               = 'extractiveData'
     retrievalReasoningEffort = @{ kind = 'minimal' }
