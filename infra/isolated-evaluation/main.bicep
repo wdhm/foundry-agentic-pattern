@@ -145,6 +145,35 @@ resource projectAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' 
   }
 }
 
+resource runnerProjectStorageRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' = {
+  name: guid(resourceGroup().id, 'isolated-eval-project-storage')
+  properties: {
+    roleName: 'Isolated Evaluation Project Storage ${uniqueString(resourceGroup().id)}'
+    description: 'Documented project inference prerequisite hypothesis; child read/write patterns exceed storage only.'
+    type: 'CustomRole'
+    assignableScopes: [resourceGroup().id]
+    permissions: [{
+      actions: []
+      notActions: []
+      dataActions: [
+        'Microsoft.CognitiveServices/accounts/AIServices/agents/*/read'
+        'Microsoft.CognitiveServices/accounts/AIServices/agents/*/write'
+      ]
+      notDataActions: []
+    }]
+  }
+}
+
+resource runnerProjectStorageAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: project
+  name: guid(project.id, identity.id, runnerProjectStorageRole.id)
+  properties: {
+    principalId: identity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: runnerProjectStorageRole.id
+  }
+}
+
 output projectEndpoint string = 'https://${accountName}.services.ai.azure.com/api/projects/${projectName}'
 output accountResourceId string = account.id
 output projectResourceId string = project.id
