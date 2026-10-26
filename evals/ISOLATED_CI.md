@@ -186,3 +186,36 @@ earlier invocations remain separate evidence, not silently discarded or scored.
 Its exact instructions, including the fixed correction when used, are recorded
 and hashed in result provenance. All existing judges, thresholds, source checks,
 schema constraints and five-candidate limit remain unchanged.
+
+The CLI emits one `eval-loop diagnostics: { ... }` JSON line to stdout on exit,
+without publishing raw captures. Version 1 contains only closed stage/reason
+codes, exception class, terminal status, validated-suite coverage IDs and integer
+counters. It never includes model output, sources, excerpts, instructions,
+feedback, exception messages, endpoints or request bodies. Unknown exceptions
+retain their class and current stage with reason `unknown`; messages are not
+matched against known error text. Explicit local guards use typed operational
+errors, for example `case_result / incomplete_execution_or_unexpected_model`
+or `evidence_verification / evidence_repair_exhausted`.
+
+Counters are cumulative across candidates, except `attempt_completed_cases`,
+which resets when a candidate starts. `attempt_number` is the started candidate;
+`completed_candidates` increments only after evaluation and finite-rank
+validation. `completed_cases` counts cases whose final result, source checks and
+scorer row completed, not merely generated answers. `counted_model_requests`
+includes budget-rejected middleware entries; `dispatched_model_requests`
+counts SDK dispatch attempts including failed parsing/auth/transport, and
+`completed_model_requests` requires a captured response. Neither is a token or
+billing count; these model-request counters cover agent calls, with judge and
+optimizer calls counted separately. `repair_attempts` increments at the
+correction's first SDK dispatch, never inferred from output or instruction content.
+
+Judge group submission counts increment only after the run-create API returns;
+completion requires a successful remote terminal run, even if fetching its
+outputs later fails. An optional event-only observer in the existing evaluator
+supplies those boundaries; other release callers retain its unchanged default
+behavior. `judge_results_validated` counts valid case/metric results after local
+result-shape validation. Optimizer attempts increment at SDK call dispatch;
+completion requires completed status and nonempty guidance. Partial failures
+retain their actual counters, without inferring completed candidates or calls.
+No diagnostic artifact upload is added; raw publication still requires separate
+approval. A hard process kill can prevent the final stdout line.

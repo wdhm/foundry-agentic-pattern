@@ -8,9 +8,10 @@ import os
 import re
 import sys
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -19,6 +20,7 @@ from tools.cli import analysis_from_response, selected_provenance
 from tools.release_sources import evaluator_item, load_cases, verify_sources
 
 METRICS = {"groundedness": (1, 5), "task_adherence": (0, 1), "tool_call_accuracy": (1, 5)}
+EvaluationEvent = Literal["definition", "submission", "submitted", "completed", "failed"]
 
 
 class ReleasePlan(BaseModel):
@@ -132,7 +134,8 @@ class FoundryProject:
 
 class FoundryEvaluation(FoundryProject):
     def evaluate(
-        self, rows: list[dict[str, Any]], thresholds: dict[str, float], deployment: str, output: Path, group: str
+        self, rows: list[dict[str, Any]], thresholds: dict[str, float], deployment: str, output: Path, group: str,
+        *, on_event: Callable[[EvaluationEvent], None] | None = None,
     ) -> list[dict[str, Any]]:
         from azure.ai.projects.models import TestingCriterionAzureAIEvaluator
 
@@ -165,12 +168,16 @@ class FoundryEvaluation(FoundryProject):
             },
             "required": ["case_id", "query", "response", "context", "tool_calls", "tool_definitions"],
         }
+        if on_event is not None:
+            on_event("definition")
         evaluation = self.client.evals.create(
             name="documentation-release-" + group,
             data_source_config={"type": "custom", "item_schema": schema},
             testing_criteria=criteria,
         )
         save(output / f"{group}-evaluation.json", evaluation.model_dump())
+        if on_event is not None:
+            on_event("submission")
         run = self.client.evals.runs.create(
             eval_id=evaluation.id,
             name="documentation-release-" + group,
@@ -182,6 +189,8 @@ class FoundryEvaluation(FoundryProject):
                 },
             },
         )
+        if on_event is not None:
+            on_event("submitted")
         save(output / f"{group}-run.json", run.model_dump())
         deadline = time.monotonic() + 1200
         while run.status in {"queued", "in_progress"} and time.monotonic() < deadline:
@@ -189,7 +198,11 @@ class FoundryEvaluation(FoundryProject):
             run = self.client.evals.runs.retrieve(eval_id=evaluation.id, run_id=run.id)
             save(output / f"{group}-run.json", run.model_dump())
         if run.status != "completed" or run.error:
+            if on_event is not None:
+                on_event("failed")
             raise ValueError(f"Evaluation ended without success: {run.status}; run {run.id}.")
+        if on_event is not None:
+            on_event("completed")
         items = [
             item.model_dump() for item in self.client.evals.runs.output_items.list(eval_id=evaluation.id, run_id=run.id)
         ]
