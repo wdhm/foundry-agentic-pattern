@@ -212,6 +212,34 @@ REPAIR_INSTRUCTIONS = (
     "Do not invent missing facts or change the task."
 )
 
+SUPPLIED_OUTPUT_GUIDANCE = (
+    "\n\nCI supplied-output contract: "
+    "When proposed_changes is nonempty, set requires_human_review=true. "
+    "This flag requires human review; it never means approval has occurred. "
+    "Evidence IDs must be unique; every finding and proposed change needs nonempty evidence_refs "
+    "that resolve to IDs in evidence. "
+    "For documentation_status=up_to_date, evidence must be nonempty and findings, proposed_changes "
+    "and missing_information must all be empty. "
+    "For documentation_status=gaps_found, findings must be nonempty. "
+    "For documentation_status=insufficient_information, missing_information must be nonempty. "
+    "When an explicit task has unresolved missing_information, use insufficient_information. "
+    "For each evidence entry, copy source, uri and version unchanged from the same available source snapshot. "
+    "Copy excerpt as a short contiguous verbatim substring of that snapshot's content; do not paraphrase, "
+    "combine separated passages, insert ellipses or add line numbers not present in the source. "
+    "Do not substitute a source ID for its source type, URI or version. "
+    "Git versions are full 40-character commit SHAs; wiki versions are the supplied ETag/version; "
+    "work-item versions are the supplied positive revision. Never replace them with moving aliases. "
+    "Check these constraints before returning. If support is unavailable, report missing information "
+    "rather than inventing evidence or hiding an unresolved fact to claim up_to_date."
+)
+
+SUPPLIED_REPAIR_INSTRUCTIONS = (
+    REPAIR_INSTRUCTIONS
+    + " Recheck the CI supplied-output contract: proposed_changes requires requires_human_review=true; "
+    "copy source, uri and version unchanged from one available snapshot, and excerpt verbatim from its content. "
+    "Recheck the status-dependent arrays and all evidence_refs before returning."
+)
+
 
 async def candidate_with_repair(
     invoke: Callable[[bool], Awaitable[str]], check: Callable[[str], list[str]],
@@ -292,6 +320,12 @@ class SuppliedSettings(BaseModel):
     ado_project: str = Field(alias="DOCUMENTATION_ADO_PROJECT", min_length=1)
     ado_wiki: str = Field(alias="DOCUMENTATION_ADO_WIKI", min_length=1)
     auth_mode: Literal["azure_cli"] = Field(alias="DOCUMENTATION_AUTH_MODE")
+
+
+def ci_supplied_instructions(settings: AssessmentSettings | SuppliedSettings) -> str:
+    from documentation_agent.evaluation import supplied_instructions
+
+    return supplied_instructions(settings) + SUPPLIED_OUTPUT_GUIDANCE
 
 
 def runtime_settings(config: LoopConfig) -> AssessmentSettings | SuppliedSettings:
@@ -485,7 +519,7 @@ class LiveDemo:
         from azure.ai.projects.aio import AIProjectClient
         from azure.identity.aio import AzureCliCredential
         from documentation_agent.assessment import APP_DIR, APP_VERSION, AssessmentAgent
-        from documentation_agent.evaluation import supplied_check, supplied_instructions, verify_snapshots
+        from documentation_agent.evaluation import supplied_check, verify_snapshots
         from documentation_agent.execution import CaptureModel, messages_data
         from documentation_agent.read_policy import ReadOnlyPolicy, parse_read_result, read_tools
 
@@ -539,7 +573,7 @@ class LiveDemo:
             base = AssessmentAgent(self.settings) if isinstance(self.settings, AssessmentSettings) else None
             if live and base is None:
                 raise OperationalError(Stage.INPUT, Reason.LIVE_SETTINGS)
-            instructions = base.instructions if live and base is not None else supplied_instructions(self.settings)
+            instructions = base.instructions if live and base is not None else ci_supplied_instructions(self.settings)
             if candidate:
                 instructions += "\n\nAdditional evaluation-candidate guidance:\n" + candidate
             record = ExecutionRecord(
@@ -565,8 +599,9 @@ class LiveDemo:
                         nonlocal record, check
                         owner.telemetry.stage = Stage.INVOCATION
                         owner.telemetry.failure_reason = None
+                        repair = REPAIR_INSTRUCTIONS if live else SUPPLIED_REPAIR_INSTRUCTIONS
                         record = seed.model_copy(update={
-                            "instructions": instructions + (REPAIR_INSTRUCTIONS if correction else ""),
+                            "instructions": instructions + (repair if correction else ""),
                             "model_calls": [], "tool_calls": [],
                         })
                         guard = (
@@ -705,7 +740,6 @@ class LiveDemo:
     async def improve(self, candidate: str, feedback: dict[str, Any]) -> str:
         self.telemetry.stage = Stage.OPTIMIZER
         from documentation_agent.assessment import AssessmentAgent
-        from documentation_agent.evaluation import supplied_instructions
 
         from contracts.v1 import AnalysisOutput
 
@@ -715,7 +749,7 @@ class LiveDemo:
                     {"live_sources": AssessmentAgent(self.settings).instructions}
                     if isinstance(self.settings, AssessmentSettings) else {}
                 ),
-                "supplied_sources": supplied_instructions(self.settings),
+                "supplied_sources": ci_supplied_instructions(self.settings),
             },
             "current_guidance": candidate, "failures": feedback,
         }, allow_nan=False)
