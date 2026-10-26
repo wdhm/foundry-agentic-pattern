@@ -245,6 +245,40 @@ def deterministic(doc: Document) -> dict[str, Any]:
     }
 
 
+def overall_report(documents: list[dict[str, Any]]) -> dict[str, Any]:
+    coverage = {
+        kind: {
+            field: sum(doc["coverage"][kind][field] for doc in documents)
+            for field in ("applicable", "labeled", "unjudged", "skipped")
+        }
+        for kind in LABELS
+    }
+    metrics = {}
+    for metric in (
+        "supported_all_claims",
+        "supported_decidable_claims",
+        "contradiction_rate",
+        "unverifiable_rate",
+        "critical_recall",
+    ):
+        metrics[metric] = fraction(
+            sum(doc[metric]["numerator"] for doc in documents),
+            sum(doc[metric]["denominator"] for doc in documents),
+            complete=all(doc[metric]["status"] != "incomplete" for doc in documents),
+        )
+    checks = Counter(check["status"] for doc in documents for check in doc["deterministic_checks"].values())
+    return {
+        "aggregation": "micro",
+        "coverage": coverage,
+        **metrics,
+        "contradiction_count": metrics["contradiction_rate"]["numerator"],
+        "inapplicable_targets": [
+            {"case_id": doc["case_id"], **target} for doc in documents for target in doc["inapplicable_targets"]
+        ],
+        "deterministic_check_counts": {status: checks[status] for status in ("pass", "fail", "skip")},
+    }
+
+
 def report(dataset: Dataset, provenance: dict[str, Any], labels: Labels | None = None) -> dict[str, Any]:
     imported = label_rows(dataset, provenance, labels) if labels else {}
     expected = targets(dataset)
@@ -313,6 +347,7 @@ def report(dataset: Dataset, provenance: dict[str, Any], labels: Labels | None =
         "semantic_gates_enabled": False,
         "label_provenance": label_provenance(labels) if labels else None,
         "documents": documents,
+        "overall": overall_report(documents),
     }
 
 

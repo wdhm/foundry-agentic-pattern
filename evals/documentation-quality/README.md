@@ -114,6 +114,16 @@ likewise incomplete until all applicable facts are labeled. Once complete, an
 empty denominator yields `null` with `empty_denominator`, never zero or one.
 An empty claim/fact set therefore cannot manufacture a perfect score.
 
+The `overall` block micro-aggregates numerator and denominator counts across
+documents **before dividing**, never averages document rates. It includes all
+five metrics above, observed `contradiction_count`, summed per-kind coverage,
+case-qualified inapplicable targets and deterministic check pass/fail/skip
+counts. If any document has unjudged applicable claims (or facts), the
+corresponding overall claim rates (or recall) remain null/incomplete.
+Contradiction counts include only labeled contradictions; when coverage is
+incomplete they are not a claim about the unjudged targets. Empty denominators
+retain the same explicit semantics at the overall level.
+
 Calibration reports per-kind paired count, unpaired coverage, observed agreement,
 the full confusion matrix (**rows=human, columns=judge**) and unweighted Cohen's
 kappa. Kappa uses marginal expected agreement; no pairs yields null, and expected

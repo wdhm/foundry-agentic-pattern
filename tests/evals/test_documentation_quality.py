@@ -319,3 +319,103 @@ def test_cli_export_and_calibration_are_offline(inputs, tmp_path, monkeypatch, c
     assert output["calibration_state"] == "synthetic_regression_only"
     assert output["by_kind"]["claim"]["agreement"]["value"] == 1
     assert output["by_kind"]["claim"]["contradiction_sensitivity"]["status"] == "empty_denominator"
+
+
+def test_overall_micro_aggregation_mixed_sizes_and_skips(inputs):
+    dataset, provenance, _ = inputs
+    dataset = dataset.model_copy(deep=True)
+    dataset.documents[0].claims = dataset.documents[0].claims[:1]
+    labels = labels_for(
+        dataset,
+        provenance,
+        {
+            ("retry-draft", "claim", "attempts"): "contradicted",
+            ("stub-draft", "claim", "print-only"): "unverifiable",
+            ("retry-draft", "fact", "backoff"): "missing",
+        },
+    )
+    result = DQ.report(dataset, provenance, labels)
+    overall = result["overall"]
+    assert overall["aggregation"] == "micro"
+    assert overall["supported_all_claims"]["value"] == pytest.approx(3 / 5)
+    assert overall["supported_decidable_claims"]["value"] == pytest.approx(3 / 4)
+    assert overall["contradiction_count"] == 1
+    assert overall["contradiction_rate"]["value"] == pytest.approx(1 / 5)
+    assert overall["unverifiable_rate"]["value"] == pytest.approx(1 / 5)
+    assert overall["critical_recall"]["value"] == pytest.approx(9 / 10)
+    assert overall["coverage"]["claim"] == {"applicable": 5, "labeled": 5, "unjudged": 0, "skipped": 0}
+    assert overall["coverage"]["fact"] == {"applicable": 10, "labeled": 10, "unjudged": 0, "skipped": 1}
+    assert overall["coverage"]["document"] == {"applicable": 3, "labeled": 3, "unjudged": 0, "skipped": 0}
+    assert overall["inapplicable_targets"][0]["case_id"] == "version-draft"
+    assert overall["inapplicable_targets"][0]["target_id"] == "runtime-timeout"
+    assert overall["deterministic_check_counts"] == {"pass": 14, "fail": 0, "skip": 4}
+
+
+def test_overall_partial_labels_preserve_nulls_and_observed_counts(inputs):
+    dataset, provenance, _ = inputs
+    labels = labels_for(dataset, provenance, {("retry-draft", "claim", "attempts"): "contradicted"})
+    for row in labels.rows:
+        if (row.case_id, row.kind, row.target_id) == ("stub-draft", "fact", "queue"):
+            row.label = None
+    labels.rows = [
+        row for row in labels.rows if (row.case_id, row.kind, row.target_id) != ("retry-draft", "claim", "timeout")
+    ]
+    overall = DQ.report(dataset, provenance, labels)["overall"]
+    for metric in (
+        "supported_all_claims",
+        "supported_decidable_claims",
+        "contradiction_rate",
+        "unverifiable_rate",
+        "critical_recall",
+    ):
+        assert overall[metric]["status"] == "incomplete"
+        assert overall[metric]["value"] is None
+    assert overall["contradiction_count"] == 1
+    assert overall["coverage"]["claim"]["unjudged"] == 1
+    assert overall["coverage"]["fact"]["unjudged"] == 1
+    assert overall["coverage"]["fact"]["skipped"] == 1
+    assert overall["critical_recall"]["numerator"] == 9
+    assert overall["critical_recall"]["denominator"] == 10
+    unmeasured = DQ.report(dataset, provenance)["overall"]
+    assert unmeasured["supported_all_claims"]["status"] == "incomplete"
+    assert unmeasured["coverage"]["claim"]["unjudged"] == 6
+
+
+def test_overall_empty_and_undecidable_denominators(inputs):
+    dataset, provenance, _ = inputs
+    labels = labels_for(dataset, provenance)
+    for row in labels.rows:
+        if row.kind == "claim":
+            row.label = "unverifiable"
+    overall = DQ.report(dataset, provenance, labels)["overall"]
+    assert overall["supported_decidable_claims"] == {
+        "numerator": 0,
+        "denominator": 0,
+        "value": None,
+        "status": "empty_denominator",
+    }
+    assert overall["supported_all_claims"]["value"] == 0
+    assert overall["unverifiable_rate"]["value"] == 1
+    assert overall["critical_recall"]["value"] == 1
+    dataset = dataset.model_copy(deep=True)
+    for doc in dataset.documents:
+        doc.claims = []
+        doc.critical_facts = []
+    overall = DQ.report(dataset, provenance)["overall"]
+    for metric in (
+        "supported_all_claims",
+        "supported_decidable_claims",
+        "contradiction_rate",
+        "unverifiable_rate",
+        "critical_recall",
+    ):
+        assert overall[metric] == {"numerator": 0, "denominator": 0, "value": None, "status": "empty_denominator"}
+    assert overall["coverage"]["fact"] == {"applicable": 0, "labeled": 0, "unjudged": 0, "skipped": 0}
+
+
+def test_overall_deterministic_fail_counts(inputs):
+    dataset, provenance, _ = inputs
+    dataset = dataset.model_copy(deep=True)
+    dataset.documents[0].action = "write"
+    counts = DQ.report(dataset, provenance)["overall"]["deterministic_check_counts"]
+    assert counts == {"pass": 13, "fail": 1, "skip": 4}
