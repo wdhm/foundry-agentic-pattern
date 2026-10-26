@@ -6,7 +6,17 @@ from uuid import uuid4
 
 import pytest
 
-from tools.eval_loop import THRESHOLDS, LiveDemo, LoopConfig, http_failure, loop, main, quality, safe_failure
+from tools.eval_loop import (
+    THRESHOLDS,
+    LiveDemo,
+    LoopConfig,
+    http_failure,
+    loop,
+    main,
+    quality,
+    safe_failure,
+    schema_parse_failure,
+)
 
 
 @pytest.mark.parametrize("stage", ["setup", "evaluation"])
@@ -83,6 +93,29 @@ def test_http_failure_only_exposes_safe_metadata_through_sdk_wrapper():
 
 def test_http_failure_without_http_response_is_empty():
     assert http_failure(RuntimeError("local failure")) == {}
+
+
+def test_only_direct_sdk_analysis_parse_failure_is_repairable():
+    from agent_framework.exceptions import ChatClientException
+    from pydantic import ValidationError
+
+    schema = ValidationError.from_exception_data("AnalysisOutput", [])
+    wrapped = ChatClientException("redacted", schema)
+    assert not schema_parse_failure(wrapped)  # Arguments alone do not prove SDK parsing.
+    wrapped.__cause__ = schema
+    assert schema_parse_failure(wrapped)
+    wrapped.__cause__ = ValidationError.from_exception_data("Settings", [])
+    assert not schema_parse_failure(wrapped)
+    other = RuntimeError("operational failure")
+    other.__cause__ = schema
+    wrapped.__cause__ = other
+    assert not schema_parse_failure(wrapped)
+    wrapped.__cause__ = schema
+    http = RuntimeError("http")
+    http.status_code = 403
+    http.response = SimpleNamespace(headers={})
+    wrapped.__context__ = http
+    assert not schema_parse_failure(wrapped)
 
 
 def rows(score=3, passed=True):
@@ -353,13 +386,15 @@ def test_actual_agent_sdk_path_uses_new_guidance_and_bounded_fresh_calls(monkeyp
         NeverToolbox if mode == "supplied_sources_only" else Resource,
     )
     monkeypatch.setattr("agent_framework.foundry.FoundryChatClient", Transport)
+    # These transport doubles do not perform live reads; live evidence is tested separately.
+    monkeypatch.setattr("documentation_agent.assessment.AssessmentAgent.analysis_problems", lambda *args: [])
     monkeypatch.setattr("tools.hosted_evaluation.evaluator_row", row)
     demo = LiveDemo(config, SimpleNamespace(model_version=lambda _: "1", evaluate=evaluate))
     if failure and failure != "wrong-status":
         if failure == "budget":
             demo.calls = 100
         with pytest.raises(
-            ValueError, match="budget exhausted|Replayed model|Invalid JSON|supplied content|auth failure",
+            ValueError, match="budget exhausted|Replayed model|Invalid JSON|evidence verification|auth failure",
         ):
             asyncio.run(demo.evaluate("Do not infer facts.", tmp_path))
         if failure == "budget":
@@ -488,3 +523,169 @@ def test_reviewed_partial_configuration_needs_no_toolbox():
     assert config.model_copy(update={"mode": "full_suite"}).mode == "full_suite"
     with pytest.raises(ValueError, match="toolbox_endpoint"):
         runtime_settings(config.model_copy(update={"mode": "full_suite"}))
+
+
+@pytest.mark.parametrize("sequence", [
+    ("schema", "valid"), ("schema", "schema"), ("http",), ("timeout",),
+    ("schema", "evidence"), ("evidence", "schema"), ("evidence", "valid"),
+])
+def test_real_foundry_sdk_schema_repair_is_single_fresh_bounded_invocation(
+    monkeypatch, tmp_path, capsys, sequence,
+):
+    """Use real Foundry/OpenAI parsing over an offline HTTP transport, never a model service."""
+    import httpx
+    from openai import AsyncOpenAI
+
+    from tools.eval_loop import REPAIR_INSTRUCTIONS
+
+    requests, clients = [], []
+    secret = "SENSITIVE_INVALID_OUTPUT"
+
+    def handler(request):
+        body = json.loads(request.content)
+        requests.append(body)
+        assert body["store"] is False
+        assert not {"previous_response_id", "conversation"} & body.keys()
+        assert body["text"]["format"]["type"] == "json_schema"
+        assert body["text"]["format"]["strict"] is True
+        outcome = sequence[len(requests) - 1]
+        if outcome == "http":
+            return httpx.Response(403, json={"error": {"code": "Forbidden", "message": secret}})
+        if outcome == "timeout":
+            raise httpx.ReadTimeout(secret, request=request)
+        answer = {
+            "documentation_status": "insufficient_information", "findings": [], "proposed_changes": [],
+            "missing_information": [{"description": "Unknown.", "expected_source": "wiki"}],
+            "evidence": [], "confidence": 0.5, "requires_human_review": True,
+        }
+        if outcome == "schema":
+            answer.update(requires_human_review=False, proposed_changes=[{
+                "target_page": "demo", "target_section": "demo", "proposed_content": secret,
+                "evidence_refs": ["support"],
+            }], evidence=[{
+                "id": "support", "source": "wiki", "uri": "https://invalid.example/source",
+                "version": "wiki-etag-1", "excerpt": secret,
+            }])
+        elif outcome == "evidence":
+            answer["evidence"] = [{
+                "id": "unsupported", "source": "wiki", "uri": "https://invalid.example/source",
+                "version": "wiki-etag-1", "excerpt": secret,
+            }]
+        return httpx.Response(200, json={
+            "id": f"resp_{len(requests)}", "object": "response", "created_at": 1,
+            "model": "agent", "status": "completed",
+            "output": [{"type": "message", "id": f"msg_{len(requests)}", "role": "assistant",
+                        "status": "completed", "content": [{
+                            "type": "output_text", "text": json.dumps(answer), "annotations": [],
+                        }]}],
+            "parallel_tool_calls": False, "tool_choice": "none", "tools": [],
+        })
+
+    class Resource:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        def get_openai_client(self, **kwargs):
+            client = AsyncOpenAI(
+                api_key="offline-test-only", base_url="https://offline.example/api/projects/eval/openai/v1",
+                http_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+            )
+            clients.append(client)
+            return client
+
+    monkeypatch.setattr("azure.identity.aio.AzureCliCredential", Resource)
+    monkeypatch.setattr("azure.ai.projects.aio.AIProjectClient", Resource)
+    config = LoopConfig(
+        mode="supplied_sources_only", observed_model="agent",
+        settings={
+            "DOCUMENTATION_PROJECT_ENDPOINT": "https://isolated.example/api/projects/eval",
+            "AZURE_AI_MODEL_DEPLOYMENT_NAME": "agent", "DOCUMENTATION_MODEL_VERSION": "1",
+            "DOCUMENTATION_ADO_PROJECT": "demo", "DOCUMENTATION_ADO_WIKI": "demo",
+            "DOCUMENTATION_AUTH_MODE": "azure_cli",
+        },
+        evaluator_deployment="judge", evaluator_version="1",
+        optimizer_deployment="optimizer", optimizer_version="1",
+        isolation_review_reference="offline-test",
+        serving_project_endpoint="https://serving.example/api/projects/prod",
+    )
+    judges = []
+
+    def evaluate(rows, thresholds, *args):
+        judges.append(rows)
+        return [{
+            "datasource_item_id": i, "status": "completed", "results": [
+                {"name": name, "type": "azure_ai_evaluator", "score": score, "passed": True}
+                for name, score in thresholds.items()
+            ],
+        } for i in range(len(rows))]
+
+    demo = LiveDemo(config, SimpleNamespace(model_version=lambda _: "1", evaluate=evaluate))
+    demo.cases = demo.cases[:1]
+    output = tmp_path / "run"
+
+    async def improve(*args):
+        pytest.fail("Operational failure must never call optimizer")
+
+    if sequence[-1] == "valid":
+        output.mkdir()
+        asyncio.run(demo.evaluate("", output))
+        assert len(judges) == 1
+    else:
+        with pytest.raises(Exception) as error:
+            asyncio.run(loop(demo.evaluate, improve, output))
+        decision = json.loads((output / "decision.json").read_text())
+        assert decision["status"] == "blocked"
+        assert decision["attempts"] == []
+        assert not judges
+        if sequence[-1] == "schema":
+            assert safe_failure(error.value)["validation"]
+            assert error.value.__cause__.errors(include_input=False)[0]["type"] == "value_error"
+    assert len(requests) == len(sequence) == demo.calls
+    assert len(clients) == len(sequence)
+    assert all(client.is_closed() for client in clients)
+    if len(requests) == 2:
+        assert REPAIR_INSTRUCTIONS.strip() in requests[1]["instructions"]
+        assert secret not in json.dumps(requests[1])
+        assert requests[0]["input"] == requests[1]["input"]
+    invocations = sorted(output.rglob("*-invocation-*.json"))
+    assert len(invocations) == len(sequence)
+    for index, path in enumerate(invocations):
+        entry = json.loads(path.read_text())
+        assert entry["request_count_before"] == index
+        assert entry["request_count_after"] == index + 1
+        if sequence[index] == "schema":
+            assert entry["status"] == "schema_invalid"
+            call = entry["execution"]["model_calls"][0]
+            assert call["status"] == "schema_invalid"
+            assert "output" not in call and "response_id" not in call
+            assert secret not in path.read_text()
+        if sequence[index] == "evidence":
+            assert entry["status"] == "completed"  # Parsed successfully; only source verification failed.
+    captured = capsys.readouterr()
+    assert secret not in captured.out + captured.err
+    for path in output.rglob("*"):
+        if path.name in {"decision.json", "summary.md"}:
+            assert secret not in path.read_text()
+
+
+def test_source_integrity_check_exception_does_not_enter_correction():
+    from tools.eval_loop import candidate_with_repair
+
+    calls = []
+
+    async def invoke(correction):
+        calls.append(correction)
+        return "output"
+
+    def check(value):
+        raise ValueError("source integrity violation")
+
+    with pytest.raises(ValueError, match="source integrity violation"):
+        asyncio.run(candidate_with_repair(invoke, check))
+    assert calls == [False]

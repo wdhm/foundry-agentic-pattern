@@ -73,6 +73,45 @@ def http_failure(exc: BaseException) -> dict[str, Any]:
 ROOT = Path.cwd()
 
 
+def schema_parse_failure(exc: BaseException) -> bool:
+    from agent_framework.exceptions import ChatClientException
+
+    # The Responses SDK wraps its typed parser error using ``raise ... from ex``.
+    return (
+        type(exc) is ChatClientException
+        and isinstance(exc.__cause__, ValidationError)
+        and exc.__cause__.title == "AnalysisOutput"
+        and not http_failure(exc)
+    )
+
+
+REPAIR_INSTRUCTIONS = (
+    "\n\nCI correction: Return a valid AnalysisOutput satisfying every schema constraint, "
+    "including the human-review requirement for proposed changes. Verify evidence against "
+    "the exact available sources and versions; remove evidence that cannot be verified. "
+    "Do not invent missing facts or change the task."
+)
+
+
+async def candidate_with_repair(
+    invoke: Callable[[bool], Awaitable[str]], check: Callable[[str], list[str]],
+) -> str:
+    from agent_framework.exceptions import ChatClientException
+
+    for correction in (False, True):
+        try:
+            text = await invoke(correction)
+        except ChatClientException as exc:
+            if correction or not schema_parse_failure(exc):
+                raise
+            continue
+        if not check(text):
+            return text
+        if correction:
+            raise ValueError("Candidate evidence verification failed after the single correction.")
+    raise AssertionError("Unreachable correction state.")
+
+
 def safe_failure(exc: BaseException) -> dict[str, Any]:
     """Keep exception payloads out of logs and operational-failure artifacts."""
     result: dict[str, Any] = {"exception": type(exc).__name__}
@@ -302,15 +341,16 @@ class LiveDemo:
 
     async def evaluate(self, candidate: str, output: Path) -> tuple[bool, float, dict[str, Any]]:
         from agent_framework import Agent, ChatContext
+        from agent_framework.exceptions import ChatClientException
         from agent_framework.foundry import FoundryChatClient
         from azure.ai.projects.aio import AIProjectClient
         from azure.identity.aio import AzureCliCredential
-        from documentation_agent.assessment import APP_DIR, APP_VERSION, AssessmentAgent, run_with_repair
+        from documentation_agent.assessment import APP_DIR, APP_VERSION, AssessmentAgent
         from documentation_agent.evaluation import supplied_check, supplied_instructions, verify_snapshots
         from documentation_agent.execution import CaptureModel, messages_data
         from documentation_agent.read_policy import ReadOnlyPolicy, parse_read_result, read_tools
 
-        from contracts.evaluation import EvaluationResponse, ExecutionRecord
+        from contracts.evaluation import EvaluationRequest, EvaluationResponse, ExecutionRecord
         from contracts.v1 import CONTRACT_VERSION, AnalysisOutput, Provenance, assemble_result
         from tools.hosted_evaluation import evaluation_request, evaluator_row
 
@@ -350,10 +390,6 @@ class LiveDemo:
                 correlation_id=payload.request.correlation_id, source_mode=payload.source_mode,
                 instructions=instructions, sources=payload.sources, standard=payload.standard,
             )
-            guard = (
-                ReadOnlyPolicy(payload.request, self.settings, record)
-                if live and isinstance(self.settings, AssessmentSettings) else None
-            )
             async with (
                 asyncio.timeout(180),
                 AzureCliCredential() as credential,
@@ -361,37 +397,72 @@ class LiveDemo:
             ):
                 async def run(
                     tools: list[Any], record: ExecutionRecord, live: bool,
-                    instructions: str, guard: ReadOnlyPolicy | None, message: str,
-                    check: Callable[[str], list[str]],
-                ) -> str:
-                    client = FoundryChatClient(
-                        project_client=project, model=self.settings.model,
-                        middleware=[BoundedCapture(record, tools_disabled=not live)],
-                        function_invocation_configuration={
-                            "enabled": live, "max_iterations": 8, "max_function_calls": 12,
-                            "max_consecutive_errors_per_request": 1, "terminate_on_unknown_calls": True,
-                            "allow_concurrent_invocation": False,
-                        },
-                    )
-                    client.client.max_retries = 0
-                    async with client.client:
-                        agent = Agent(
-                            client=client, instructions=instructions, tools=tools,
-                            middleware=[guard] if guard is not None else [],
-                            default_options={
-                                "store": False, "response_format": AnalysisOutput, "max_tokens": 4096,
-                                **({} if live else {"tool_choice": "none"}),
-                            },
+                    instructions: str, message: str, payload: EvaluationRequest,
+                    base: AssessmentAgent | None, case_id: str,
+                ) -> tuple[str, ExecutionRecord]:
+                    seed = record
+                    check: Callable[[str], list[str]] = supplied_check(payload)
+
+                    async def invoke(correction: bool) -> str:
+                        nonlocal record, check
+                        record = seed.model_copy(update={
+                            "instructions": instructions + (REPAIR_INSTRUCTIONS if correction else ""),
+                            "model_calls": [], "tool_calls": [],
+                        })
+                        guard = (
+                            ReadOnlyPolicy(payload.request, self.settings, record)
+                            if live and isinstance(self.settings, AssessmentSettings) else None
                         )
-                        response = await run_with_repair(agent, message, check)
-                        if response.user_input_requests or response.finish_reason != "stop":
-                            raise ValueError("Incomplete model response or approval request.")
-                        return str(response.text)
+                        check = (
+                            partial(base.analysis_problems, payload.request, guard)
+                            if base is not None and guard is not None else supplied_check(payload)
+                        )
+                        before = owner.calls
+                        status = "failed"
+                        try:
+                            client = FoundryChatClient(
+                                project_client=project, model=self.settings.model,
+                                middleware=[BoundedCapture(record, tools_disabled=not live)],
+                                function_invocation_configuration={
+                                    "enabled": live, "max_iterations": 8, "max_function_calls": 12,
+                                    "max_consecutive_errors_per_request": 1, "terminate_on_unknown_calls": True,
+                                    "allow_concurrent_invocation": False,
+                                },
+                            )
+                            client.client.max_retries = 0
+                            async with client.client:
+                                agent = Agent(
+                                    client=client, instructions=record.instructions, tools=tools,
+                                    middleware=[guard] if guard is not None else [],
+                                    default_options={
+                                        "store": False, "response_format": AnalysisOutput, "max_tokens": 4096,
+                                        **({} if live else {"tool_choice": "none"}),
+                                    },
+                                )
+                                response = await agent.run(message, session=agent.create_session())
+                                if response.user_input_requests or response.finish_reason != "stop":
+                                    raise ValueError("Incomplete model response or approval request.")
+                                status = "completed"
+                                return str(response.text)
+                        except ChatClientException as exc:
+                            status = "schema_invalid" if schema_parse_failure(exc) else "failed"
+                            raise
+                        finally:
+                            if record.model_calls and record.model_calls[-1]["status"] == "running":
+                                record.model_calls[-1]["status"] = status
+                            save(output / f"{case_id}-invocation-{int(correction) + 1}.json", {
+                                "status": status, "correction": correction,
+                                "request_count_before": before, "request_count_after": owner.calls,
+                                "execution": record.model_dump(mode="json"),
+                            })
+
+                    text = await candidate_with_repair(invoke, lambda value: check(value))
+                    return text, record
 
                 if live:
                     from agent_framework_foundry_hosting import FoundryToolbox
 
-                    if base is None or guard is None or not isinstance(self.settings, AssessmentSettings):
+                    if base is None or not isinstance(self.settings, AssessmentSettings):
                         raise ValueError("Live source execution is not configured.")
                     async with FoundryToolbox(
                         credential, url=self.settings.toolbox_endpoint, allowed_tools=read_tools(self.settings),
@@ -401,14 +472,13 @@ class LiveDemo:
                             {"name": f.name, "description": f.description, "parameters": f.parameters()}
                             for f in toolbox.functions
                         ]
-                        text = await run(
-                            list(toolbox.functions), record, live, instructions, guard,
-                            payload.request.model_dump_json(),
-                            partial(base.analysis_problems, payload.request, guard),
+                        text, record = await run(
+                            list(toolbox.functions), record, live, instructions,
+                            payload.request.model_dump_json(), payload, base, case["id"],
                         )
                 else:
-                    text = await run(
-                        [], record, live, instructions, guard, payload.model_dump_json(), supplied_check(payload),
+                    text, record = await run(
+                        [], record, live, instructions, payload.model_dump_json(), payload, base, case["id"],
                     )
             analysis = AnalysisOutput.model_validate_json(text)
             if not record.model_calls or any(
@@ -422,7 +492,7 @@ class LiveDemo:
             provenance = Provenance(
                 contract_version=CONTRACT_VERSION, agent_name="documentation-agent", agent_version=APP_VERSION,
                 model=self.settings.model, model_version=self.settings.model_version,
-                prompt_version="sha256:" + digest(instructions),
+                prompt_version="sha256:" + digest(record.instructions),
                 policy_version="sha256:" + digest(
                     (APP_DIR / "policies/documentation-analysis-v1.txt").read_text(encoding="utf-8").strip(),
                 ),
