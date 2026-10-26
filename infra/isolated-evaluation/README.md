@@ -11,7 +11,8 @@ source review and the prepare -> validate -> deploy handoff.
 | Resource group / region | `rg-foundry-evaluation-ci` / `swedencentral` |
 | Account / project | `foundry-eval-ci-r8n3ld` / `evaluation-ci` |
 | Auth / network | Entra only (`disableLocalAuth=true`); public endpoint for GitHub-hosted runners |
-| Candidate deployment | `eval-candidate`: `gpt-5.4-mini`, version `2026-03-17`, GlobalStandard capacity 50 |
+| Retained candidate deployment | `eval-candidate`: `gpt-5.4-mini`, version `2026-03-17`, GlobalStandard capacity 50 |
+| Proposed stronger candidate | New `eval-candidate-full`: `gpt-5.4`, version `2026-03-05`, GlobalStandard capacity 50 |
 | Judge deployment | `eval-judge`: same model/version, independent capacity 50 |
 | Optimizer deployment | `eval-optimizer`: same model/version, independent capacity 10 |
 | Upgrade / safety policy | `NoAutoUpgrade`, `Microsoft.DefaultV2`; dynamic account throttling disabled |
@@ -106,7 +107,12 @@ to check the exact role, runner principal expression, project scope and unchange
 account-role boundaries. The assertion script reads ARM JSON only and makes no
 Azure or model calls.
 
-### Proposed evaluation-assets prerequisite: source only, not applied
+### Previously approved evaluation-assets prerequisite
+
+This section records the PR124 proposal, subsequently reviewed, separately
+approved and applied. Its role and assignment remain unchanged by the full-model
+proposal below; the later bounded run stopped before evaluator-definition
+creation, so the permission has not yet been verified in that operation.
 
 Bounded run [40333586550](https://github.com/wdhm/foundry-agentic-pattern/actions/runs/40333586550)
 on reviewed merge `0398e217b09371616f830a59e96514b0eb1730ee` completed all three
@@ -180,6 +186,56 @@ Keep `EVAL_LOOP_ENABLED=false` and raw artifact approval absent. Deployment, if
 separately authorized after review, must use fresh validation/what-if and apply
 only this role/runner-project assignment incrementally, not redeploy models or
 modify existing roles. A subsequent bounded workflow run requires its own gate.
+
+### Proposed full candidate: source only, not deployed or activated
+
+Repeated output-contract failures motivate a stronger-model hypothesis, not a
+promised pass or a reason to relax validation. The exact new cloud delta is one
+deployment, **`foundry-eval-ci-r8n3ld/eval-candidate-full`**, OpenAI `gpt-5.4`
+version **`2026-03-05`**, **GlobalStandard capacity 50**, `NoAutoUpgrade`,
+`Microsoft.DefaultV2`. Retain `eval-candidate`, `eval-judge` and `eval-optimizer`
+unchanged on mini `2026-03-17` with their existing 50/50/10 capacities.
+No identity, role, gateway, source credential or production change is needed.
+The new resource follows the existing serialized mini deployments if the full
+template is used; any later approved execution must isolate this single addition
+so existing deployments are not rewritten.
+
+The checked-in supplied configuration changes exactly three candidate fields:
+`AZURE_AI_MODEL_DEPLOYMENT_NAME=eval-candidate-full`,
+`DOCUMENTATION_MODEL_VERSION=2026-03-05`, and
+`observed_model=gpt-5.4-2026-03-05`. The observed-model value remains an exact
+guard, not an alias fallback. Judge/optimizer deployment names and versions,
+direct project endpoint, source-only coverage, schema, prompts, thresholds,
+single correction and five-candidate bound are unchanged. No reasoning settings
+or output-token changes are introduced; the current 4096-token cap remains.
+This file change does not update GitHub environment variables.
+
+Read-only Sweden Central discovery in the approved demo subscription on
+2026-10-26 confirmed this exact version is GA, `responses=true` and
+`chatCompletion=true`, with GlobalStandard quota **0/250** and provider
+`availableCapacity=250`. Capacity 50 allocates **50,000 TPM and 500 RPM**
+according to the catalog's 1,000-token/10-request per-unit rates, leaving 200
+quota units. Availability is a snapshot, not a deployment reservation.
+The existing Global routing type is preserved; no DataZone switch, quota
+increase or production capacity reassignment is proposed.
+
+The [structured outputs guide](https://learn.microsoft.com/azure/foundry/openai/how-to/structured-outputs)
+documents the same Responses/Pydantic `text_format` parsing used by the installed
+FoundryChatClient. An offline real-SDK transport regression exercises the new
+deployment/model lineage, strict JSON schema, `store:false` and unchanged 4096
+token cap. This verifies SDK request/parsing compatibility, **not a live service
+capability or quality result on this deployment**. Cross-field Pydantic rules
+still require local checks and are not enforced merely by generated JSON Schema.
+
+GlobalStandard is pay-per-token, not a provisioned-hour commitment. The model
+catalog exposes token meter categories but no verified monetary price; exact
+account/region pricing and the cost increase over mini remain unquoted.
+[Reasoning tokens share the output cap and are billed as output](https://learn.microsoft.com/azure/foundry/openai/how-to/reasoning).
+The aggregate safe counters do not establish token exhaustion in earlier runs;
+the latest failure was a completed-output request-contract rejection, not the
+incomplete-response guard. A larger model under the same cap can still fail.
+Separate source review/merge and explicit fresh validate/deploy/run approval
+remain required. Keep enable false and raw artifact approval absent meanwhile.
 
 ## Capacity and costs
 

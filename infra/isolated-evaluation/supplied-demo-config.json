@@ -2,13 +2,13 @@
   "mode": "supplied_sources_only",
   "settings": {
     "DOCUMENTATION_PROJECT_ENDPOINT": "https://foundry-eval-ci-r8n3ld.services.ai.azure.com/api/projects/evaluation-ci",
-    "AZURE_AI_MODEL_DEPLOYMENT_NAME": "eval-candidate",
-    "DOCUMENTATION_MODEL_VERSION": "2026-03-17",
+    "AZURE_AI_MODEL_DEPLOYMENT_NAME": "eval-candidate-full",
+    "DOCUMENTATION_MODEL_VERSION": "2026-03-05",
     "DOCUMENTATION_ADO_PROJECT": "integration-team",
     "DOCUMENTATION_ADO_WIKI": "integration-team.wiki",
     "DOCUMENTATION_AUTH_MODE": "azure_cli"
   },
-  "observed_model": "gpt-5.4-mini-2026-03-17",
+  "observed_model": "gpt-5.4-2026-03-05",
   "evaluator_deployment": "eval-judge",
   "evaluator_version": "2026-03-17",
   "optimizer_deployment": "eval-optimizer",
