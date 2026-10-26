@@ -1,5 +1,13 @@
 # evals/
 
+**Optional local documentation-quality measurement:** the
+[three-case offline thin slice](documentation-quality/README.md) measures curated
+document excerpts, atomic claims and critical-fact coverage from explicitly
+imported labels, and exports human-calibration templates. It performs no inference,
+run submission or publication and enables no semantic release gates. Its curated
+examples and synthetic regression labels are not historical agent outputs or
+observed calibration. The existing five-case assessment suite below is unchanged.
+
 **Primary runtime update (2026-10-16):** hosted `documentation-agent`, per
 ADR 0024 and P3's confirmed target. The unchanged five-case dataset below is
 not proof of hosted runtime compatibility. Ordinary assessment accepts bare

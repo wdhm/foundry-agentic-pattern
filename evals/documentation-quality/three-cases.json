@@ -1,0 +1,133 @@
+{
+  "schema_version": "1.0.0",
+  "dataset_version": "1.0.0",
+  "curation_provenance": "Synthetic, manually curated technical excerpts, atomic spans and candidate critical facts for offline measurement only. Not historical agent outputs, owner-approved truth or observed calibration. Evidence comes exclusively from existing suite.json pinned snapshots. Reviewers must validate atomicity, coverage and fact selection.",
+  "documents": [
+    {
+      "id": "retry-draft",
+      "original_case_id": "order-sync-retry",
+      "origin": "synthetic_curated_example",
+      "scope": "technical_excerpt",
+      "draft": "# Retry configuration\nThe configured retry limit is 5 attempts.\nThe configured ERP timeout is 30 seconds.\nRequires human review.",
+      "action": "proposal",
+      "missing_information_required": false,
+      "claims": [
+        {
+          "id": "attempts",
+          "text": "The configured retry limit is 5 attempts.",
+          "citations": [{"source_id": "pr62-settings", "excerpt": "\"maxAttempts\": 5"}]
+        },
+        {
+          "id": "timeout",
+          "text": "The configured ERP timeout is 30 seconds.",
+          "citations": [{"source_id": "pr62-settings", "excerpt": "\"timeoutSeconds\": 30"}]
+        }
+      ],
+      "critical_facts": [
+        {
+          "id": "attempts",
+          "text": "Configured maxAttempts is 5.",
+          "citations": [{"source_id": "pr62-settings", "excerpt": "\"maxAttempts\": 5"}]
+        },
+        {
+          "id": "timeout",
+          "text": "Configured timeoutSeconds is 30.",
+          "citations": [{"source_id": "pr62-settings", "excerpt": "\"timeoutSeconds\": 30"}]
+        },
+        {
+          "id": "backoff",
+          "text": "Configured backoff is exponential.",
+          "citations": [{"source_id": "pr62-settings", "excerpt": "\"backoff\": \"exponential\""}]
+        },
+        {
+          "id": "initial-delay",
+          "text": "Configured initialDelaySeconds is 2.",
+          "citations": [{"source_id": "pr62-settings", "excerpt": "\"initialDelaySeconds\": 2"}]
+        },
+        {
+          "id": "queue",
+          "text": "Configured deadLetterQueue is orders-confirmed-failed; configuration does not prove delivery.",
+          "citations": [{"source_id": "pr62-settings", "excerpt": "\"deadLetterQueue\": \"orders-confirmed-failed\""}]
+        }
+      ]
+    },
+    {
+      "id": "version-draft",
+      "original_case_id": "order-sync-version-isolation",
+      "origin": "synthetic_curated_example",
+      "scope": "technical_excerpt",
+      "draft": "# Historical configuration\nThe configured retry limit is 3 attempts.\nThe configured fixed delay is 5 seconds.\nInformation missing: wiki content is unavailable in this supplied-source case; wiki freshness is not assessed.\nRequires human review.",
+      "action": "proposal",
+      "missing_information_required": true,
+      "claims": [
+        {
+          "id": "attempts",
+          "text": "The configured retry limit is 3 attempts.",
+          "citations": [{"source_id": "base-settings", "excerpt": "\"maxAttempts\": 3"}]
+        },
+        {
+          "id": "delay",
+          "text": "The configured fixed delay is 5 seconds.",
+          "citations": [{"source_id": "base-settings", "excerpt": "\"delaySeconds\": 5"}]
+        }
+      ],
+      "critical_facts": [
+        {
+          "id": "attempts",
+          "text": "Historical configured maxAttempts is 3.",
+          "citations": [{"source_id": "base-settings", "excerpt": "\"maxAttempts\": 3"}]
+        },
+        {
+          "id": "delay",
+          "text": "Historical configured delaySeconds is 5.",
+          "citations": [{"source_id": "base-settings", "excerpt": "\"delaySeconds\": 5"}]
+        },
+        {
+          "id": "runtime-timeout",
+          "text": "Runtime timeout cannot be established from settings alone; no code snapshot is allowlisted.",
+          "citations": [{"source_id": "base-settings", "excerpt": "\"salesOrderPath\": \"/api/v2/salesorders\""}],
+          "applicable": false,
+          "skip_reason": "Settings-only case: no runtime implementation evidence; absent keys are not defaults."
+        }
+      ]
+    },
+    {
+      "id": "stub-draft",
+      "original_case_id": "order-sync-dead-letter-stub",
+      "origin": "synthetic_curated_example",
+      "scope": "technical_excerpt",
+      "draft": "# Failed-message handling\nThe configured dead-letter queue name is orders-confirmed-failed.\nThe sample dead_letter implementation only prints a message.\nInformation missing: real queue-send implementation and delivery proof.\nRequires human review.",
+      "action": "proposal",
+      "missing_information_required": true,
+      "claims": [
+        {
+          "id": "queue",
+          "text": "The configured dead-letter queue name is orders-confirmed-failed.",
+          "citations": [{"source_id": "pr62-settings", "excerpt": "\"deadLetterQueue\": \"orders-confirmed-failed\""}]
+        },
+        {
+          "id": "print-only",
+          "text": "The sample dead_letter implementation only prints a message.",
+          "citations": [{"source_id": "pr62-code", "excerpt": "def dead_letter(body: str, reason: str) -> None:\n    \"\"\"Forward a failed message to the dead-letter queue (stubbed in the sample).\"\"\"\n    print(f\"dead-letter -> {SETTINGS['source']['deadLetterQueue']}: {reason}\")"}]
+        }
+      ],
+      "critical_facts": [
+        {
+          "id": "queue",
+          "text": "Configured deadLetterQueue is orders-confirmed-failed.",
+          "citations": [{"source_id": "pr62-settings", "excerpt": "\"deadLetterQueue\": \"orders-confirmed-failed\""}]
+        },
+        {
+          "id": "print-only",
+          "text": "dead_letter only prints; the sample does not establish real queue delivery.",
+          "citations": [{"source_id": "pr62-code", "excerpt": "def dead_letter(body: str, reason: str) -> None:\n    \"\"\"Forward a failed message to the dead-letter queue (stubbed in the sample).\"\"\"\n    print(f\"dead-letter -> {SETTINGS['source']['deadLetterQueue']}: {reason}\")"}]
+        },
+        {
+          "id": "error-path",
+          "text": "handle_message calls dead_letter on exhausted OSError.",
+          "citations": [{"source_id": "pr62-code", "excerpt": "except OSError as error:\n        dead_letter(body, str(error))"}]
+        }
+      ]
+    }
+  ]
+}

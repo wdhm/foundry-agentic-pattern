@@ -61,6 +61,7 @@ local.settings.json
 
 # --- Eval / run outputs ---
 evals/results/
+evals/documentation-quality/private/
 *.log
 
 # --- Editors / OS ---
