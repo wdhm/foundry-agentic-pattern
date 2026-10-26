@@ -124,12 +124,16 @@ class AgentResult(AnalysisOutput):
     provenance: Provenance
 
 
-def assemble_result(request: AgentRequest, output: AnalysisOutput, provenance: Provenance) -> AgentResult:
-    if (
+def request_status_conflict(request: AgentRequest, output: AnalysisOutput) -> bool:
+    return bool(
         request.task is not None
         and output.missing_information
         and output.documentation_status != "insufficient_information"
-    ):
+    )
+
+
+def assemble_result(request: AgentRequest, output: AnalysisOutput, provenance: Provenance) -> AgentResult:
+    if request_status_conflict(request, output):
         raise ValueError("Unresolved information in an explicit task requires insufficient_information status.")
     return AgentResult(
         **output.model_dump(),

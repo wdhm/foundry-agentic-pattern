@@ -16,6 +16,9 @@ from tools.eval_loop import (
     OperationalError,
     Reason,
     Stage,
+    candidate_contract_problem,
+    candidate_with_repair,
+    checked_result,
     ci_supplied_instructions,
     http_failure,
     loop,
@@ -426,7 +429,8 @@ def test_actual_agent_sdk_path_uses_new_guidance_and_bounded_fresh_calls(monkeyp
             demo.calls = 100
         with pytest.raises(
             ValueError, match=(
-                "request_budget_exhausted|response_replay|Invalid JSON|evidence_repair_exhausted|auth failure"
+                "request_budget_exhausted|response_replay|output_contract_repair_exhausted"
+                "|evidence_repair_exhausted|auth failure"
                 "|model_version_mismatch|incomplete_execution_or_unexpected_model|incomplete_response"
                 "|SENSITIVE_ROW_PAYLOAD"
             ),
@@ -440,7 +444,7 @@ def test_actual_agent_sdk_path_uses_new_guidance_and_bounded_fresh_calls(monkeyp
             "model-version": (Stage.MODEL_CHECK, Reason.MODEL_VERSION_MISMATCH),
             "observed-model": (Stage.CASE_RESULT, Reason.EXECUTION_MODEL),
             "incomplete": (Stage.RESPONSE, Reason.INCOMPLETE_RESPONSE),
-            "schema": (Stage.CASE_RESULT, "unknown"),
+            "schema": (Stage.CASE_RESULT, Reason.OUTPUT_REPAIR),
             "auth": (Stage.INVOCATION, "unknown"),
             "row": (Stage.SCORER, "unknown"),
         }
@@ -609,6 +613,10 @@ def test_reviewed_partial_configuration_needs_no_toolbox():
 @pytest.mark.parametrize("sequence", [
     ("schema", "valid"), ("schema", "schema"), ("http",), ("timeout",),
     ("schema", "evidence"), ("evidence", "schema"), ("evidence", "valid"),
+    ("request", "valid"), ("request", "request"),
+    ("request", "schema"), ("schema", "request"),
+    ("request", "evidence"), ("evidence", "request"),
+    ("persist-io",), ("persist-nonfinite",),
 ])
 def test_real_foundry_sdk_schema_repair_is_single_fresh_bounded_invocation(
     monkeypatch, tmp_path, capsys, sequence,
@@ -653,6 +661,17 @@ def test_real_foundry_sdk_schema_repair_is_single_fresh_bounded_invocation(
                 "id": "unsupported", "source": "wiki", "uri": "https://invalid.example/source",
                 "version": "wiki-etag-1", "excerpt": secret,
             }]
+        elif outcome == "request":
+            user = next(item for item in body["input"] if item.get("role") == "user")
+            payload = json.loads(user["content"][0]["text"])
+            source = payload["sources"][0]
+            answer.update(documentation_status="gaps_found", findings=[{
+                "category": "Local structural test", "severity": "low",
+                "description": "Synthetic output, not a semantic assessment.", "evidence_refs": ["support"],
+            }], evidence=[{
+                "id": "support", "source": source["source"], "uri": source["uri"], "version": source["version"],
+                "excerpt": next(line for line in source["content"].splitlines() if line.strip()),
+            }])
         return httpx.Response(200, json={
             "id": f"resp_{len(requests)}", "object": "response", "created_at": 1,
             "model": "agent", "status": "completed",
@@ -683,6 +702,17 @@ def test_real_foundry_sdk_schema_repair_is_single_fresh_bounded_invocation(
 
     monkeypatch.setattr("azure.identity.aio.AzureCliCredential", Resource)
     monkeypatch.setattr("azure.ai.projects.aio.AIProjectClient", Resource)
+    if sequence[0].startswith("persist-"):
+        from tools.eval_loop import save as real_save
+
+        def fail_persistence(path, value):
+            if path.name.endswith("-evaluation.json"):
+                if sequence[0] == "persist-io":
+                    raise OSError(secret)
+                return real_save(path, {"nonfinite_metadata": float("nan")})
+            return real_save(path, value)
+
+        monkeypatch.setattr("tools.eval_loop.save", fail_persistence)
     config = LoopConfig(
         mode="supplied_sources_only", observed_model="agent",
         settings={
@@ -710,7 +740,10 @@ def test_real_foundry_sdk_schema_repair_is_single_fresh_bounded_invocation(
         } for i in range(len(rows))]
 
     demo = LiveDemo(config, SimpleNamespace(model_version=lambda _: "1", evaluate=evaluate))
-    demo.cases = demo.cases[:1]
+    demo.cases = (
+        [next(case for case in demo.cases if case["id"] == "order-sync-dead-letter-stub")]
+        if "request" in sequence else demo.cases[:1]
+    )
     output = tmp_path / "run"
 
     async def improve(*args):
@@ -730,11 +763,21 @@ def test_real_foundry_sdk_schema_repair_is_single_fresh_bounded_invocation(
         if sequence[-1] == "schema":
             assert safe_failure(error.value)["validation"]
             assert error.value.__cause__.errors(include_input=False)[0]["type"] == "value_error"
+        if sequence[-1] == "request":
+            assert type(error.value) is OperationalError
+            assert error.value.reason == Reason.REQUEST_REPAIR
+            assert decision["error"]["reason"] == Reason.REQUEST_REPAIR
+        if sequence[-1].startswith("persist-"):
+            snapshot = demo.telemetry.snapshot(error.value)
+            assert snapshot["stage"] == Stage.PERSISTENCE
+            assert snapshot["reason"] == "unknown"
     assert len(requests) == len(sequence) == demo.calls
     counts = demo.telemetry.snapshot()["counters"]
     assert counts["counted_model_requests"] == counts["dispatched_model_requests"] == len(sequence)
     assert counts["repair_attempts"] == len(sequence) - 1
-    assert counts["completed_model_requests"] == sequence.count("valid") + sequence.count("evidence")
+    assert counts["completed_model_requests"] == sum(
+        sequence.count(kind) for kind in ("valid", "evidence", "request", "persist-io", "persist-nonfinite")
+    )
     assert counts["completed_cases"] == int(sequence[-1] == "valid")
     assert counts["judge_groups_submitted"] == counts["judge_groups_completed"] == len(judges)
     assert len(clients) == len(sequence)
@@ -766,8 +809,6 @@ def test_real_foundry_sdk_schema_repair_is_single_fresh_bounded_invocation(
 
 
 def test_source_integrity_check_exception_does_not_enter_correction():
-    from tools.eval_loop import candidate_with_repair
-
     calls = []
 
     async def invoke(correction):
@@ -780,6 +821,148 @@ def test_source_integrity_check_exception_does_not_enter_correction():
     with pytest.raises(ValueError, match="source integrity violation"):
         asyncio.run(candidate_with_repair(invoke, check))
     assert calls == [False]
+
+
+@pytest.fixture
+def canonical_result_contract():
+    from contracts.v1 import Provenance
+    from tools.eval_loop import SCOPES
+    from tools.hosted_evaluation import evaluation_request
+    from tools.release_sources import load_cases
+
+    _, cases = load_cases(Path("evals/datasets/suite.json"), Path.cwd())
+    case = next(case for case in cases if case["id"] == "order-sync-dead-letter-stub")
+    payload = evaluation_request(case, SCOPES[case["id"]])
+    source = payload.sources[0]
+    value = {
+        "documentation_status": "gaps_found",
+        "findings": [{
+            "category": "Structural fixture", "severity": "low",
+            "description": "Not a semantic assessment.", "evidence_refs": ["e0"],
+        }],
+        "proposed_changes": [],
+        "missing_information": [{"description": "Synthetic unresolved question.", "expected_source": "wiki"}],
+        "evidence": [{
+            "id": "e0", "source": source.source, "uri": source.uri, "version": source.version,
+            "excerpt": next(line for line in source.content.splitlines() if line.strip()),
+        }],
+        "confidence": 0.8, "requires_human_review": True,
+    }
+    provenance = Provenance(
+        contract_version="1.0.0", agent_name="synthetic", agent_version="local",
+        model="synthetic", model_version="local", prompt_version="local", policy_version="local",
+    )
+    return payload, value, provenance
+
+
+def test_request_contract_uses_authoritative_predicate_and_keeps_serving_semantics(canonical_result_contract):
+    from documentation_agent.evaluation import supplied_check
+
+    from contracts.v1 import AnalysisOutput, assemble_result, request_status_conflict
+
+    payload, value, provenance = canonical_result_contract
+    analysis = AnalysisOutput.model_validate(value)
+    assert not supplied_check(payload)(analysis.model_dump_json())
+    assert request_status_conflict(payload.request, analysis)
+    assert candidate_contract_problem(payload.request, provenance, analysis.model_dump_json()) == Reason.REQUEST_REPAIR
+    with pytest.raises(ValueError, match="Unresolved information in an explicit task") as serving:
+        assemble_result(payload.request, analysis, provenance)
+    assert type(serving.value) is ValueError
+    with pytest.raises(OperationalError) as final:
+        checked_result(payload.request, analysis, provenance)
+    assert safe_failure(final.value) == {
+        "exception": "OperationalError", "stage": Stage.CASE_RESULT, "reason": Reason.REQUEST_STATUS,
+    }
+    legacy = payload.request.model_copy(update={"task": None})
+    assert not request_status_conflict(legacy, analysis)
+    assert candidate_contract_problem(legacy, provenance, analysis.model_dump_json()) is None
+    value["documentation_status"] = "insufficient_information"
+    valid = AnalysisOutput.model_validate(value)
+    assert candidate_contract_problem(payload.request, provenance, valid.model_dump_json()) is None
+    result = checked_result(payload.request, valid, provenance)
+    assert result.request_id == payload.request.request_id and result.provenance == provenance
+
+
+@pytest.mark.parametrize("mutation", [
+    "extra", "missing", "confidence", "review", "duplicate_ids", "unknown_reference", "empty_reference",
+    "up_to_date", "gaps_found", "insufficient_information", "version_alias", "git_sha", "work_item_revision",
+    "uri", "status",
+])
+def test_all_model_output_invariants_use_same_authoritative_schema(canonical_result_contract, mutation):
+    payload, value, provenance = canonical_result_contract
+    value["documentation_status"] = "insufficient_information"
+    if mutation == "extra":
+        value["untrusted"] = "SENSITIVE_EXTRA_INPUT"
+    elif mutation == "missing":
+        value.pop("confidence")
+    elif mutation == "confidence":
+        value["confidence"] = float("nan")
+    elif mutation == "review":
+        value["proposed_changes"] = [{
+            "target_page": "test", "target_section": "test", "proposed_content": "synthetic", "evidence_refs": ["e0"],
+        }]
+        value["requires_human_review"] = False
+    elif mutation == "duplicate_ids":
+        value["evidence"].append(value["evidence"][0].copy())
+    elif mutation == "unknown_reference":
+        value["findings"][0]["evidence_refs"] = ["absent"]
+    elif mutation == "empty_reference":
+        value["findings"][0]["evidence_refs"] = []
+    elif mutation == "up_to_date":
+        value["documentation_status"] = "up_to_date"
+    elif mutation == "gaps_found":
+        value["documentation_status"], value["findings"] = "gaps_found", []
+    elif mutation == "insufficient_information":
+        value["missing_information"] = []
+    elif mutation == "version_alias":
+        value["evidence"][0]["version"] = "latest"
+    elif mutation == "git_sha":
+        value["evidence"][0]["version"] = "123"
+    elif mutation == "work_item_revision":
+        value["evidence"][0].update(source="work_item", version="0")
+    elif mutation == "uri":
+        value["evidence"][0]["uri"] = "not-https"
+    else:
+        value["documentation_status"] = "invalid"
+    assert candidate_contract_problem(payload.request, provenance, json.dumps(value)) == Reason.OUTPUT_REPAIR
+
+
+@pytest.mark.parametrize("failure", ["source", "assembly", "io", "metadata"])
+def test_unrelated_contract_boundary_failures_never_repair(monkeypatch, canonical_result_contract, failure):
+    from documentation_agent.evaluation import supplied_check
+
+    payload, value, provenance = canonical_result_contract
+    value["documentation_status"] = "insufficient_information"
+    invocations = []
+
+    async def invoke(correction):
+        invocations.append(correction)
+        return json.dumps(value)
+
+    def fail(*args):
+        if failure == "io":
+            raise OSError("SENSITIVE_IO_FAILURE")
+        if failure == "metadata":
+            type(provenance).model_validate({
+                **provenance.model_dump(), "model": {"SENSITIVE_METADATA_INPUT": "not a model identifier"},
+            })
+        raise ValueError("SENSITIVE_UNRELATED_FAILURE")
+
+    if failure != "source":
+        monkeypatch.setattr("tools.eval_loop.assemble_result", fail)
+    with pytest.raises((ValueError, OSError)) as error:
+        asyncio.run(candidate_with_repair(
+            invoke, fail if failure == "source" else supplied_check(payload),
+            lambda text: candidate_contract_problem(payload.request, provenance, text),
+        ))
+    assert invocations == [False]
+    if failure == "metadata":
+        sanitized = safe_failure(error.value)
+        assert sanitized["exception"] == "ValidationError"
+        assert "SENSITIVE_METADATA_INPUT" not in json.dumps(sanitized)
+        return
+    assert type(error.value) is (OSError if failure == "io" else ValueError)
+    assert safe_failure(error.value) == {"exception": type(error.value).__name__}
 
 
 def test_ci_supplied_guidance_explains_crossfields_without_fixture_specific_answers():
