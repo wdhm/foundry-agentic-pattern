@@ -9,6 +9,14 @@ from .agent import DocumentationAgent
 
 def create_server() -> ResponsesHostServer:
     mode = os.environ.get("DOCUMENTATION_MODE", "stub")
+    chat_enabled = os.environ.get("DOCUMENTATION_ENABLE_CHAT") == "true"
+    if os.environ.get("DOCUMENTATION_ENABLE_CHANNEL_REVIEWS") == "true" and (
+        mode != "approval" or os.environ.get("DOCUMENTATION_ENABLE_TEAMS") != "true"
+        or os.environ.get("DOCUMENTATION_ENABLE_PUSH_FLOW") != "true"
+    ):
+        raise ValueError("Channel reviews require Teams, push flow and approval mode.")
+    if chat_enabled and mode != "approval":
+        raise ValueError("Conversational chat requires approval mode; assessment/evaluation remain unchanged.")
     if os.environ.get("DOCUMENTATION_ENABLE_TEAMS") == "true" and mode != "approval":
         raise ValueError("Teams cards require approval mode; assessment/evaluation remain unchanged.")
     if os.environ.get("DOCUMENTATION_ENABLE_PUSH_FLOW") == "true" and (
@@ -37,10 +45,15 @@ def create_server() -> ResponsesHostServer:
 
         policy = ToolApprovalPolicy.from_environment()
         agent = ToolApprovalAgent(policy, wiki_reader=wiki_reader_from_environment(policy))
+        from .conversation import ConversationRouter, ConversationService
+
+        conversation = ConversationService.from_environment() if chat_enabled else None
         if os.environ.get("DOCUMENTATION_ENABLE_TEAMS") == "true":
             from .teams import create_teams_server
 
-            return create_teams_server(agent)
+            return create_teams_server(agent, conversation=conversation)
+        if conversation is not None:
+            agent = ConversationRouter(agent, conversation)
     else:
         raise ValueError(
             "DOCUMENTATION_MODE must be 'stub', 'assessment' or explicitly enabled 'evaluation'/'approval'."

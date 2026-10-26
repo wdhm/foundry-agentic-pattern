@@ -51,18 +51,18 @@ backup recording aligned with actual results.
 ## 10:30–11:10 · P2 · Knowledge & identity · Rickard
 
 Use the [40-minute P2 presenter guide](p2-presenter-guide.md) for the run order,
-fallbacks and hard stops. Demos target hosted **`documentation-agent`** (v13
-serving at 100%, recorded 2026-10-21) with its **own** identity and agent user. The
-assessment uses only the read-only toolbox. The live PR #62 assessment runs only
-if the same request passed at rehearsal on the same serving version; otherwise
-show the recorded result.
+fallbacks and hard stops. Foundry IQ and Toolbox are demoed in the Foundry
+playground on the hosted **`documentation-agent`** (v30, read-only chat over
+toolbox `documentation-agent-readonly:4`), running as its **own** identity and
+agent user. Each answer is followed by the Foundry view behind it: the knowledge
+base, then the toolboxes.
 
 | Time | Feature | F | Type | Content |
 |---|---|---|---|---|
 | 10:30–10:32 | Framing | F8 | Slide | One sentence: all demos run on a fictional Order Sync integration with planted drifts ([data](../../data/README.md)) |
-| 10:32–10:45 | Foundry IQ | F3 | Demo | The documentation standard as a knowledge base, called as an MCP tool; `demo-foundry-iq.ps1` returns DS-14 and DS-30 ([guide](foundry-iq-guide.md)) |
-| 10:45–10:58 | Toolbox (MCP · DevOps · GitHub) | F1 | Read-only demo (recorded fallback) | `demo-toolbox.ps1`: `documentation-agent-readonly` vs `documentation-agent-write`; one assessment of PR #62 → `gaps_found` with pinned evidence ([GitHub guide](github-mcp-guide.md)). No write tools in an assessment |
-| 10:58–11:06 | Agent identity | – | Demo | ADO refuses a person and accepts only the agent's identity; Entra Agent ID and the agent user ([guide](agent-identity-guide.md)); the wiki commit from John's Teams Approve is authored by the agent user. Name the security debt: the agent user is Basic + Contributors for the write path ([#22](https://github.com/wdhm/foundry-agentic-pattern/issues/22)) |
+| 10:32–10:45 | Foundry IQ | F3 | Playground demo | Ask `documentation-agent` what the standard requires for error handling and drift → cites DS-14/DS-30/DS-31 with links to the standard. Proof: Agents → Traces shows `execute_tool knowledge___knowledge_base_retrieve`; Knowledge → `kb-doc-agent` → `ks-doc-knowledge` → index `doc-knowledge` ([guide](foundry-iq-guide.md)) |
+| 10:45–10:58 | Toolbox (MCP · DevOps · GitHub) | F1 | Playground demo | Ask it to compare the Order Sync code with the wiki page and work item 1 → one answer from ADO repo (pinned commit), wiki, work item and the standard, gaps per rule ID. Proof: the trace shows `tools/list documentation-agent-readonly:4` and one `execute_tool` per source; toolbox definitions in VS Code Foundry Toolkit |
+| 10:58–11:06 | Agent identity | – | Playground demo | Ask it to update the wiki "I approve" → refused, publishing needs the Teams card. Proof: gateway Log stream (`ca-doc-agent-mcp`) logs `authorized caller oid=ea9e8fb5-…` = the agent identity in Entra Agent ID; ADO accepts no other caller. Entra Agent ID and the agent user ([guide](agent-identity-guide.md)); the wiki commit from John's Teams Approve is authored by the agent user. Name the security debt: the agent user is Basic + Contributors for the write path ([#22](https://github.com/wdhm/foundry-agentic-pattern/issues/22)) |
 | 11:06–11:10 | *Agent 365* | – | Slide | Fleet governance across M365 ([#46](https://github.com/wdhm/foundry-agentic-pattern/issues/46)). Work IQ ([#47](https://github.com/wdhm/foundry-agentic-pattern/issues/47)) and PDF/SharePoint ([#48](https://github.com/wdhm/foundry-agentic-pattern/issues/48)) are backup slides |
 
 ## 11:10–11:50 · P3 · AgentOps & platform · Louise
@@ -92,7 +92,7 @@ How to fork the repo, swap in your own sources and documentation standard, and p
 - [ ] Prepare the retained hosted trace lookup for the presentation; portal UI and all-presenter access still need verification
 - [ ] Demonstrate the full five-case good/bad evaluation gate, or clearly label the unverified showcase
 - [x] Real approved wiki write and Teams delivery demonstrated on v13 by P1 (2026-10-20, [evidence](../../src/agents/documentation-agent/TEAMS_APPROVAL.md)); assessment stays read-only. Second-user Teams test pending ([#31](https://github.com/wdhm/foundry-agentic-pattern/issues/31))
-- [x] P2 40-minute presenter run order, fallbacks and evidence prepared ([guide](p2-presenter-guide.md)); live PR #62 assessment still to be rehearsed
+- [x] P2 40-minute presenter run order, fallbacks and evidence prepared ([guide](p2-presenter-guide.md)); playground questions on `documentation-agent:30` (toolbox v4) verified 2026-10-23 with traces and gateway log; portal rehearsal pending
 - [ ] Obtain separate routing approval and demonstrate timed rollback with new named-path sessions; two deployed versions or a pin alone do not pass
 - [x] P3 primary evidence content, AI Gateway explanatory fallback and 40-minute presenter run order prepared; four existing next-step slides retained
 - [ ] Assemble the source slides into the shared deck and review story, visual layout, evidence dates and captures with all presenters

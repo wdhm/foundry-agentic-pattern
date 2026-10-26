@@ -15,7 +15,10 @@ from azure.ai.agentserver.core import (
 )
 from azure.ai.agentserver.core.storage import FoundryStateStore
 from documentation_agent.approval import STORE_NAME, InspectCall, PendingCall, ToolApprovalAgent, ToolApprovalPolicy
+from documentation_agent.conversation import STORE as CHAT_STORE
+from documentation_agent.conversation import ConversationService, ConversationSources
 from documentation_agent.main import create_server
+from documentation_agent.settings import AssessmentSettings
 from documentation_agent.teams import BINDING_STORE, CardAction, TeamsApproval, create_teams_server
 from documentation_agent.teams_card import MAX_CARD_BYTES
 from httpx import ASGITransport, AsyncClient
@@ -58,7 +61,7 @@ def harness(tmp_path, monkeypatch):
     monkeypatch.setenv("DOCUMENTATION_TEAMS_TENANT_ID", TENANT)
     monkeypatch.setenv("DOCUMENTATION_ENABLE_TEAMS", "true")
     stores = {}
-    for name in (STORE_NAME, BINDING_STORE, "function_approvals", "agent_sessions"):
+    for name in (STORE_NAME, BINDING_STORE, CHAT_STORE, "function_approvals", "agent_sessions"):
         stores[name] = asyncio.run(FoundryStateStore.get_or_create(name, user_isolation=True))
 
     async def local_store(name, **kwargs):
@@ -425,3 +428,145 @@ def test_teams_requires_explicit_mode_and_tenant(harness, monkeypatch):
     monkeypatch.delenv("DOCUMENTATION_TEAMS_TENANT_ID")
     with pytest.raises(ValueError, match="TENANT_ID"):
         create_teams_server(agent)
+
+
+@pytest.fixture
+def conversation():
+    from types import SimpleNamespace
+
+    settings = AssessmentSettings(
+        project_endpoint="https://test.services.ai.azure.com/api/projects/test",
+        toolbox_endpoint="https://test.services.ai.azure.com/api/projects/test/toolboxes/read/versions/1/mcp?api-version=v1",
+        model="test", model_version="test", ado_project="test", ado_wiki="test.wiki",
+    )
+    sources = ConversationSources.model_validate({
+        "subject": {"repo": "example/repo", "commit_sha": "a" * 40},
+        "context": {"wiki_page_paths": ["/Overview"], "work_item_ids": [1]},
+        "documentation_standard_ref": "standard",
+    })
+    runner = SimpleNamespace(reply=AsyncMock(return_value="This is a read-only answer."))
+    return ConversationService(settings, sources, runner), runner
+
+
+def test_combined_http_host_handles_chat_cards_native_approval_and_stream(harness, proposal, conversation, monkeypatch):
+    async def run():
+        agent, _, connection, _ = harness
+        service, runner = conversation
+        host = create_teams_server(agent, conversation=service)
+        sent = []
+
+        async def send_activities(context, activities):
+            sent.extend(activities)
+            return [ResourceResponse(id=str(uuid4())) for _ in activities]
+
+        monkeypatch.setattr(host.adapter, "send_activities", send_activities)
+        monkeypatch.setenv("FOUNDRY_HOSTING_ENVIRONMENT", "true")
+        headers = {"x-agent-user-id": USER, "x-agent-foundry-call-id": "test-call", "x-agent-session-id": SESSION}
+        async with AsyncClient(transport=ASGITransport(app=host), base_url="http://localhost") as client:
+            for question in (
+                "Show me how Order Sync works", "show me the retry configuration", "Looks good, approve it",
+            ):
+                response = await client.post(
+                    "/activity/messages", headers=headers,
+                    json=activity(text=question).model_dump(mode="json", by_alias=True, exclude_none=True),
+                )
+                assert response.status_code < 300
+                assert sent[-1].text == "This is a read-only answer."
+                assert not sent[-1].attachments
+            assert len(runner.reply.call_args.args[0]) == 5
+            connection.invoke_once.assert_not_called()
+            answer = await client.post("/responses", headers=headers, json={"input": "Hello", "stream": False})
+            assert answer.json()["status"] == "completed", answer.text
+            assert len(runner.reply.call_args.args[0]) == 1  # Teams history is not copied into Responses.
+            assert "This is a read-only answer." in answer.text
+            streamed = await client.post("/responses", headers=headers, json={
+                "input": "Next", "stream": True, "previous_response_id": answer.json()["id"],
+            })
+            assert "response.completed" in streamed.text and "This is a read-only answer." in streamed.text
+            assert [t.text for t in runner.reply.call_args.args[0]] == ["Hello", "This is a read-only answer.", "Next"]
+            before = runner.reply.await_count
+            malformed = await client.post("/responses", headers=headers, json={"input": '{"action":', "stream": False})
+            assert malformed.json()["status"] == "failed"
+            first = (await client.post("/responses", headers=headers, json={
+                "input": json.dumps(proposal), "stream": False,
+            })).json()
+            pending = next(item for item in first["output"] if item["type"] == "mcp_approval_request")
+            discussed = await client.post("/responses", headers=headers, json={
+                "input": "Explain what approval means; do not approve.", "stream": False,
+                "previous_response_id": first["id"],
+            })
+            assert discussed.json()["status"] == "completed", discussed.text
+            assert "This is a read-only answer." in discussed.text
+            connection.invoke_once.assert_not_called()
+            before += 1
+            body = {"input": [{"type": "mcp_approval_response", "approval_request_id": pending["id"], "approve": True}],
+                    "previous_response_id": first["id"], "stream": False}
+            approved = await client.post("/responses", headers=headers, json=body)
+            assert approved.json()["status"] == "completed", approved.text
+            assert runner.reply.await_count == before
+            connection.invoke_once.assert_awaited_once()
+            replay = await client.post("/responses", headers=headers, json=body)
+            assert replay.json()["status"] == "failed"
+            connection.invoke_once.assert_awaited_once()
+            # Card proposal/rejection still works independently of free-text chat.
+            await client.post(
+                "/activity/messages", headers=headers,
+                json=activity(text=json.dumps(proposal)).model_dump(mode="json", by_alias=True, exclude_none=True),
+            )
+            card = sent[-1].attachments[0].content
+            await client.post(
+                "/activity/messages", headers=headers,
+                json=activity(value=submitted(card, "Reject")).model_dump(
+                    mode="json", by_alias=True, exclude_none=True,
+                ),
+            )
+            assert "Proposal rejected" in json.dumps(sent[-1].attachments[0].content)
+            assert runner.reply.await_count == before
+
+    asyncio.run(run())
+
+
+def test_chat_cannot_relax_teams_identity_or_invalid_card_validation(harness, conversation, monkeypatch):
+    async def run():
+        agent, _, connection, _ = harness
+        service, runner = conversation
+        handler = TeamsApproval(agent, UUID(TENANT), service)
+        monkeypatch.setenv("FOUNDRY_HOSTING_ENVIRONMENT", "true")
+        with platform():
+            for item in [activity(value={"action": "approve"}), activity(text='{"action":')]:
+                with pytest.raises(ValueError):
+                    await handler.handle(item)
+            foreign = activity(text="Read the wiki")
+            foreign.conversation.conversation_type = "groupChat"
+            with pytest.raises(ValueError):
+                await handler.handle(foreign)
+        with platform(user=None), pytest.raises(ValueError):
+            await handler.handle(activity(text="Read the wiki"))
+        runner.reply.assert_not_called()
+        connection.invoke_once.assert_not_called()
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_main_selects_chat_only_with_explicit_flag(harness, conversation, monkeypatch, enabled):
+    from documentation_agent.conversation import ConversationRouter
+
+    agent, _, _, _ = harness
+    service, _ = conversation
+    monkeypatch.delenv("DOCUMENTATION_ENABLE_TEAMS", raising=False)
+    monkeypatch.setenv("DOCUMENTATION_MODE", "approval")
+    monkeypatch.setenv("DOCUMENTATION_ENABLE_APPROVAL", "true")
+    monkeypatch.setenv("DOCUMENTATION_ENABLE_CHAT", "true" if enabled else "false")
+    monkeypatch.setattr(ToolApprovalPolicy, "from_environment", lambda: agent.policy)
+    monkeypatch.setattr(ConversationService, "from_environment", lambda: service)
+    selected = []
+
+    def host(agent, **kwargs):
+        selected.append(agent)
+        assert kwargs == {"history_source": "agent"}
+        return object()
+
+    monkeypatch.setattr("documentation_agent.main.ResponsesHostServer", host)
+    create_server()
+    assert isinstance(selected[0], ConversationRouter if enabled else ToolApprovalAgent)
