@@ -10,6 +10,10 @@ from tools.eval_loop import (
     THRESHOLDS,
     LiveDemo,
     LoopConfig,
+    LoopTelemetry,
+    OperationalError,
+    Reason,
+    Stage,
     http_failure,
     loop,
     main,
@@ -55,6 +59,10 @@ def test_sensitive_exception_never_reaches_logs_or_failure_artifacts(tmp_path, m
     monkeypatch.setattr(LoopConfig, "model_validate_json", fail_config)
     assert main(["--config", str(config), "--output", str(output), "--execute-approved-isolated"]) == 1
     captured = capsys.readouterr()
+    diagnostic = json.loads(captured.out.removeprefix("eval-loop diagnostics: "))
+    assert diagnostic["exception"] == "RuntimeError"
+    assert diagnostic["reason"] == "unknown"
+    assert diagnostic["counters"]["completed_candidates"] == 0
     assert secret not in captured.out + captured.err
     assert "RuntimeError" in captured.err
     assert secret not in summary.read_text()
@@ -149,14 +157,20 @@ def test_malformed_judges_fail_early(mutation):
         value[0]["results"][0]["score"] = True
     else:
         value[0]["results"][0]["label"] = "fail"
-    with pytest.raises(ValueError):
+    with pytest.raises(OperationalError) as caught:
         quality(value, 1, THRESHOLDS)
+    assert caught.value.stage == Stage.JUDGE_VALIDATION
+    assert caught.value.reason == {
+        "missing": Reason.JUDGE_RESULTS, "duplicate": Reason.JUDGE_ROWS, "nan": Reason.JUDGE_SCORE,
+        "error": Reason.JUDGE_FAILED, "boolean": Reason.JUDGE_SCORE, "label": Reason.JUDGE_SCORE,
+    }[mutation]
 
 
 @pytest.mark.parametrize("pass_at,expected,calls", [(1, "passed", 1), (3, "passed", 3), (9, "exhausted", 5)])
 @pytest.mark.parametrize("mode", ["full_suite", "supplied_sources_only"])
 def test_five_total_candidates_and_real_revisions(tmp_path, pass_at, expected, calls, mode):
     evaluated, optimized = [], []
+    telemetry = LoopTelemetry()
 
     async def evaluate(candidate, output):
         evaluated.append(candidate)
@@ -167,7 +181,7 @@ def test_five_total_candidates_and_real_revisions(tmp_path, pass_at, expected, c
         return candidate + "Better instructions.\n"
 
     output = tmp_path / "run"
-    result = asyncio.run(loop(evaluate, improve, output, {"coverage": {"mode": mode}}))
+    result = asyncio.run(loop(evaluate, improve, output, {"coverage": {"mode": mode}}, telemetry))
     assert result["status"] == (
         "partial_passed" if expected == "passed" and mode == "supplied_sources_only" else expected
     )
@@ -179,6 +193,9 @@ def test_five_total_candidates_and_real_revisions(tmp_path, pass_at, expected, c
     assert json.loads((output / "decision.json").read_text()) == result
     assert (output / "best-instructions.txt").read_text() == evaluated[-1]
     assert result["full_suite_passed"] == (expected == "passed" and mode == "full_suite")
+    assert telemetry.attempt_number == telemetry.completed_candidates == calls
+    # Generic callbacks are not assumed to have dispatched model or judge API calls.
+    assert telemetry.optimizer_attempts == telemetry.judge_groups_submitted == 0
 
 
 @pytest.mark.parametrize("revised", ["", "   ", "x" * 12001])
@@ -263,11 +280,14 @@ def test_serving_project_rejected_before_source_or_network(tmp_path):
         optimizer_deployment="optimizer", optimizer_version="1",
         isolation_review_reference="review", serving_project_endpoint=endpoint,
     )
-    with pytest.raises(ValueError, match="separate isolated"):
+    with pytest.raises(ValueError, match="isolation_required"):
         LiveDemo(config, None)
 
 
-@pytest.mark.parametrize("failure", [None, "budget", "replay", "wrong-status", "schema", "source", "auth"])
+@pytest.mark.parametrize("failure", [
+    None, "budget", "replay", "wrong-status", "schema", "source", "auth",
+    "model-version", "observed-model", "incomplete", "row",
+])
 @pytest.mark.parametrize("mode", ["full_suite", "supplied_sources_only"])
 def test_actual_agent_sdk_path_uses_new_guidance_and_bounded_fresh_calls(monkeypatch, tmp_path, failure, mode):
     """Offline transport double; this test does not assert semantic agent quality."""
@@ -343,10 +363,14 @@ def test_actual_agent_sdk_path_uses_new_guidance_and_bounded_fresh_calls(monkeyp
                 messages=[Message("assistant", [Content.from_text(
                     "invalid JSON" if failure == "schema" else json.dumps(answer),
                 )])],
-                response_id="same" if failure == "replay" else str(uuid4()), model="agent", finish_reason="stop",
+                response_id="same" if failure == "replay" else str(uuid4()),
+                model="unexpected-model" if failure == "observed-model" else "agent",
+                finish_reason="length" if failure == "incomplete" else "stop",
             )
 
     def row(case, payload, report, definition):
+        if failure == "row":
+            raise ValueError("SENSITIVE_ROW_PAYLOAD")
         assert definition["environment_variables"] == settings
         if failure != "wrong-status":
             assert "Do not infer facts." in report.execution.instructions
@@ -358,9 +382,11 @@ def test_actual_agent_sdk_path_uses_new_guidance_and_bounded_fresh_calls(monkeyp
             return evaluator_row(case, payload, report, definition)
         return {"case_id": case["id"]}
 
-    def evaluate(rows, thresholds, deployment, output, mode):
+    def evaluate(rows, thresholds, deployment, output, mode, *, on_event):
         assert deployment == "judge"
         assert ("tool_call_accuracy" in thresholds) == (mode == "live_sources")
+        on_event("submitted")
+        on_event("completed")
         return [
             {"datasource_item_id": i, "status": "completed", "results": [
                 {"name": key, "type": "azure_ai_evaluator", "score": value, "passed": True}
@@ -389,16 +415,44 @@ def test_actual_agent_sdk_path_uses_new_guidance_and_bounded_fresh_calls(monkeyp
     # These transport doubles do not perform live reads; live evidence is tested separately.
     monkeypatch.setattr("documentation_agent.assessment.AssessmentAgent.analysis_problems", lambda *args: [])
     monkeypatch.setattr("tools.hosted_evaluation.evaluator_row", row)
-    demo = LiveDemo(config, SimpleNamespace(model_version=lambda _: "1", evaluate=evaluate))
+    demo = LiveDemo(config, SimpleNamespace(
+        model_version=lambda _: "2" if failure == "model-version" else "1", evaluate=evaluate,
+    ))
     if failure and failure != "wrong-status":
         if failure == "budget":
             demo.calls = 100
         with pytest.raises(
-            ValueError, match="budget exhausted|Replayed model|Invalid JSON|evidence verification|auth failure",
-        ):
+            ValueError, match=(
+                "request_budget_exhausted|response_replay|Invalid JSON|evidence_repair_exhausted|auth failure"
+                "|model_version_mismatch|incomplete_execution_or_unexpected_model|incomplete_response"
+                "|SENSITIVE_ROW_PAYLOAD"
+            ),
+        ) as caught:
             asyncio.run(demo.evaluate("Do not infer facts.", tmp_path))
+        snapshot = demo.telemetry.snapshot(caught.value)
+        expected = {
+            "budget": (Stage.REQUEST, Reason.REQUEST_BUDGET),
+            "replay": (Stage.RESPONSE, Reason.RESPONSE_REPLAY),
+            "source": (Stage.EVIDENCE, Reason.EVIDENCE_REPAIR),
+            "model-version": (Stage.MODEL_CHECK, Reason.MODEL_VERSION_MISMATCH),
+            "observed-model": (Stage.CASE_RESULT, Reason.EXECUTION_MODEL),
+            "incomplete": (Stage.RESPONSE, Reason.INCOMPLETE_RESPONSE),
+            "schema": (Stage.CASE_RESULT, "unknown"),
+            "auth": (Stage.INVOCATION, "unknown"),
+            "row": (Stage.SCORER, "unknown"),
+        }
+        assert (snapshot["stage"], snapshot["reason"]) == expected[failure]
+        counts = snapshot["counters"]
+        assert counts["completed_candidates"] == 0
+        assert counts["completed_cases"] == (
+            1 if failure == "replay" else 2 if failure == "source" and mode == "full_suite" else 0
+        )
+        assert counts["judge_groups_submitted"] == counts["optimizer_attempts"] == 0
+        assert "SENSITIVE_ROW_PAYLOAD" not in json.dumps(snapshot)
         if failure == "budget":
             assert not observed
+            assert counts["counted_model_requests"] == 101
+            assert counts["dispatched_model_requests"] == counts["repair_attempts"] == 0
         return
     if failure == "wrong-status":
         expectations = [case["expected_status"] for case in demo.cases]
@@ -444,16 +498,22 @@ def test_cancellation_records_failure(tmp_path):
     assert (tmp_path / "run" / "manifest.json").is_file()
 
 
-def test_optimizer_is_a_bounded_model_call_not_a_file_editor():
+@pytest.mark.parametrize("failure", [None, "operational", "incomplete", "budget"])
+def test_optimizer_is_a_bounded_model_call_not_a_file_editor(failure):
     from documentation_agent.settings import AssessmentSettings
 
     calls = []
 
     def create(**kwargs):
         calls.append(kwargs)
-        return SimpleNamespace(status="completed", output_text="Do not infer facts.")
+        if failure == "operational":
+            raise RuntimeError("SENSITIVE_OPTIMIZER_OUTPUT")
+        return SimpleNamespace(
+            status="failed" if failure == "incomplete" else "completed", output_text="Do not infer facts.",
+        )
 
     demo = object.__new__(LiveDemo)
+    demo.telemetry = LoopTelemetry()
     demo.settings = AssessmentSettings(
         project_endpoint="https://example.services.ai.azure.com/api/projects/isolated",
         toolbox_endpoint="https://example.services.ai.azure.com/api/projects/isolated/toolboxes/read/mcp?api-version=v1",
@@ -461,12 +521,27 @@ def test_optimizer_is_a_bounded_model_call_not_a_file_editor():
     )
     demo.config = SimpleNamespace(optimizer_deployment="optimizer")
     demo.cloud = SimpleNamespace(client=SimpleNamespace(responses=SimpleNamespace(create=create)))
-    assert asyncio.run(demo.improve("old", {"failure": "groundedness"})) == "Do not infer facts."
+    feedback = {"failure": "x" * 150001 if failure == "budget" else "groundedness"}
+    if failure:
+        with pytest.raises((RuntimeError, OperationalError)) as caught:
+            asyncio.run(demo.improve("old", feedback))
+        snapshot = demo.telemetry.snapshot(caught.value)
+        assert snapshot["stage"] == Stage.OPTIMIZER
+        assert snapshot["reason"] == {
+            "operational": "unknown", "incomplete": Reason.OPTIMIZER_INCOMPLETE,
+            "budget": Reason.OPTIMIZER_BUDGET,
+        }[failure]
+        assert snapshot["counters"]["optimizer_attempts"] == int(failure != "budget")
+        assert snapshot["counters"]["optimizer_completed"] == 0
+        assert "SENSITIVE_OPTIMIZER_OUTPUT" not in json.dumps(snapshot)
+        return
+    assert asyncio.run(demo.improve("old", feedback)) == "Do not infer facts."
     assert calls[0]["model"] == "optimizer"
     assert calls[0]["max_output_tokens"] == 3000
     assert calls[0]["store"] is False
     assert "Never alter evaluator rules" in calls[0]["instructions"]
     assert json.loads(calls[0]["input"])["current_guidance"] == "old"
+    assert demo.telemetry.optimizer_attempts == demo.telemetry.optimizer_completed == 1
 
 
 def test_partial_pass_never_claims_full_suite_quality(tmp_path):
@@ -616,7 +691,9 @@ def test_real_foundry_sdk_schema_repair_is_single_fresh_bounded_invocation(
     )
     judges = []
 
-    def evaluate(rows, thresholds, *args):
+    def evaluate(rows, thresholds, *args, on_event):
+        on_event("submitted")
+        on_event("completed")
         judges.append(rows)
         return [{
             "datasource_item_id": i, "status": "completed", "results": [
@@ -647,6 +724,12 @@ def test_real_foundry_sdk_schema_repair_is_single_fresh_bounded_invocation(
             assert safe_failure(error.value)["validation"]
             assert error.value.__cause__.errors(include_input=False)[0]["type"] == "value_error"
     assert len(requests) == len(sequence) == demo.calls
+    counts = demo.telemetry.snapshot()["counters"]
+    assert counts["counted_model_requests"] == counts["dispatched_model_requests"] == len(sequence)
+    assert counts["repair_attempts"] == len(sequence) - 1
+    assert counts["completed_model_requests"] == sequence.count("valid") + sequence.count("evidence")
+    assert counts["completed_cases"] == int(sequence[-1] == "valid")
+    assert counts["judge_groups_submitted"] == counts["judge_groups_completed"] == len(judges)
     assert len(clients) == len(sequence)
     assert all(client.is_closed() for client in clients)
     if len(requests) == 2:
@@ -689,3 +772,118 @@ def test_source_integrity_check_exception_does_not_enter_correction():
     with pytest.raises(ValueError, match="source integrity violation"):
         asyncio.run(candidate_with_repair(invoke, check))
     assert calls == [False]
+
+
+def test_safe_snapshot_is_a_closed_projection_not_exception_message_matching():
+    secret = "SENSITIVE_INPUT_OR_REASON"
+    telemetry = LoopTelemetry(
+        mode="supplied_sources_only", selected_case_ids=("order-sync-version-isolation", secret),
+    )
+    telemetry.stage = secret
+    telemetry.status = secret
+    telemetry.failure_reason = secret
+    telemetry.counted_model_requests = secret
+    telemetry.excluded_case_ids = (secret,)
+    telemetry.untrusted_feedback = {"source": secret}
+    error = ValueError("incomplete_execution_or_unexpected_model " + secret)
+    snapshot = telemetry.snapshot(error)
+    assert snapshot["stage"] == snapshot["reason"] == snapshot["status"] == "unknown"
+    assert snapshot["exception"] == "ValueError"
+    assert snapshot["counters"]["counted_model_requests"] == 0
+    assert snapshot["coverage"]["selected_case_ids"] == ["order-sync-version-isolation"]
+    assert secret not in json.dumps(snapshot)
+    assert safe_failure(error) == {"exception": "ValueError"}
+    with pytest.raises(TypeError):
+        OperationalError(Stage.REQUEST, secret)
+
+
+def test_main_publishes_only_closed_guard_reason_and_counters(tmp_path, monkeypatch, capsys):
+    secret = "SENSITIVE_EXCEPTION_MESSAGE"
+
+    def fail(*args, **kwargs):
+        error = OperationalError(Stage.CASE_RESULT, Reason.EXECUTION_MODEL)
+        error.args = (secret,)
+        raise error
+
+    monkeypatch.setenv("EVAL_LOOP_APPROVED", "true")
+    monkeypatch.setattr(LoopConfig, "model_validate_json", fail)
+    config = tmp_path / "config.json"
+    config.write_text("{}")
+    output = tmp_path / "run"
+    assert main(["--config", str(config), "--output", str(output), "--execute-approved-isolated"]) == 1
+    captured = capsys.readouterr()
+    snapshot = json.loads(captured.out.removeprefix("eval-loop diagnostics: "))
+    assert (snapshot["stage"], snapshot["reason"]) == (Stage.CASE_RESULT, Reason.EXECUTION_MODEL)
+    assert snapshot["status"] == "blocked"
+    assert not any(snapshot["counters"].values())
+    assert secret not in captured.out + captured.err
+    assert all(secret not in path.read_text() for path in output.iterdir())
+
+
+def test_later_candidate_failure_retains_completed_candidate_accounting(tmp_path):
+    telemetry = LoopTelemetry()
+
+    async def evaluate(candidate, output):
+        if candidate:
+            raise OperationalError(Stage.CASE_RESULT, Reason.EXECUTION_MODEL)
+        return False, 0.5, {}
+
+    async def improve(candidate, feedback):
+        return "changed guidance"
+
+    with pytest.raises(OperationalError) as caught:
+        asyncio.run(loop(evaluate, improve, tmp_path / "run", telemetry=telemetry))
+    snapshot = telemetry.snapshot(caught.value)
+    assert snapshot["status"] == "blocked"
+    assert snapshot["counters"]["attempt_number"] == 2
+    assert snapshot["counters"]["completed_candidates"] == 1
+    assert snapshot["counters"]["completed_cases"] == snapshot["counters"]["attempt_completed_cases"] == 0
+    assert snapshot["counters"]["optimizer_attempts"] == snapshot["counters"]["dispatched_model_requests"] == 0
+
+
+@pytest.mark.parametrize("failure", ["definition", "submission", "run", "outputs", None])
+def test_judge_counters_follow_actual_run_submission_and_completion(tmp_path, failure):
+    from tools.release import FoundryEvaluation
+
+    secret = "SENSITIVE_JUDGE_RESULT"
+    telemetry = LoopTelemetry()
+
+    class Dump(SimpleNamespace):
+        def model_dump(self):
+            return vars(self)
+
+    def definition(**kwargs):
+        if failure == "definition":
+            raise ValueError(secret)
+        return Dump(id="eval-id")
+
+    def submit(**kwargs):
+        if failure == "submission":
+            raise ValueError(secret)
+        return Dump(id="run-id", status="failed" if failure == "run" else "completed", error=None)
+
+    def outputs(**kwargs):
+        if failure == "outputs":
+            raise ValueError(secret)
+        return []
+
+    cloud = FoundryEvaluation(None, SimpleNamespace(evals=SimpleNamespace(
+        create=definition, runs=SimpleNamespace(create=submit, output_items=SimpleNamespace(list=outputs)),
+    )))
+    error = None
+    try:
+        cloud.evaluate([], {"groundedness": 3.0}, "judge", tmp_path, "supplied_sources",
+                       on_event=telemetry.judge_event)
+    except ValueError as exc:
+        error = exc
+    assert (error is not None) == (failure is not None)
+    snapshot = telemetry.snapshot(error)
+    assert snapshot["counters"]["judge_groups_submitted"] == int(failure not in {"definition", "submission"})
+    assert snapshot["counters"]["judge_groups_completed"] == int(failure in {None, "outputs"})
+    assert snapshot["counters"]["completed_candidates"] == snapshot["counters"]["completed_cases"] == 0
+    assert snapshot["stage"] == {
+        "definition": Stage.JUDGE_DEFINITION, "submission": Stage.JUDGE_SUBMISSION,
+        "run": Stage.JUDGE_POLLING, "outputs": Stage.JUDGE_OUTPUTS, None: Stage.JUDGE_OUTPUTS,
+    }[failure]
+    assert snapshot["reason"] == (Reason.JUDGE_RUN if failure == "run" else "unknown")
+    assert secret not in json.dumps(snapshot)
