@@ -7,6 +7,8 @@ from uuid import uuid4
 import pytest
 
 from tools.eval_loop import (
+    SUPPLIED_OUTPUT_GUIDANCE,
+    SUPPLIED_REPAIR_INSTRUCTIONS,
     THRESHOLDS,
     LiveDemo,
     LoopConfig,
@@ -14,6 +16,7 @@ from tools.eval_loop import (
     OperationalError,
     Reason,
     Stage,
+    ci_supplied_instructions,
     http_failure,
     loop,
     main,
@@ -541,6 +544,9 @@ def test_optimizer_is_a_bounded_model_call_not_a_file_editor(failure):
     assert calls[0]["store"] is False
     assert "Never alter evaluator rules" in calls[0]["instructions"]
     assert json.loads(calls[0]["input"])["current_guidance"] == "old"
+    assert json.loads(calls[0]["input"])["immutable_base_instructions"]["supplied_sources"].endswith(
+        SUPPLIED_OUTPUT_GUIDANCE,
+    )
     assert demo.telemetry.optimizer_attempts == demo.telemetry.optimizer_completed == 1
 
 
@@ -623,6 +629,7 @@ def test_real_foundry_sdk_schema_repair_is_single_fresh_bounded_invocation(
         assert not {"previous_response_id", "conversation"} & body.keys()
         assert body["text"]["format"]["type"] == "json_schema"
         assert body["text"]["format"]["strict"] is True
+        assert SUPPLIED_OUTPUT_GUIDANCE in body["instructions"]
         outcome = sequence[len(requests) - 1]
         if outcome == "http":
             return httpx.Response(403, json={"error": {"code": "Forbidden", "message": secret}})
@@ -734,6 +741,7 @@ def test_real_foundry_sdk_schema_repair_is_single_fresh_bounded_invocation(
     assert all(client.is_closed() for client in clients)
     if len(requests) == 2:
         assert REPAIR_INSTRUCTIONS.strip() in requests[1]["instructions"]
+        assert requests[1]["instructions"].endswith(SUPPLIED_REPAIR_INSTRUCTIONS)
         assert secret not in json.dumps(requests[1])
         assert requests[0]["input"] == requests[1]["input"]
     invocations = sorted(output.rglob("*-invocation-*.json"))
@@ -772,6 +780,47 @@ def test_source_integrity_check_exception_does_not_enter_correction():
     with pytest.raises(ValueError, match="source integrity violation"):
         asyncio.run(candidate_with_repair(invoke, check))
     assert calls == [False]
+
+
+def test_ci_supplied_guidance_explains_crossfields_without_fixture_specific_answers():
+    from documentation_agent.evaluation import supplied_instructions
+
+    from tools.eval_loop import runtime_settings
+    from tools.release_sources import load_cases
+
+    config = LoopConfig.model_validate_json(
+        Path("infra/isolated-evaluation/supplied-demo-config.json").read_text(),
+    )
+    settings = runtime_settings(config)
+    serving = supplied_instructions(settings)
+    instructions = ci_supplied_instructions(settings)
+    assert instructions == serving + SUPPLIED_OUTPUT_GUIDANCE
+    assert SUPPLIED_OUTPUT_GUIDANCE not in serving
+    for text in (
+        "When proposed_changes is nonempty, set requires_human_review=true",
+        "never means approval has occurred",
+        "Evidence IDs must be unique",
+        "nonempty evidence_refs that resolve to IDs in evidence",
+        "documentation_status=up_to_date, evidence must be nonempty",
+        "findings, proposed_changes and missing_information must all be empty",
+        "documentation_status=gaps_found, findings must be nonempty",
+        "documentation_status=insufficient_information, missing_information must be nonempty",
+        "When an explicit task has unresolved missing_information, use insufficient_information",
+        "copy source, uri and version unchanged from the same available source snapshot",
+        "short contiguous verbatim substring",
+    ):
+        assert text in SUPPLIED_OUTPUT_GUIDANCE
+    assert "requires_human_review=true" in SUPPLIED_REPAIR_INSTRUCTIONS
+    assert "copy source, uri and version unchanged" in SUPPLIED_REPAIR_INSTRUCTIONS
+    assert "excerpt verbatim from its content" in SUPPLIED_REPAIR_INSTRUCTIONS
+    _, cases = load_cases(Path("evals/datasets/suite.json"), Path.cwd())
+    added = SUPPLIED_OUTPUT_GUIDANCE + SUPPLIED_REPAIR_INSTRUCTIONS
+    for case in cases:
+        assert case["id"] not in added and case["question"] not in added
+        for source in case["sources"]:
+            assert source["uri"] not in added and source["version"] not in added
+    for answer_fragment in ("maxRetries", "batchSize", "dead_letter", "deadLetter", "order-sync"):
+        assert answer_fragment not in added
 
 
 def test_safe_snapshot_is_a_closed_projection_not_exception_message_matching():

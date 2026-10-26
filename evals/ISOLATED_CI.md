@@ -219,3 +219,17 @@ completion requires completed status and nonempty guidance. Partial failures
 retain their actual counters, without inferring completed candidates or calls.
 No diagnostic artifact upload is added; raw publication still requires separate
 approval. A hard process kill can prevent the final stdout line.
+
+The CI supplied-source path appends generic contract guidance before the first
+invocation and repeats the key checks in its fixed correction guidance. The
+serving supplied prompt already requires exact references and verbatim excerpts,
+but does not explicitly state `requires_human_review=true` for proposed changes
+or every status-dependent array invariant enforced by the Pydantic validators.
+Those cross-field validators are not encoded by the generated JSON Schema.
+CI guidance spells out those existing rules and the source/URI/version-to-snapshot
+copying requirement; it contains no fixture IDs, answers, source pins or per-case
+expected statuses. The optimizer sees the same immutable supplied base used by
+candidate invocation. Serving prompts, live-tool instructions, schema, source
+checks, judges, correction/candidate budgets and thresholds remain unchanged.
+This addresses an instruction omission, not proof of the precise offending live
+evidence or a claim that a subsequent live evaluation will pass.
