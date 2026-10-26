@@ -2,6 +2,29 @@
 
 import json
 import sys
+from pathlib import Path
+
+
+def verify_config(config):
+    assert set(config) == {
+        "mode", "settings", "observed_model", "evaluator_deployment", "evaluator_version",
+        "optimizer_deployment", "optimizer_version", "isolation_review_reference", "serving_project_endpoint",
+    }
+    assert config["mode"] == "supplied_sources_only"
+    assert config["settings"] == {
+        "DOCUMENTATION_PROJECT_ENDPOINT": "https://foundry-eval-ci-r8n3ld.services.ai.azure.com/api/projects/evaluation-ci",
+        "AZURE_AI_MODEL_DEPLOYMENT_NAME": "eval-candidate-full",
+        "DOCUMENTATION_MODEL_VERSION": "2026-03-05",
+        "DOCUMENTATION_ADO_PROJECT": "integration-team",
+        "DOCUMENTATION_ADO_WIKI": "integration-team.wiki",
+        "DOCUMENTATION_AUTH_MODE": "azure_cli",
+    }
+    assert config["observed_model"] == "gpt-5.4-2026-03-05"
+    assert config["evaluator_deployment"] == "eval-judge" and config["evaluator_version"] == "2026-03-17"
+    assert config["optimizer_deployment"] == "eval-optimizer" and config["optimizer_version"] == "2026-03-17"
+    assert config["serving_project_endpoint"] == (
+        "https://foundry-agentic-r8n3ld.services.ai.azure.com/api/projects/proj-agentic"
+    )
 
 
 def verify(template):
@@ -9,6 +32,33 @@ def verify(template):
     assert template["variables"]["accountName"] == "foundry-eval-ci-r8n3ld"
     assert template["variables"]["projectName"] == "evaluation-ci"
     assert template["variables"]["identityName"] == "id-gh-isolated-eval"
+    models = [r for r in resources if r["type"] == "Microsoft.CognitiveServices/accounts/deployments"]
+    assert len(models) == 2
+    slots = (
+        "createArray(createObject('name', 'eval-candidate', 'capacity', 50), "
+        "createObject('name', 'eval-judge', 'capacity', 50), "
+        "createObject('name', 'eval-optimizer', 'capacity', 10))"
+    )
+    mini = next(r for r in models if "copy" in r)
+    assert mini["copy"] == {"name": "models", "count": f"[length({slots})]", "mode": "serial", "batchSize": 1}
+    assert mini["name"] == "[format('{0}/{1}', variables('accountName'), " + slots + "[copyIndex()].name)]"
+    assert mini["sku"] == {"name": "GlobalStandard", "capacity": f"[{slots}[copyIndex()].capacity]"}
+    assert mini["properties"] == {
+        "model": {"format": "OpenAI", "name": "gpt-5.4-mini", "version": "2026-03-17"},
+        "versionUpgradeOption": "NoAutoUpgrade", "raiPolicyName": "Microsoft.DefaultV2",
+    }
+    full = next(r for r in models if "copy" not in r)
+    assert full == {
+        "type": "Microsoft.CognitiveServices/accounts/deployments",
+        "apiVersion": "2025-10-01-preview",
+        "name": "[format('{0}/{1}', variables('accountName'), 'eval-candidate-full')]",
+        "sku": {"name": "GlobalStandard", "capacity": 50},
+        "properties": {
+            "model": {"format": "OpenAI", "name": "gpt-5.4", "version": "2026-03-05"},
+            "versionUpgradeOption": "NoAutoUpgrade", "raiPolicyName": "Microsoft.DefaultV2",
+        },
+        "dependsOn": ["[resourceId('Microsoft.CognitiveServices/accounts', variables('accountName'))]", "models"],
+    }
     assert template["variables"]["inferenceDataActions"] == [
         "Microsoft.CognitiveServices/accounts/OpenAI/deployments/read",
         "Microsoft.CognitiveServices/accounts/AIServices/deployments/read",
@@ -89,3 +139,5 @@ def verify(template):
 
 if __name__ == "__main__":
     print(verify(json.load(sys.stdin)))
+    verify_config(json.loads(Path(__file__).with_name("supplied-demo-config.json").read_text()))
+    print("Full candidate configuration lineage and unchanged mini judge/optimizer verified")

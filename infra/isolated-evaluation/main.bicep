@@ -58,6 +58,18 @@ resource models 'Microsoft.CognitiveServices/accounts/deployments@2025-10-01-pre
   }
 }]
 
+resource fullCandidate 'Microsoft.CognitiveServices/accounts/deployments@2025-10-01-preview' = {
+  parent: account
+  name: 'eval-candidate-full'
+  dependsOn: [models]
+  sku: { name: 'GlobalStandard', capacity: 50 }
+  properties: {
+    model: { format: 'OpenAI', name: 'gpt-5.4', version: '2026-03-05' }
+    versionUpgradeOption: 'NoAutoUpgrade'
+    raiPolicyName: 'Microsoft.DefaultV2'
+  }
+}
+
 resource identity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
   name: identityName
   location: location

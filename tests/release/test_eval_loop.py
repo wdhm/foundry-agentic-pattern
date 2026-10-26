@@ -603,8 +603,11 @@ def test_reviewed_partial_configuration_needs_no_toolbox():
     assert isinstance(settings, SuppliedSettings)
     assert "TOOLBOX_ENDPOINT" not in config.settings
     assert settings.project_endpoint != config.serving_project_endpoint
-    assert settings.model_version == config.evaluator_version == config.optimizer_version == "2026-03-17"
-    assert config.observed_model == "gpt-5.4-mini-2026-03-17"
+    assert settings.model == "eval-candidate-full"
+    assert settings.model_version == "2026-03-05"
+    assert config.observed_model == "gpt-5.4-2026-03-05"
+    assert (config.evaluator_deployment, config.optimizer_deployment) == ("eval-judge", "eval-optimizer")
+    assert config.evaluator_version == config.optimizer_version == "2026-03-17"
     assert config.model_copy(update={"mode": "full_suite"}).mode == "full_suite"
     with pytest.raises(ValueError, match="toolbox_endpoint"):
         runtime_settings(config.model_copy(update={"mode": "full_suite"}))
@@ -616,7 +619,7 @@ def test_reviewed_partial_configuration_needs_no_toolbox():
     ("request", "valid"), ("request", "request"),
     ("request", "schema"), ("schema", "request"),
     ("request", "evidence"), ("evidence", "request"),
-    ("persist-io",), ("persist-nonfinite",),
+    ("persist-io",), ("persist-nonfinite",), ("full-valid",),
 ])
 def test_real_foundry_sdk_schema_repair_is_single_fresh_bounded_invocation(
     monkeypatch, tmp_path, capsys, sequence,
@@ -629,6 +632,10 @@ def test_real_foundry_sdk_schema_repair_is_single_fresh_bounded_invocation(
 
     requests, clients = [], []
     secret = "SENSITIVE_INVALID_OUTPUT"
+    full = sequence == ("full-valid",)
+    deployment, version, observed = (
+        ("eval-candidate-full", "2026-03-05", "gpt-5.4-2026-03-05") if full else ("agent", "1", "agent")
+    )
 
     def handler(request):
         body = json.loads(request.content)
@@ -637,6 +644,8 @@ def test_real_foundry_sdk_schema_repair_is_single_fresh_bounded_invocation(
         assert not {"previous_response_id", "conversation"} & body.keys()
         assert body["text"]["format"]["type"] == "json_schema"
         assert body["text"]["format"]["strict"] is True
+        assert body["model"] == deployment
+        assert body["max_output_tokens"] == 4096
         assert SUPPLIED_OUTPUT_GUIDANCE in body["instructions"]
         outcome = sequence[len(requests) - 1]
         if outcome == "http":
@@ -674,7 +683,7 @@ def test_real_foundry_sdk_schema_repair_is_single_fresh_bounded_invocation(
             }])
         return httpx.Response(200, json={
             "id": f"resp_{len(requests)}", "object": "response", "created_at": 1,
-            "model": "agent", "status": "completed",
+            "model": observed, "status": "completed",
             "output": [{"type": "message", "id": f"msg_{len(requests)}", "role": "assistant",
                         "status": "completed", "content": [{
                             "type": "output_text", "text": json.dumps(answer), "annotations": [],
@@ -714,10 +723,10 @@ def test_real_foundry_sdk_schema_repair_is_single_fresh_bounded_invocation(
 
         monkeypatch.setattr("tools.eval_loop.save", fail_persistence)
     config = LoopConfig(
-        mode="supplied_sources_only", observed_model="agent",
+        mode="supplied_sources_only", observed_model=observed,
         settings={
             "DOCUMENTATION_PROJECT_ENDPOINT": "https://isolated.example/api/projects/eval",
-            "AZURE_AI_MODEL_DEPLOYMENT_NAME": "agent", "DOCUMENTATION_MODEL_VERSION": "1",
+            "AZURE_AI_MODEL_DEPLOYMENT_NAME": deployment, "DOCUMENTATION_MODEL_VERSION": version,
             "DOCUMENTATION_ADO_PROJECT": "demo", "DOCUMENTATION_ADO_WIKI": "demo",
             "DOCUMENTATION_AUTH_MODE": "azure_cli",
         },
@@ -739,7 +748,9 @@ def test_real_foundry_sdk_schema_repair_is_single_fresh_bounded_invocation(
             ],
         } for i in range(len(rows))]
 
-    demo = LiveDemo(config, SimpleNamespace(model_version=lambda _: "1", evaluate=evaluate))
+    demo = LiveDemo(config, SimpleNamespace(
+        model_version=lambda name: version if name == deployment else "1", evaluate=evaluate,
+    ))
     demo.cases = (
         [next(case for case in demo.cases if case["id"] == "order-sync-dead-letter-stub")]
         if "request" in sequence else demo.cases[:1]
@@ -749,7 +760,7 @@ def test_real_foundry_sdk_schema_repair_is_single_fresh_bounded_invocation(
     async def improve(*args):
         pytest.fail("Operational failure must never call optimizer")
 
-    if sequence[-1] == "valid":
+    if sequence[-1] in {"valid", "full-valid"}:
         output.mkdir()
         asyncio.run(demo.evaluate("", output))
         assert len(judges) == 1
@@ -776,9 +787,10 @@ def test_real_foundry_sdk_schema_repair_is_single_fresh_bounded_invocation(
     assert counts["counted_model_requests"] == counts["dispatched_model_requests"] == len(sequence)
     assert counts["repair_attempts"] == len(sequence) - 1
     assert counts["completed_model_requests"] == sum(
-        sequence.count(kind) for kind in ("valid", "evidence", "request", "persist-io", "persist-nonfinite")
+        sequence.count(kind)
+        for kind in ("valid", "full-valid", "evidence", "request", "persist-io", "persist-nonfinite")
     )
-    assert counts["completed_cases"] == int(sequence[-1] == "valid")
+    assert counts["completed_cases"] == int(sequence[-1] in {"valid", "full-valid"})
     assert counts["judge_groups_submitted"] == counts["judge_groups_completed"] == len(judges)
     assert len(clients) == len(sequence)
     assert all(client.is_closed() for client in clients)

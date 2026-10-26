@@ -11,7 +11,9 @@ from pathlib import Path
 import pytest
 
 INFRA = Path(__file__).parents[2] / "infra" / "isolated-evaluation"
-verify = runpy.run_path(str(INFRA / "assert-template.py"))["verify"]
+checks = runpy.run_path(str(INFRA / "assert-template.py"))
+verify = checks["verify"]
+verify_config = checks["verify_config"]
 
 
 @pytest.fixture(scope="module")
@@ -28,6 +30,56 @@ def template():
 
 def test_exact_compiled_isolated_roles(template):
     assert verify(template)
+
+
+@pytest.mark.parametrize("mutation", [
+    "parent", "model", "version", "sku", "capacity", "upgrade", "identity", "judge_model", "mini_capacity",
+])
+def test_compiled_assertions_reject_model_or_identity_drift(template, mutation):
+    value = copy.deepcopy(template)
+    models = [r for r in value["resources"] if r["type"].endswith("/deployments")]
+    full = next(r for r in models if "copy" not in r)
+    mini = next(r for r in models if "copy" in r)
+    if mutation == "parent":
+        full["name"] = "foundry-agentic-R8N3LD/eval-candidate-full"
+    elif mutation == "model":
+        full["properties"]["model"]["name"] = "gpt-6-luna"
+    elif mutation == "version":
+        full["properties"]["model"]["version"] = "latest"
+    elif mutation == "sku":
+        full["sku"]["name"] = "DataZoneStandard"
+    elif mutation == "capacity":
+        full["sku"]["capacity"] = 100
+    elif mutation == "upgrade":
+        full["properties"]["versionUpgradeOption"] = "OnceNewDefaultVersionAvailable"
+    elif mutation == "identity":
+        full["identity"] = {"type": "SystemAssigned"}
+    elif mutation == "judge_model":
+        mini["properties"]["model"]["name"] = "gpt-5.4"
+    else:
+        mini["sku"]["capacity"] = 100
+    with pytest.raises(AssertionError):
+        verify(value)
+
+
+def test_full_supplied_configuration_lineage():
+    verify_config(json.loads((INFRA / "supplied-demo-config.json").read_text()))
+
+
+@pytest.mark.parametrize("field,value", [
+    ("observed_model", "gpt-5.4-mini-2026-03-17"),
+    ("evaluator_version", "2026-03-05"), ("optimizer_version", "2026-03-05"),
+    ("evaluator_deployment", "eval-candidate-full"), ("optimizer_deployment", "eval-candidate-full"),
+    ("AZURE_AI_MODEL_DEPLOYMENT_NAME", "eval-candidate"), ("DOCUMENTATION_MODEL_VERSION", "2026-03-17"),
+    ("DOCUMENTATION_PROJECT_ENDPOINT", "https://foundry-agentic-r8n3ld.services.ai.azure.com/api/projects/proj-agentic"),
+    ("reasoning_effort", "low"),
+])
+def test_configuration_assertions_reject_lineage_routing_or_option_changes(field, value):
+    config = json.loads((INFRA / "supplied-demo-config.json").read_text())
+    target = config if field in config else config["settings"]
+    target[field] = value
+    with pytest.raises(AssertionError):
+        verify_config(config)
 
 
 @pytest.mark.parametrize("mutation", [
