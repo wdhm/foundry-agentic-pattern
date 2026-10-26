@@ -17,7 +17,7 @@ from urllib.parse import urlsplit
 from uuid import uuid4
 
 from documentation_agent.settings import AssessmentSettings
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from tools.release import METRICS, FoundryEvaluation, save
 from tools.release_sources import load_cases
@@ -71,6 +71,37 @@ def http_failure(exc: BaseException) -> dict[str, Any]:
                        if isinstance(value, BaseException))
     return {}
 ROOT = Path.cwd()
+
+
+def safe_failure(exc: BaseException) -> dict[str, Any]:
+    """Keep exception payloads out of logs and operational-failure artifacts."""
+    result: dict[str, Any] = {"exception": type(exc).__name__}
+    pending = [exc]
+    seen: set[int] = set()
+    validation = []
+    while pending:
+        error = pending.pop()
+        if id(error) in seen:
+            continue
+        seen.add(id(error))
+        if isinstance(error, ValidationError):
+            for item in error.errors(include_input=False, include_context=False, include_url=False):
+                validation.append({
+                    # Locations may contain untrusted dictionary keys. Preserve only indices.
+                    "location": [part if type(part) is int else "<field>" for part in item["loc"]],
+                    "type": item["type"] if item["type"] in {
+                        "value_error", "missing", "extra_forbidden", "literal_error",
+                        "string_type", "int_type", "bool_type", "json_invalid",
+                    } else "validation_error",
+                })
+        pending.extend(value for value in (error.__cause__, error.__context__, *error.args)
+                       if isinstance(value, BaseException))
+    if validation:
+        result["validation"] = validation
+    diagnostic = http_failure(exc)
+    if diagnostic:
+        result["http"] = diagnostic
+    return result
 
 
 class LoopConfig(BaseModel):
@@ -200,7 +231,7 @@ async def loop(
             seen.add(digest(revised))
             candidate = revised
     except (Exception, asyncio.CancelledError) as exc:
-        decision.update(status="blocked", error=f"{type(exc).__name__}: {exc}")
+        decision.update(status="blocked", error=safe_failure(exc))
         raise
     finally:
         save(output / "decision.json", decision)
@@ -507,15 +538,13 @@ def main(argv: list[str] | None = None) -> int:
             decision = asyncio.run(execute())
         return 0 if decision["status"] in {"passed", "partial_passed"} else 1
     except Exception as exc:
-        diagnostic = http_failure(exc)
-        print(f"eval-loop blocked: {type(exc).__name__}" + ("" if diagnostic else f": {exc}"), file=sys.stderr)
-        if diagnostic:
-            print("eval-loop HTTP metadata: " + json.dumps(diagnostic, sort_keys=True), file=sys.stderr)
+        diagnostic = safe_failure(exc)
+        print("eval-loop blocked: " + json.dumps(diagnostic, sort_keys=True), file=sys.stderr)
         if not args.output.exists():
             args.output.mkdir(parents=True)
             save(args.output / "decision.json", {
                 "status": "blocked", "promoted": False, "promotion_eligible": False,
-                "error": f"{type(exc).__name__}: {exc}", "attempts": [],
+                "error": diagnostic, "attempts": [],
             })
             (args.output / "summary.md").write_text(
                 "## Isolated evaluation loop\n\n**Blocked before evaluation**; see the step logs. "
