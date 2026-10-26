@@ -21,6 +21,7 @@ from uuid import uuid4
 from documentation_agent.settings import AssessmentSettings
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from contracts.v1 import AgentRequest, AgentResult, AnalysisOutput, Provenance, assemble_result, request_status_conflict
 from tools.release import METRICS, EvaluationEvent, FoundryEvaluation, save
 from tools.release_sources import load_cases
 
@@ -46,6 +47,7 @@ class Stage(StrEnum):
     RESPONSE = "model_response"
     EVIDENCE = "evidence_verification"
     CASE_RESULT = "case_result"
+    PERSISTENCE = "case_persistence"
     SCORER = "evaluator_row"
     JUDGE_DEFINITION = "judge_definition"
     JUDGE_SUBMISSION = "judge_submission"
@@ -69,6 +71,9 @@ class Reason(StrEnum):
     INCOMPLETE_RESPONSE = "incomplete_response"
     EXECUTION_MODEL = "incomplete_execution_or_unexpected_model"
     EVIDENCE_REPAIR = "evidence_repair_exhausted"
+    OUTPUT_REPAIR = "output_contract_repair_exhausted"
+    REQUEST_REPAIR = "request_contract_repair_exhausted"
+    REQUEST_STATUS = "request_status_conflict"
     JUDGE_ROWS = "judge_rows_invalid"
     JUDGE_FAILED = "judge_failed"
     JUDGE_RESULTS = "judge_results_invalid"
@@ -243,6 +248,7 @@ SUPPLIED_REPAIR_INSTRUCTIONS = (
 
 async def candidate_with_repair(
     invoke: Callable[[bool], Awaitable[str]], check: Callable[[str], list[str]],
+    contract_check: Callable[[str], Reason | None] | None = None,
 ) -> str:
     from agent_framework.exceptions import ChatClientException
 
@@ -253,11 +259,34 @@ async def candidate_with_repair(
             if correction or not schema_parse_failure(exc):
                 raise
             continue
-        if not check(text):
+        problem = contract_check(text) if contract_check is not None else None
+        if problem is None and check(text):
+            problem = Reason.EVIDENCE_REPAIR
+        if problem is None:
             return text
         if correction:
-            raise OperationalError(Stage.EVIDENCE, Reason.EVIDENCE_REPAIR)
+            raise OperationalError(
+                Stage.EVIDENCE if problem == Reason.EVIDENCE_REPAIR else Stage.CASE_RESULT, problem,
+            )
     raise AssertionError("Unreachable correction state.")
+
+
+def checked_result(request: AgentRequest, output: AnalysisOutput, provenance: Provenance) -> AgentResult:
+    if request_status_conflict(request, output):
+        raise OperationalError(Stage.CASE_RESULT, Reason.REQUEST_STATUS)
+    return assemble_result(request, output, provenance)
+
+
+def candidate_contract_problem(request: AgentRequest, provenance: Provenance, text: str) -> Reason | None:
+    try:
+        output = AnalysisOutput.model_validate_json(text)
+    except ValidationError:
+        return Reason.OUTPUT_REPAIR
+    if request_status_conflict(request, output):
+        return Reason.REQUEST_REPAIR
+    # Metadata and unrelated assembly failures are operational, never model-repair feedback.
+    checked_result(request, output, provenance)
+    return None
 
 
 def safe_failure(exc: BaseException) -> dict[str, Any]:
@@ -524,10 +553,20 @@ class LiveDemo:
         from documentation_agent.read_policy import ReadOnlyPolicy, parse_read_result, read_tools
 
         from contracts.evaluation import EvaluationRequest, EvaluationResponse, ExecutionRecord
-        from contracts.v1 import CONTRACT_VERSION, AnalysisOutput, Provenance, assemble_result
+        from contracts.v1 import CONTRACT_VERSION
         from tools.hosted_evaluation import evaluation_request, evaluator_row
 
         owner = self
+
+        def provenance(instructions: str) -> Provenance:
+            return Provenance(
+                contract_version=CONTRACT_VERSION, agent_name="documentation-agent", agent_version=APP_VERSION,
+                model=self.settings.model, model_version=self.settings.model_version,
+                prompt_version="sha256:" + digest(instructions),
+                policy_version="sha256:" + digest(
+                    (APP_DIR / "policies/documentation-analysis-v1.txt").read_text(encoding="utf-8").strip(),
+                ),
+            )
 
         class BoundedCapture(CaptureModel):
             def __init__(self, record: ExecutionRecord, *, tools_disabled: bool, correction: bool) -> None:
@@ -657,7 +696,11 @@ class LiveDemo:
                         owner.telemetry.stage = Stage.EVIDENCE
                         return check(value)
 
-                    text = await candidate_with_repair(invoke, verify)
+                    def verify_contract(value: str) -> Reason | None:
+                        owner.telemetry.stage = Stage.CASE_RESULT
+                        return candidate_contract_problem(payload.request, provenance(record.instructions), value)
+
+                    text = await candidate_with_repair(invoke, verify, verify_contract)
                     return text, record
 
                 if live:
@@ -693,17 +736,10 @@ class LiveDemo:
                 verify_snapshots(analysis, payload)
             self.telemetry.stage = Stage.CASE_RESULT
             record.status = "completed"
-            provenance = Provenance(
-                contract_version=CONTRACT_VERSION, agent_name="documentation-agent", agent_version=APP_VERSION,
-                model=self.settings.model, model_version=self.settings.model_version,
-                prompt_version="sha256:" + digest(record.instructions),
-                policy_version="sha256:" + digest(
-                    (APP_DIR / "policies/documentation-analysis-v1.txt").read_text(encoding="utf-8").strip(),
-                ),
-            )
             report = EvaluationResponse(
-                result=assemble_result(payload.request, analysis, provenance), execution=record,
+                result=checked_result(payload.request, analysis, provenance(record.instructions)), execution=record,
             )
+            self.telemetry.stage = Stage.PERSISTENCE
             save(output / f"{case['id']}-evaluation.json", report.model_dump(mode="json"))
             # Status mismatch is quality feedback, not a source-validation failure.
             source_case = {**case, "expected_status": report.result.documentation_status}
@@ -740,8 +776,6 @@ class LiveDemo:
     async def improve(self, candidate: str, feedback: dict[str, Any]) -> str:
         self.telemetry.stage = Stage.OPTIMIZER
         from documentation_agent.assessment import AssessmentAgent
-
-        from contracts.v1 import AnalysisOutput
 
         data = json.dumps({
             "immutable_base_instructions": {

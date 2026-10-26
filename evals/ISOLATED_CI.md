@@ -167,10 +167,25 @@ failures, not quality retries. Restricted execution captures still require the
 separate artifact-publication approval.
 
 CI candidate invocation allows one total correction per case, shared between
-evidence verification and the SDK's directly wrapped `AnalysisOutput` parsing
-failure. A second invalid schema/evidence result blocks evaluation; HTTP,
+evidence verification, the SDK's directly wrapped `AnalysisOutput` parsing
+failure and request-aware result validation. Before accepting an invocation,
+CI reuses the full `AnalysisOutput` schema and assembles an `AgentResult`, including
+its inherited output constraints and trusted request/provenance fields. The
+existing pure request-status predicate is shared with serving assembly:
+an explicit task with unresolved `missing_information` requires
+`insufficient_information`, even though `gaps_found` plus missing information
+can satisfy the output-only schema. Serving assembly behavior is unchanged.
+
+Only output-schema rejection or this explicit request-status conflict enters
+the existing fixed correction, never a broad catch of assembly `ValueError`.
+A second invalid schema/evidence/request result blocks evaluation; HTTP,
 authentication, timeout, source-integrity and unrelated exceptions do not enter
-schema repair. This does not change the serving runtime's repair behavior.
+repair. Invalid trusted metadata, unexpected assembly failures, I/O and nonfinite
+persistence values fail immediately rather than consuming a model correction.
+Final assembly repeats the typed request-status guard; persistence has its own
+`case_persistence` stage. A locally reproduced canonical-fixture conflict proves
+the old validation-boundary gap, not that it caused an unpublished live failure.
+This does not change the serving runtime's repair behavior.
 Correction feedback is fixed, not copied from invalid output or exception text.
 Each invocation uses a new client, agent, session and evidence/guard context,
 resubmitting the canonical input rather than resuming failed conversation state.
