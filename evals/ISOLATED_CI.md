@@ -58,6 +58,13 @@ latter fails immediately rather than asking the optimizer to repair credentials.
 
 ## Triggers and approvals
 
+Operational HTTP failures expose only allowlisted diagnostic metadata: status,
+safe error code, known inference API path, request IDs and referenced Cognitive
+Services operation names when supplied by the service. SDK wrapper exceptions
+are traversed without logging HTTP bodies, headers, query strings or source
+content. A 403 is an operational failure, never a quality verdict; do not broaden
+IAM or repeatedly retry inference without reviewing its concrete cause.
+
 Agent source, contracts, shared tools (including the existing ADO MCP
 `requirements.txt`), dataset, knowledge, dependency manifest
 and this workflow trigger offline checks on PRs and main pushes. PRs, including

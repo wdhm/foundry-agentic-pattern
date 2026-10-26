@@ -6,12 +6,14 @@ import hashlib
 import json
 import math
 import os
+import re
 import subprocess
 import sys
 from collections.abc import Awaitable, Callable
 from functools import partial
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 from documentation_agent.settings import AssessmentSettings
@@ -28,6 +30,46 @@ SCOPES: dict[str, Literal["change_review", "information_review"]] = {
     "order-sync-dead-letter-stub": "information_review",
     "order-sync-wiki-unavailable": "change_review",
 }
+
+
+def http_failure(exc: BaseException) -> dict[str, Any]:
+    """Expose only allowlisted HTTP metadata, never SDK payloads or credentials."""
+    pending = [exc]
+    seen: set[int] = set()
+    while pending:
+        error = pending.pop()
+        if id(error) in seen:
+            continue
+        seen.add(id(error))
+        response = getattr(error, "response", None)
+        status = getattr(error, "status_code", None)
+        if response is not None and type(status) is int:
+            result: dict[str, Any] = {"status": status}
+            path = urlsplit(str(getattr(getattr(response, "request", None), "url", ""))).path
+            if re.fullmatch(r"/api/projects/[A-Za-z0-9_-]+/openai/v1/(responses|chat/completions)", path):
+                result["api_path"] = path
+            for header in ("apim-request-id", "x-ms-request-id", "x-request-id"):
+                value = response.headers.get(header, "")
+                if re.fullmatch(r"[A-Za-z0-9_-]{1,128}", value):
+                    result[header] = value
+            body = getattr(error, "body", None)
+            if isinstance(body, dict):
+                detail = body.get("error", body)
+                if isinstance(detail, dict):
+                    code = detail.get("code")
+                    if isinstance(code, str) and re.fullmatch(r"[A-Za-z0-9_.-]{1,80}", code):
+                        result["code"] = code
+                    message = detail.get("message", "")
+                    if isinstance(message, str):
+                        actions = re.findall(
+                            r"Microsoft\.CognitiveServices/[A-Za-z0-9_./]+", message,
+                        )
+                        if actions:
+                            result["referenced_operations"] = sorted(set(actions))
+            return result
+        pending.extend(value for value in (error.__cause__, error.__context__, *error.args)
+                       if isinstance(value, BaseException))
+    return {}
 ROOT = Path.cwd()
 
 
@@ -465,7 +507,10 @@ def main(argv: list[str] | None = None) -> int:
             decision = asyncio.run(execute())
         return 0 if decision["status"] in {"passed", "partial_passed"} else 1
     except Exception as exc:
-        print(f"eval-loop blocked: {type(exc).__name__}: {exc}", file=sys.stderr)
+        diagnostic = http_failure(exc)
+        print(f"eval-loop blocked: {type(exc).__name__}" + ("" if diagnostic else f": {exc}"), file=sys.stderr)
+        if diagnostic:
+            print("eval-loop HTTP metadata: " + json.dumps(diagnostic, sort_keys=True), file=sys.stderr)
         if not args.output.exists():
             args.output.mkdir(parents=True)
             save(args.output / "decision.json", {

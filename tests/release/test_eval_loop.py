@@ -6,7 +6,35 @@ from uuid import uuid4
 
 import pytest
 
-from tools.eval_loop import THRESHOLDS, LiveDemo, LoopConfig, loop, main, quality
+from tools.eval_loop import THRESHOLDS, LiveDemo, LoopConfig, http_failure, loop, main, quality
+
+
+def test_http_failure_only_exposes_safe_metadata_through_sdk_wrapper():
+    error = RuntimeError("secret response text")
+    error.status_code = 403
+    error.response = SimpleNamespace(
+        request=SimpleNamespace(url=(
+            "https://isolated.services.ai.azure.com/api/projects/evaluation-ci/openai/v1/responses?secret=token"
+        )),
+        headers={"x-ms-request-id": "request-123", "Authorization": "secret", "x-request-id": "invalid\nsecret"},
+    )
+    error.body = {
+        "error": {"code": "PermissionDenied",
+                  "message": "principal secret lacks Microsoft.CognitiveServices/accounts/AIServices/responses/write"},
+        "request_body": "private sources",
+    }
+    wrapper = RuntimeError("SDK failure", error)
+    assert http_failure(wrapper) == {
+        "status": 403, "api_path": "/api/projects/evaluation-ci/openai/v1/responses",
+        "x-ms-request-id": "request-123", "code": "PermissionDenied",
+        "referenced_operations": ["Microsoft.CognitiveServices/accounts/AIServices/responses/write"],
+    }
+    wrapper.__cause__ = wrapper
+    assert http_failure(wrapper)["status"] == 403
+
+
+def test_http_failure_without_http_response_is_empty():
+    assert http_failure(RuntimeError("local failure")) == {}
 
 
 def rows(score=3, passed=True):
