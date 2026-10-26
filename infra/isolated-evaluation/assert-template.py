@@ -9,11 +9,18 @@ def verify(template):
     assert template["variables"]["accountName"] == "foundry-eval-ci-r8n3ld"
     assert template["variables"]["projectName"] == "evaluation-ci"
     assert template["variables"]["identityName"] == "id-gh-isolated-eval"
-    for action in template["variables"]["inferenceDataActions"]:
-        assert "*" not in action and "/agents/" not in action
+    assert template["variables"]["inferenceDataActions"] == [
+        "Microsoft.CognitiveServices/accounts/OpenAI/deployments/read",
+        "Microsoft.CognitiveServices/accounts/AIServices/deployments/read",
+        "Microsoft.CognitiveServices/accounts/OpenAI/responses/write",
+        "Microsoft.CognitiveServices/accounts/OpenAI/responses/read",
+        "Microsoft.CognitiveServices/accounts/AIServices/responses/write",
+        "Microsoft.CognitiveServices/accounts/AIServices/responses/read",
+        "Microsoft.CognitiveServices/accounts/OpenAI/deployments/chat/completions/action",
+    ]
     roles = [r for r in resources if r["type"] == "Microsoft.Authorization/roleDefinitions"]
     assignments = [r for r in resources if r["type"] == "Microsoft.Authorization/roleAssignments"]
-    assert len(roles) == len(assignments) == 3
+    assert len(roles) == len(assignments) == 4
     storage_role = next(r for r in roles if "isolated-eval-project-storage" in r["name"])
     assert storage_role["properties"]["assignableScopes"] == ["[resourceGroup().id]"]
     assert storage_role["properties"]["permissions"] == [{
@@ -35,27 +42,45 @@ def verify(template):
         "variables('identityName')), '2023-01-31').principalId]"
     )
     assert storage_assignment["properties"]["principalType"] == "ServicePrincipal"
+    assets_role = next(r for r in roles if "isolated-eval-project-assets" in r["name"])
+    assert assets_role["properties"]["type"] == "CustomRole"
+    assert assets_role["properties"]["assignableScopes"] == ["[resourceGroup().id]"]
+    assert assets_role["properties"]["permissions"] == [{
+        "actions": [], "notActions": [], "notDataActions": [],
+        "dataActions": ["Microsoft.CognitiveServices/accounts/AIServices/assets/write"],
+    }]
+    assets_assignment = next(
+        r for r in assignments if "isolated-eval-project-assets" in r["properties"]["roleDefinitionId"]
+    )
+    assert assets_assignment["scope"] == storage_assignment["scope"]
+    assert assets_assignment["properties"]["principalId"] == storage_assignment["properties"]["principalId"]
+    assert assets_assignment["properties"]["principalType"] == "ServicePrincipal"
     for role in roles:
-        if role is storage_role:
+        if role is storage_role or role is assets_role:
             continue
         assert role["properties"]["assignableScopes"] == ["[resourceGroup().id]"]
-        for permission in role["properties"]["permissions"]:
-            data = permission["dataActions"]
-            if isinstance(data, str):
-                assert data in (
-                    "[variables('inferenceDataActions')]",
-                    "[concat(variables('inferenceDataActions'), createArray("
-                    "'Microsoft.CognitiveServices/accounts/OpenAI/evals/read', "
-                    "'Microsoft.CognitiveServices/accounts/OpenAI/evals/write', "
-                    "'Microsoft.CognitiveServices/accounts/AIServices/evaluations/read', "
-                    "'Microsoft.CognitiveServices/accounts/AIServices/evaluations/write'))]",
-                )
-                data = [data]
-            for action in permission["actions"] + data:
-                assert "*" not in action
-                assert "/agents/" not in action
+        runner = "isolated-eval-runner" in role["name"]
+        assert runner or "isolated-eval-model-inference" in role["name"]
+        actions = ["Microsoft.CognitiveServices/accounts/deployments/read"]
+        if runner:
+            actions = [
+                "Microsoft.CognitiveServices/accounts/read",
+                "Microsoft.CognitiveServices/accounts/projects/read",
+                *actions,
+            ]
+        assert role["properties"]["permissions"] == [{
+            "actions": actions, "notActions": [], "notDataActions": [],
+            "dataActions": (
+                "[concat(variables('inferenceDataActions'), createArray("
+                "'Microsoft.CognitiveServices/accounts/OpenAI/evals/read', "
+                "'Microsoft.CognitiveServices/accounts/OpenAI/evals/write', "
+                "'Microsoft.CognitiveServices/accounts/AIServices/evaluations/read', "
+                "'Microsoft.CognitiveServices/accounts/AIServices/evaluations/write'))]"
+                if runner else "[variables('inferenceDataActions')]"
+            ),
+        }]
     for assignment in assignments:
-        if assignment is not storage_assignment:
+        if assignment is not storage_assignment and assignment is not assets_assignment:
             assert assignment["scope"] == (
                 "[resourceId('Microsoft.CognitiveServices/accounts', variables('accountName'))]"
             )

@@ -174,6 +174,34 @@ resource runnerProjectStorageAssignment 'Microsoft.Authorization/roleAssignments
   }
 }
 
+resource runnerEvaluationAssetsRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' = {
+  name: guid(resourceGroup().id, 'isolated-eval-project-assets')
+  properties: {
+    roleName: 'Isolated Evaluation Project Assets ${uniqueString(resourceGroup().id)}'
+    description: 'Create evaluation definition assets in the isolated project; generic asset-version write also covers other asset types.'
+    type: 'CustomRole'
+    assignableScopes: [resourceGroup().id]
+    permissions: [{
+      actions: []
+      notActions: []
+      dataActions: [
+        'Microsoft.CognitiveServices/accounts/AIServices/assets/write'
+      ]
+      notDataActions: []
+    }]
+  }
+}
+
+resource runnerEvaluationAssetsAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: project
+  name: guid(project.id, identity.id, runnerEvaluationAssetsRole.id)
+  properties: {
+    principalId: identity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: runnerEvaluationAssetsRole.id
+  }
+}
+
 output projectEndpoint string = 'https://${accountName}.services.ai.azure.com/api/projects/${projectName}'
 output accountResourceId string = account.id
 output projectResourceId string = project.id

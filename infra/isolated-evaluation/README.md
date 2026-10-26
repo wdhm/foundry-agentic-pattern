@@ -62,7 +62,11 @@ Provider compatibility must be verified during the first live run. A missing
 permission is a blocker to review explicitly, not permission to assign
 `Foundry User` or Contributor to force a pass.
 
-### Proposed project-storage exception: not yet approved or applied
+### Previously approved project-storage exception
+
+The following records the original proposal, subsequently reviewed, explicitly
+approved and applied through PR118. Its two actions and assignment are unchanged
+by the evaluation-assets proposal below.
 
 The first two bounded runs failed at project `/openai/v1/responses` with HTTP403,
 before completing a candidate. This is not a quality verdict. The service did not
@@ -101,6 +105,81 @@ Compile to stdout and pipe to `python infra/isolated-evaluation/assert-template.
 to check the exact role, runner principal expression, project scope and unchanged
 account-role boundaries. The assertion script reads ARM JSON only and makes no
 Azure or model calls.
+
+### Proposed evaluation-assets prerequisite: source only, not applied
+
+Bounded run [40333586550](https://github.com/wdhm/foundry-agentic-pattern/actions/runs/40333586550)
+on reviewed merge `0398e217b09371616f830a59e96514b0eb1730ee` completed all three
+supplied-source cases (four agent requests, one correction), then failed before
+submitting any judge group. At `judge_definition`, the service returned HTTP403
+`UserError`, explicitly referencing
+`Microsoft.CognitiveServices/accounts/AIServices/assets/write`, request ID
+`24a6af20-33b0-4b53-8f97-2035f4325f3d`. The SDK call was `client.evals.create`
+(`POST /openai/v1/evals` relative to the isolated project endpoint). This is an
+observed evaluator-definition authorization prerequisite, not a model fix or a
+quality verdict.
+
+The exact proposed cloud delta is **one new custom role and one new assignment**:
+
+| Boundary | Proposed value |
+|---|---|
+| Role name seed | `isolated-eval-project-assets` (separate from all existing roles) |
+| Assignable scope | Only `rg-foundry-evaluation-ci` in subscription `ac021984-29ca-42e6-9c21-36e599814543` |
+| Data actions | Exactly `Microsoft.CognitiveServices/accounts/AIServices/assets/write` |
+| Management actions / exclusions | All empty; no wildcard, `assets/read` or `assets/delete` |
+| Principal | Only CI runner `id-gh-isolated-eval`, object ID `0d421658-707e-463d-9644-d09efefef91d` |
+| Assignment scope | `/subscriptions/ac021984-29ca-42e6-9c21-36e599814543/resourceGroups/rg-foundry-evaluation-ci/providers/Microsoft.CognitiveServices/accounts/foundry-eval-ci-r8n3ld/projects/evaluation-ci` |
+
+The live provider operation catalog confirms `isDataAction=true` and display
+name **Create a new version of an asset**. The published
+[provider permissions reference](https://learn.microsoft.com/azure/role-based-access-control/permissions/ai-machine-learning#microsoftcognitiveservices)
+describes generic asset operations; the live catalog's write description repeats read/list
+wording, so the observed service denial and live display name are the more
+precise evidence for this write requirement.
+
+**This is not an evaluation-definition-only capability.** It authorizes generic
+asset-version creation within this isolated project, including other asset types
+that share that gate. The SDK exposes versioned datasets, custom evaluator
+definitions and indexes; those are additional asset families to consider, not
+an asserted exhaustive service authorization map. Neither provider metadata nor
+the reviewed public documentation establishes a per-type restriction or an
+exhaustive mapping of these endpoints to `assets/write`. Treat creation of other
+project asset types, including dataset/evaluator/index versions where this gate
+applies, as part of the permission's potential reach. This is not a new grant to
+read upstream sources, ingest from protected external systems, create tool
+connections or obtain connection credentials. It does not prevent a caller from
+writing data it already holds into an asset version.
+
+No original account role, inference permission, project managed identity,
+approved agent-child pattern, model, gateway, production scope or existing
+assignment changes. The new role has no account-scoped assignment. The compiled
+assertions and negative regressions reject scope/principal drift, added
+read/delete/wildcard/top-level-agent actions and changes to the prior patterns.
+
+#### Subsequent read/list calls: inspected, not speculatively granted
+
+The installed SDK and current `FoundryEvaluation.evaluate` call sequence is:
+definition create, run create, run retrieve while pending, output-item list.
+It does **not** explicitly retrieve/list evaluation definitions. The read routes
+are `GET /openai/v1/evals/{eval_id}/runs/{run_id}` and
+`GET /openai/v1/evals/{eval_id}/runs/{run_id}/output_items`. Existing runner
+permissions already include OpenAI `evals/read` and AIServices
+`evaluations/read`; the live catalog describes those as evaluation-run metadata
+and evaluation-run reads. `assets/read` is separately registered for listing
+versions/getting an asset version and is deliberately **not added**.
+
+The [evaluation permissions guide](https://learn.microsoft.com/azure/foundry/observability/how-to/evaluation-permissions)
+supports equivalent custom permissions at the evaluation project, but does not
+provide an exact per-endpoint action map. SDK routes do not establish every
+internal service authorization check; whether subsequent calls also need
+`assets/read` or another operation remains unverified. A further explicit denial
+must be reviewed, not preempted with broader roles or extra actions.
+
+Committing/merging this proposal authorizes no cloud writes or inference.
+Keep `EVAL_LOOP_ENABLED=false` and raw artifact approval absent. Deployment, if
+separately authorized after review, must use fresh validation/what-if and apply
+only this role/runner-project assignment incrementally, not redeploy models or
+modify existing roles. A subsequent bounded workflow run requires its own gate.
 
 ## Capacity and costs
 
