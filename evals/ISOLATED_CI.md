@@ -165,3 +165,24 @@ types/locations only; validation field names are redacted because dictionary
 keys can contain source content. Schema-invalid model outputs remain operational
 failures, not quality retries. Restricted execution captures still require the
 separate artifact-publication approval.
+
+CI candidate invocation allows one total correction per case, shared between
+evidence verification and the SDK's directly wrapped `AnalysisOutput` parsing
+failure. A second invalid schema/evidence result blocks evaluation; HTTP,
+authentication, timeout, source-integrity and unrelated exceptions do not enter
+schema repair. This does not change the serving runtime's repair behavior.
+Correction feedback is fixed, not copied from invalid output or exception text.
+Each invocation uses a new client, agent, session and evidence/guard context,
+resubmitting the canonical input rather than resuming failed conversation state.
+Requests set `store:false` and send neither a conversation nor a previous-response
+reference. Failed parsing yields no returned response ID or captured output;
+this is not a claim about the provider's internal telemetry retention.
+
+Private per-invocation captures retain request-counter deltas and explicit
+`schema_invalid`/`failed` status, including failed parse requests in the existing
+100-request budget. They never fabricate completed calls or response IDs.
+Only the final corrected invocation's complete observed execution is scored;
+earlier invocations remain separate evidence, not silently discarded or scored.
+Its exact instructions, including the fixed correction when used, are recorded
+and hashed in result provenance. All existing judges, thresholds, source checks,
+schema constraints and five-candidate limit remain unchanged.
