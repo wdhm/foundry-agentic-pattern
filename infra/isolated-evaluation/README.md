@@ -53,7 +53,7 @@ metadata reads, chat-completions inference, and OpenAI `evals/read|write` plus
 AIServices `evaluations/read|write` on **the new account only**.
 The project MI receives only model metadata and inference operations.
 Both custom role definitions are assignable only inside the new resource group.
-There are no wildcard actions, connection-secret/key access, agent writes,
+The two original account roles have no wildcard actions, connection-secret/key access, agent writes,
 model deployment management, role-assignment management, source access or
 production grants. The custom operation names were checked against the live
 Microsoft.CognitiveServices provider operation catalog.
@@ -61,6 +61,46 @@ Microsoft.CognitiveServices provider operation catalog.
 Provider compatibility must be verified during the first live run. A missing
 permission is a blocker to review explicitly, not permission to assign
 `Foundry User` or Contributor to force a pass.
+
+### Proposed project-storage exception: not yet approved or applied
+
+The first two bounded runs failed at project `/openai/v1/responses` with HTTP403,
+before completing a candidate. This is not a quality verdict. The service did not
+return a missing-operation code; the following is a **documented prerequisite
+hypothesis, not a proven root cause or a working fix**.
+
+Microsoft's [hosted agent permissions reference](https://learn.microsoft.com/azure/foundry/agents/concepts/hosted-agent-permissions#agent-access-beyond-defaults)
+lists agent storage read/write alongside Responses permissions for project model
+inference. For custom roles, it explicitly recommends `agents/*/read` and
+`agents/*/write`: literal `agents/storage/read|write` operations are not registered
+in the inspected provider catalog, so a supported exact storage-only grant has
+not been established.
+
+The proposed `main.bicep` delta creates one additional custom role, assignable
+only inside `rg-foundry-evaluation-ci`, containing exactly:
+
+```text
+Microsoft.CognitiveServices/accounts/AIServices/agents/*/read
+Microsoft.CognitiveServices/accounts/AIServices/agents/*/write
+```
+
+One new assignment grants that role **only to `id-gh-isolated-eval` at the exact
+`foundry-eval-ci-r8n3ld/projects/evaluation-ci` project scope**. The existing
+account-level inference/evaluation roles and project MI remain unchanged.
+No top-level `agents/write`, endpoint interaction, keys/secrets, production
+access, new models, capacity or resources beyond this role/assignment are added.
+
+These child wildcards cover **more than storage**, including matching current or
+future agent-child operations. They are a specific exception to the original
+no-wildcard boundary and require explicit approval plus source review before
+validation/deployment and one bounded verification run. Do not apply this source
+as routine convergence until that approval is recorded. Do not grant the same
+exception to the project MI speculatively.
+
+Compile to stdout and pipe to `python infra/isolated-evaluation/assert-template.py`
+to check the exact role, runner principal expression, project scope and unchanged
+account-role boundaries. The assertion script reads ARM JSON only and makes no
+Azure or model calls.
 
 ## Capacity and costs
 
