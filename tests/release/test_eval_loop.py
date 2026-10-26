@@ -6,7 +6,55 @@ from uuid import uuid4
 
 import pytest
 
-from tools.eval_loop import THRESHOLDS, LiveDemo, LoopConfig, http_failure, loop, main, quality
+from tools.eval_loop import THRESHOLDS, LiveDemo, LoopConfig, http_failure, loop, main, quality, safe_failure
+
+
+@pytest.mark.parametrize("stage", ["setup", "evaluation"])
+def test_sensitive_exception_never_reaches_logs_or_failure_artifacts(tmp_path, monkeypatch, capsys, stage):
+    from pydantic import ValidationError
+
+    secret = "SENSITIVE_SOURCE_FRAGMENT"
+    validation = ValidationError.from_exception_data("Sensitive", [{
+        "type": "value_error", "loc": (secret, 2), "input": secret,
+        "ctx": {"error": ValueError(secret)},
+    }])
+    wrapped = RuntimeError(secret, validation)
+    wrapped.__cause__ = validation
+    assert safe_failure(wrapped) == {
+        "exception": "RuntimeError",
+        "validation": [{"location": ["<field>", 2], "type": "value_error"}],
+    }
+    output = tmp_path / "run"
+    summary = tmp_path / "actions.md"
+    monkeypatch.setenv("EVAL_LOOP_APPROVED", "true")
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+    config = tmp_path / "config.json"
+    config.write_text("{}")
+
+    async def evaluate(candidate, attempt):
+        raise wrapped
+
+    async def improve(candidate, feedback):
+        pytest.fail("schema-invalid output must not reach optimizer")
+
+    def fail_config(*args, **kwargs):
+        if stage == "evaluation":
+            asyncio.run(loop(evaluate, improve, output))
+        raise wrapped
+
+    monkeypatch.setattr(LoopConfig, "model_validate_json", fail_config)
+    assert main(["--config", str(config), "--output", str(output), "--execute-approved-isolated"]) == 1
+    captured = capsys.readouterr()
+    assert secret not in captured.out + captured.err
+    assert "RuntimeError" in captured.err
+    assert secret not in summary.read_text()
+    for path in output.rglob("*"):
+        if path.is_file():
+            assert secret not in path.read_text()
+    decision = json.loads((output / "decision.json").read_text())
+    assert decision["status"] == "blocked"
+    assert decision["attempts"] == []
+    assert decision["error"] == safe_failure(wrapped)
 
 
 def test_http_failure_only_exposes_safe_metadata_through_sdk_wrapper():

@@ -158,3 +158,10 @@ precedence over every failing candidate; it is not promotion eligibility.
 No claimed historical baseline or independently verified CI credentials are supplied.
 Future production continuation should consume a separately reviewed immutable
 passing candidate; it must not automatically continue to Teams from this demo.
+
+Operational-failure logs and decision files omit arbitrary exception text.
+They retain exception class, allowlisted HTTP metadata, and safe validation
+types/locations only; validation field names are redacted because dictionary
+keys can contain source content. Schema-invalid model outputs remain operational
+failures, not quality retries. Restricted execution captures still require the
+separate artifact-publication approval.
