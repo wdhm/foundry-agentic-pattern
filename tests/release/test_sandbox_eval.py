@@ -359,6 +359,17 @@ def test_external_output_preserved_and_symlink_to_repo_blocked(output_repo, tmp_
     assert not (output_repo / "src").exists()
 
 
+def test_nested_invocation_cannot_treat_repo_parent_as_external(output_repo, monkeypatch):
+    import tools.sandbox_eval as sandbox
+
+    nested = output_repo / "nested"
+    nested.mkdir()
+    monkeypatch.setattr(sandbox, "ROOT", nested)
+    with pytest.raises(ValueError, match="repository root"):
+        restricted_output(output_repo / "leak.json")
+    assert not (output_repo / "leak.json").exists()
+
+
 def test_rehashed_git_capture_is_not_a_signed_source_attestation(plan):
     from tools.sandbox_eval import digest
 

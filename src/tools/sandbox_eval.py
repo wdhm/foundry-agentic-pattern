@@ -45,7 +45,11 @@ class SandboxError(ValueError):
 
 
 def restricted_output(output: Path) -> Path:
-    root = ROOT.resolve()
+    root = Path(subprocess.check_output(
+        ["git", "rev-parse", "--show-toplevel"], cwd=ROOT, text=True, stderr=subprocess.PIPE,
+    ).strip()).resolve()
+    if ROOT.resolve() != root:
+        raise SandboxError("Run sandbox commands from the repository root.")
     resolved = output.expanduser().resolve()
     if resolved.is_relative_to(root):
         relative = resolved.relative_to(root)
