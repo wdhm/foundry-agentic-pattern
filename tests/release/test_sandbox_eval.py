@@ -20,7 +20,10 @@ from tools.sandbox_eval import (
     AzureDevOpsReader,
     Capture,
     NoRedirect,
+    SandboxError,
     SandboxPlan,
+    UserIdentity,
+    approve_identity,
     capture_sources,
     check_identity,
     evaluate_capture,
@@ -48,10 +51,151 @@ def plan():
 def token(plan, **updates):
     claims = {
         "aud": ADO_AUDIENCE, "oid": str(plan.read_identity.object_id),
-        "tid": str(plan.read_identity.tenant_id), "appid": str(plan.read_identity.client_id), **updates,
+        "tid": str(plan.read_identity.tenant_id),
+        "appid": str(getattr(plan.read_identity, "client_id", uuid4())), **updates,
     }
     encoded = base64.urlsafe_b64encode(json.dumps(claims).encode()).decode().rstrip("=")
     return "header." + encoded + ".signature"
+
+
+@pytest.fixture
+def user_plan(plan):
+    return SandboxPlan.model_validate({
+        **plan.model_dump(),
+        "read_identity": {
+            "mode": "delegated_user", "tenant_id": "cc48e4fe-6662-414d-aeff-4eb633735b38",
+            "object_id": "cbc26d4a-7626-45bc-bd50-c2161c41bd71",
+        },
+        "model_identity": plan.read_identity.model_dump(),
+        "model_identity_review_reference": "TEST ONLY Foundry permissions review",
+    })
+
+
+@pytest.mark.parametrize("updates", [
+    {"oid": str(uuid4())}, {"tid": str(uuid4())}, {"aud": "https://management.azure.com/"},
+    {"scp": None}, {"scp": ""}, {"scp": " "}, {"scp": ["user_impersonation"]}, {"idtyp": "app"},
+])
+def test_delegated_claims_rejected(user_plan, updates):
+    with pytest.raises(ValueError):
+        check_identity(token(user_plan, **{"scp": "user_impersonation", **updates}), user_plan.read_identity)
+
+
+def test_delegated_user_is_object_not_cli_client(user_plan):
+    assert isinstance(user_plan.read_identity, UserIdentity)
+    for client in (uuid4(), uuid4()):
+        check_identity(token(user_plan, scp="user_impersonation", appid=str(client)), user_plan.read_identity)
+    check_identity(
+        token(user_plan, scp="user_impersonation", aud="https://ai.azure.com"),
+        user_plan.read_identity, audience="https://ai.azure.com",
+    )
+    with pytest.raises(ValueError):
+        check_identity(token(user_plan, scp="user_impersonation"), user_plan.read_identity, audience="https://ai.azure.com")
+
+
+@pytest.mark.parametrize("variable", ["CI", "GITHUB_ACTIONS", "TF_BUILD", "BUILD_BUILDID"])
+def test_delegated_ci_rejected(user_plan, monkeypatch, variable):
+    monkeypatch.setenv("SANDBOX_MANUAL_USER_APPROVED", "true")
+    monkeypatch.setenv(variable, "true")
+    with pytest.raises(ValueError, match="forbidden in CI"):
+        AzureDevOpsReader(user_plan, token(user_plan, scp="user_impersonation"), manual_user_approved=True)
+
+
+def test_manual_approval_and_app_default(plan, user_plan, monkeypatch):
+    for variable in ("CI", "GITHUB_ACTIONS", "TF_BUILD", "BUILD_BUILDID"):
+        monkeypatch.delenv(variable, raising=False)
+    monkeypatch.delenv("SANDBOX_MANUAL_USER_APPROVED", raising=False)
+    approve_identity(plan.read_identity, False)
+    with pytest.raises(ValueError, match="manual delegated-user approval"):
+        approve_identity(user_plan.read_identity, True)
+    monkeypatch.setenv("SANDBOX_MANUAL_USER_APPROVED", "true")
+    with pytest.raises(ValueError, match="manual delegated-user approval"):
+        approve_identity(user_plan.read_identity, False)
+    AzureDevOpsReader(user_plan, token(user_plan, scp="user_impersonation"), manual_user_approved=True)
+
+
+def test_cli_user_ci_rejected_before_credentials(user_plan, tmp_path, monkeypatch, capsys):
+    import azure.identity
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("Credentials must not be acquired in CI user mode")
+
+    monkeypatch.setattr(azure.identity, "AzureCliCredential", forbidden)
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("SANDBOX_READ_APPROVED", "true")
+    monkeypatch.setenv("SANDBOX_MANUAL_USER_APPROVED", "true")
+    path = tmp_path / "plan.json"
+    path.write_text(user_plan.model_dump_json())
+    output = tmp_path / "capture.json"
+    assert main([
+        "capture", "--plan", str(path), "--output", str(output),
+        "--capture-approved-readonly", "--manual-user-approved",
+    ]) == 1
+    assert "forbidden in CI" in capsys.readouterr().err
+    assert not output.exists()
+
+
+def test_user_capture_replay_preserves_separate_identity(user_plan, plan):
+    get, _ = transport(user_plan)
+    capture = Capture.model_validate_json(capture_sources(user_plan, get).model_dump_json())
+    validate_capture(user_plan, capture)
+    assert capture.identity == user_plan.read_identity
+    assert user_plan.model_identity == plan.read_identity
+    with pytest.raises(ValueError, match="reviewed model identity"):
+        SandboxPlan.model_validate({**user_plan.model_dump(), "model_identity": None})
+    with pytest.raises(ValueError, match="permissions review"):
+        SandboxPlan.model_validate({**user_plan.model_dump(), "model_identity_review_reference": None})
+    with pytest.raises(ValueError, match="does not match"):
+        validate_capture(plan, capture)
+
+
+def test_evaluate_cli_preflights_model_not_source_identity(user_plan, plan, tmp_path, monkeypatch, capsys):
+    import azure.ai.projects
+    import azure.identity
+
+    import tools.sandbox_eval as sandbox
+
+    calls = []
+
+    class Credential:
+        def __init__(self, *, tenant_id):
+            assert tenant_id == str(plan.read_identity.tenant_id)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def get_token(self, scope):
+            calls.append(scope)
+            return SimpleNamespace(token=token(plan, aud="https://ai.azure.com"))
+
+    def project(**kwargs):
+        raise SandboxError("TEST STOP after successful model preflight")
+
+    run = sandbox.subprocess.run
+
+    def clean_diff(command, **kwargs):
+        if command[:3] == ["git", "diff", "--exit-code"]:
+            return SimpleNamespace(returncode=0)
+        return run(command, **kwargs)
+
+    monkeypatch.setattr(azure.identity, "AzureCliCredential", Credential)
+    monkeypatch.setattr(azure.ai.projects, "AIProjectClient", project)
+    monkeypatch.setattr(sandbox.subprocess, "run", clean_diff)
+    monkeypatch.setenv("EVAL_LOOP_APPROVED", "true")
+    # App-only evaluation of previously captured user sources needs no user login/approval.
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    get, _ = transport(user_plan)
+    paths = [tmp_path / name for name in ("plan.json", "capture.json", "config.json")]
+    for path, model in zip(paths, (user_plan, capture_sources(user_plan, get), config(user_plan)), strict=True):
+        path.write_text(model.model_dump_json())
+    assert main([
+        "evaluate", "--plan", str(paths[0]), "--capture", str(paths[1]),
+        "--config", str(paths[2]), "--output", str(tmp_path / "run"), "--execute-approved-isolated",
+    ]) == 1
+    assert calls == ["https://ai.azure.com/.default"]
+    assert "TEST STOP after successful model preflight" in capsys.readouterr().err
 
 
 def transport(plan):
@@ -226,8 +370,13 @@ def test_replay_rejects_modified_plan_capture_and_standard(plan):
         validate_capture(plan, changed)
 
 
+@pytest.mark.parametrize("identity_mode", ["application", "delegated_user"])
 @pytest.mark.parametrize("passed", [True, False])
-def test_reuses_existing_runner_once_no_optimizer_or_live_tool_claim(plan, tmp_path, monkeypatch, passed):
+def test_reuses_existing_runner_once_no_optimizer_or_live_tool_claim(
+    plan, user_plan, tmp_path, monkeypatch, passed, identity_mode,
+):
+    if identity_mode == "delegated_user":
+        plan = user_plan
     get, _ = transport(plan)
     capture = capture_sources(plan, get)
     invocations = []
@@ -248,6 +397,9 @@ def test_reuses_existing_runner_once_no_optimizer_or_live_tool_claim(plan, tmp_p
     assert result["coverage"]["agent_driven_source_retrieval"] is False
     manifest = json.loads((output / "manifest.json").read_text())
     assert manifest["limits"]["optimizer_calls"] == 0
+    assert manifest["source_identity"] == plan.read_identity.model_dump(mode="json")
+    assert manifest["model_identity"] == (plan.model_identity or plan.read_identity).model_dump(mode="json")
+    assert manifest["model_identity_review_reference"] == plan.model_identity_review_reference
     with pytest.raises(ValueError, match="already exists"):
         asyncio.run(evaluate_capture(plan, capture, config(plan), object(), output))
 

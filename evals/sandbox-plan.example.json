@@ -9,10 +9,18 @@
   "wiki_commit": "REPLACE_WITH_REVIEWED_WIKI_REPOSITORY_COMMIT",
   "wiki_etag": "REPLACE_WITH_PAGE_ETAG_AT_THAT_COMMIT",
   "read_identity": {
+    "mode": "application",
     "tenant_id": "cc48e4fe-6662-414d-aeff-4eb633735b38",
     "object_id": "0d421658-707e-463d-9644-d09efefef91d",
     "client_id": "8c257121-e197-47c1-b141-c2dd663ac14d"
   },
+  "model_identity": {
+    "mode": "application",
+    "tenant_id": "cc48e4fe-6662-414d-aeff-4eb633735b38",
+    "object_id": "0d421658-707e-463d-9644-d09efefef91d",
+    "client_id": "8c257121-e197-47c1-b141-c2dd663ac14d"
+  },
+  "model_identity_review_reference": "REPLACE_WITH_REVIEWED_ISOLATED_FOUNDRY_PERMISSIONS",
   "read_approval_reference": "REPLACE_WITH_APPROVED_EXACT_READ_BOUNDARY",
   "question": "What retry policy does the integration implement, and does the supplied wiki describe it?",
   "scope": "change_review",
