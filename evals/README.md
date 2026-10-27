@@ -305,3 +305,10 @@ or automatic promotion/rollback is implemented by this dataset package.
 See [isolated evaluation and improvement CI](ISOLATED_CI.md) for the separate
 five-candidate GitHub Actions demo. Offline checks do not assert changed-agent
 quality; real evaluation requires an explicitly approved isolated environment.
+
+## Real-source sandbox execution
+
+For approved read-only Azure DevOps example sources followed by **actual**
+isolated agent output and judge calls, see [SANDBOX.md](SANDBOX.md). That path
+captures exact live source revisions and then evaluates tools-disabled replay;
+it does not claim agent-driven tool retrieval or replace the offline baselines.

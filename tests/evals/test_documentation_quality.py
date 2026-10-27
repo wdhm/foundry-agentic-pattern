@@ -32,18 +32,22 @@ def test_workflow_documentation_quality_offline_coverage():
             "evals/documentation_quality.py",
             "evals/documentation-quality/**",
             "tests/evals/test_documentation_quality.py",
+            "tests/release/test_sandbox_eval.py",
         ):
             assert f'      - "{path}"' in block
     offline = jobs.split("\n  isolated:\n", 1)[0]
     assert (
-        "python -m pytest tests/release/test_eval_loop.py tests/agents/test_hosted_evaluation.py tests/evals -q"
+        "python -m pytest tests/release/test_eval_loop.py tests/release/test_sandbox_eval.py "
+        "tests/agents/test_hosted_evaluation.py tests/evals -q"
     ) in offline
     assert (
-        "python -m ruff check src/tools/eval_loop.py tests/release/test_eval_loop.py "
+        "python -m ruff check src/tools/eval_loop.py src/tools/sandbox_eval.py "
+        "tests/release/test_eval_loop.py tests/release/test_sandbox_eval.py "
         "evals/documentation_quality.py tests/evals/test_documentation_quality.py"
     ) in offline
     assert (
-        "python -m mypy src/tools/eval_loop.py evals/documentation_quality.py\n        env:\n          MYPYPATH: src"
+        "python -m mypy src/tools/eval_loop.py src/tools/sandbox_eval.py "
+        "evals/documentation_quality.py\n        env:\n          MYPYPATH: src"
     ) in offline
     config = tomllib.loads((ROOT / "pyproject.toml").read_text())
     assert config["tool"]["mypy"]["strict"] is True
