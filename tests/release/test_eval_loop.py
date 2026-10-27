@@ -1131,3 +1131,99 @@ def test_judge_counters_follow_actual_run_submission_and_completion(tmp_path, fa
     }[failure]
     assert snapshot["reason"] == (Reason.JUDGE_RUN if failure == "run" else "unknown")
     assert secret not in json.dumps(snapshot)
+@pytest.mark.parametrize("workflow", ["loop", "release"])
+def test_demo_overview_is_a_process_map_not_execution_evidence(workflow):
+    from tools.workflow_summary import overview
+
+    text = overview(workflow, "failure")
+    for label in (
+        "Offline validation", "Candidate inference", "Structural and source validation",
+        "Semantic judging", "Instruction optimization", "Decision",
+        "**failure**", "not evidence", "not evaluated, not passed", "Partial coverage",
+    ):
+        assert label in text
+    assert "secret-payload" not in overview(workflow, "secret-payload")
+    if workflow == "loop":
+        assert "at most five candidates" in text
+    else:
+        assert "does not optimize instructions" in text
+
+
+@pytest.mark.parametrize("status", ["blocked", "eligible_for_manual_review", "secret-payload", ["secret-payload"]])
+def test_demo_release_summary_allowlists_all_dynamic_text(tmp_path, status):
+    from tools.workflow_summary import release_decision
+
+    path = tmp_path / "decision.json"
+    path.write_text(json.dumps({
+        "status": status, "error": "secret-payload", "candidate_version": "secret-payload",
+        "thresholds": {"secret-payload": "secret-payload"},
+    }))
+    text = release_decision(path)
+    assert "secret-payload" not in text
+    assert "No deployment" in text
+    assert ("unrecognized decision" in text) == (status not in ("blocked", "eligible_for_manual_review"))
+
+
+def test_demo_summary_missing_and_malformed_decisions(tmp_path):
+    from tools.workflow_summary import release_decision
+
+    path = tmp_path / "decision.json"
+    assert "No completed decision" in release_decision(path)
+    path.write_text("invalid json")
+    with pytest.raises(json.JSONDecodeError):
+        release_decision(path)
+
+
+def test_demo_reporter_writes_actions_summary(tmp_path, monkeypatch):
+    import sys
+
+    from tools.workflow_summary import main as summarize
+
+    path = tmp_path / "actions.md"
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(path))
+    monkeypatch.setenv("OFFLINE_OUTCOME", "cancelled")
+    monkeypatch.setattr(sys, "argv", ["summary", "--workflow", "loop"])
+    summarize()
+    assert "**cancelled**" in path.read_text()
+    monkeypatch.setattr(sys, "argv", [
+        "summary", "--workflow", "release", "--decision", str(tmp_path / "absent.json"),
+    ])
+    summarize()
+    text = path.read_text()
+    assert "How to read this evaluation" in text
+    assert "No completed decision" in text
+
+
+def test_demo_workflows_keep_real_execution_and_approval_boundaries():
+    root = Path(__file__).parents[2]
+    for filename, job, flag, environment, execution in (
+        ("agent-evaluation-loop.yml", "isolated", "EVAL_LOOP_ENABLED", "isolated-agent-evaluation",
+         "python -m tools.eval_loop --config"),
+        ("agent-release.yml", "candidate-evaluation", "P3_RELEASE_ENABLED", "p3-agent-release",
+         'python -m tools.release --plan "$PLAN_PATH" --output evals/results/release --execute-approved-cloud'),
+    ):
+        text = (root / ".github" / "workflows" / filename).read_text()
+        assert text.count(execution) == 1
+        assert text.count("    runs-on:") == 2
+        assert f"vars.{flag} == 'true'" in text
+        assert "github.ref == 'refs/heads/main'" in text
+        assert f"environment: {environment}" in text
+        assert "timeout-minutes: 55" in text
+        offline, live = text.split(f"\n  {job}:\n")
+        assert "id-token: write" not in offline
+        assert "id-token: write" in live
+        assert "needs: offline" in live
+        assert "persist-credentials: true" not in text
+        assert "--workflow " in offline
+        assert "if: always()" in offline
+        for line in text.splitlines():
+            assert not line.startswith("      - uses:")
+            assert not line.startswith("      - run:")
+    release = (root / ".github/workflows/agent-release.yml").read_text()
+    assert "default: false" in release
+    assert "inputs.execute_approved_cloud &&" in release
+    assert "vars.P3_ARTIFACT_PUBLICATION_APPROVED == 'true'" in release
+    loop_text = (root / ".github/workflows/agent-evaluation-loop.yml").read_text()
+    assert "github.event_name != 'pull_request'" in loop_text
+    assert "vars.EVAL_LOOP_ARTIFACTS_APPROVED == 'true'" in loop_text
+    assert "timeout --signal=TERM --kill-after=10s 50m" in loop_text

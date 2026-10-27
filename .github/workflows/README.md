@@ -32,8 +32,11 @@ Dispatch defaults to **offline regression tests only**, without Azure login or
 OIDC permission. The cloud job was first dispatched successfully on 2026-10-20:
 [run 39436721419](https://github.com/wdhm/foundry-agentic-pattern/actions/runs/39436721419)
 evaluated candidate v19 to `eligible_for_manual_review`, and serving v13 was
-untouched. Gate decisions and scores (no source content) are written to the job
-summary.
+untouched. That run wrote gate decisions and scores (no source content) to the job
+summary. The current demo reporter publishes an allowlisted gate outcome instead
+of interpolating arbitrary decision fields or per-case score payloads.
+See [how to read the Actions demo](../../docs/workshop/evaluation-release-guide.md#reading-the-actions-demo)
+for the two-job graph, internal runtime stages, and skipped-versus-evaluated semantics.
 
 **Configured on 2026-10-20 (P2):**
 - **Environment:** `p3-agent-release` with required reviewer @wdhm, restricted
