@@ -44,6 +44,28 @@ class SandboxError(ValueError):
     """Fixed local diagnostic text, safe to show without upstream payloads."""
 
 
+def restricted_output(output: Path) -> Path:
+    root = ROOT.resolve()
+    resolved = output.expanduser().resolve()
+    if resolved.is_relative_to(root):
+        relative = resolved.relative_to(root)
+        if not relative.is_relative_to(Path("evals") / "results") or relative == Path("evals") / "results":
+            raise SandboxError("Repository output must be a new path within ignored evals/results.")
+        tracked = subprocess.run(
+            ["git", "ls-files", "-z", "--", relative.as_posix()],
+            cwd=root, check=True, capture_output=True,
+        )
+        ignored = subprocess.run(
+            ["git", "check-ignore", "--quiet", "--", relative.as_posix()],
+            cwd=root, capture_output=True,
+        )
+        if tracked.stdout or ignored.returncode != 0:
+            raise SandboxError("Repository output must be ignored and contain no tracked paths.")
+    if resolved.exists():
+        raise SandboxError("Output already exists; refusing to overwrite evidence.")
+    return resolved
+
+
 class ReadIdentity(StrictModel):
     tenant_id: UUID
     object_id: UUID
@@ -263,6 +285,7 @@ async def evaluate_capture(
     from tools.eval_loop import LiveDemo, safe_failure
     from tools.release import save
 
+    output = restricted_output(output)
     if config.mode != "supplied_sources_only":
         raise SandboxError("Sandbox capture evaluation requires tools-disabled isolated configuration.")
     if (
@@ -324,8 +347,7 @@ def main(argv: list[str] | None = None) -> int:
             command.add_argument("--execute-approved-isolated", action="store_true")
     args = parser.parse_args(argv)
     try:
-        if args.output.exists():
-            raise SandboxError("Output already exists; refusing to overwrite evidence.")
+        args.output = restricted_output(args.output)
         plan = SandboxPlan.model_validate_json(args.plan.read_text(encoding="utf-8"))
         if args.command == "capture":
             if not args.capture_approved_readonly or os.environ.get("SANDBOX_READ_APPROVED") != "true":
@@ -337,7 +359,7 @@ def main(argv: list[str] | None = None) -> int:
                 reader = AzureDevOpsReader(plan, token)
                 capture = capture_sources(plan, reader.get)
             validate_capture(plan, capture)
-            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
             descriptor = os.open(args.output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             with os.fdopen(descriptor, "w", encoding="utf-8") as target:
                 target.write(capture.model_dump_json(indent=2) + "\n")

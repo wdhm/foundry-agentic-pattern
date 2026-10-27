@@ -3,6 +3,7 @@
 import asyncio
 import base64
 import json
+import subprocess
 from copy import deepcopy
 from io import BytesIO
 from types import SimpleNamespace
@@ -25,6 +26,7 @@ from tools.sandbox_eval import (
     evaluate_capture,
     main,
     prepared_case,
+    restricted_output,
     validate_capture,
 )
 
@@ -246,7 +248,7 @@ def test_reuses_existing_runner_once_no_optimizer_or_live_tool_claim(plan, tmp_p
     assert result["coverage"]["agent_driven_source_retrieval"] is False
     manifest = json.loads((output / "manifest.json").read_text())
     assert manifest["limits"]["optimizer_calls"] == 0
-    with pytest.raises(FileExistsError):
+    with pytest.raises(ValueError, match="already exists"):
         asyncio.run(evaluate_capture(plan, capture, config(plan), object(), output))
 
 
@@ -298,3 +300,73 @@ def test_cli_read_approval_is_required_before_credentials(plan, tmp_path, capsys
     assert main(["capture", "--plan", str(path), "--output", str(output)]) == 1
     assert "approval is required" in capsys.readouterr().err
     assert not output.exists()
+
+
+@pytest.fixture
+def output_repo(tmp_path, monkeypatch):
+    import tools.sandbox_eval as sandbox
+
+    root = tmp_path / "repo"
+    root.mkdir()
+    monkeypatch.delenv("GIT_DIR", raising=False)
+    monkeypatch.delenv("GIT_WORK_TREE", raising=False)
+    subprocess.run(["git", "init", "--quiet", str(root)], check=True)
+    (root / ".gitignore").write_text("evals/results/\n")
+    monkeypatch.setattr(sandbox, "ROOT", root)
+    return root
+
+
+@pytest.mark.parametrize("command", ["capture", "evaluate"])
+@pytest.mark.parametrize("location", ["src/leak.json", "evals/capture.json", ".git/leak.json", "new-output"])
+def test_cli_rejects_repo_output_before_reading_inputs_or_credentials(output_repo, command, location, capsys):
+    output = output_repo / location
+    arguments = [command, "--plan", "nonexistent.json", "--output", str(output)]
+    if command == "evaluate":
+        arguments += ["--capture", "nonexistent.json", "--config", "nonexistent.json"]
+    assert main(arguments) == 1
+    assert "Repository output must" in capsys.readouterr().err
+    assert not output.exists()
+
+
+def test_only_ignored_untracked_repo_results_allowed(output_repo):
+    output = output_repo / "evals/results/run"
+    assert restricted_output(output) == output
+    assert not output.exists()
+    (output_repo / ".gitignore").write_text("")
+    with pytest.raises(ValueError, match="must be ignored"):
+        restricted_output(output)
+    assert not output.exists()
+
+
+def test_tracked_results_are_rejected_even_when_deleted(output_repo):
+    tracked = output_repo / "evals/results/capture.json"
+    tracked.parent.mkdir(parents=True)
+    tracked.write_text("test-only")
+    subprocess.run(["git", "add", "--force", str(tracked)], cwd=output_repo, check=True)
+    tracked.unlink()
+    with pytest.raises(ValueError, match="no tracked paths"):
+        restricted_output(tracked)
+    assert not tracked.exists()
+
+
+def test_external_output_preserved_and_symlink_to_repo_blocked(output_repo, tmp_path):
+    external = tmp_path / "private/capture.json"
+    assert restricted_output(external) == external
+    link = tmp_path / "linked-repo"
+    link.symlink_to(output_repo, target_is_directory=True)
+    with pytest.raises(ValueError, match="Repository output must"):
+        restricted_output(link / "src/leak.json")
+    assert not (output_repo / "src").exists()
+
+
+def test_rehashed_git_capture_is_not_a_signed_source_attestation(plan):
+    from tools.sandbox_eval import digest
+
+    get, _ = transport(plan)
+    capture = capture_sources(plan, get)
+    raw = json.loads(capture.model_dump_json())
+    raw["payload"]["sources"][0]["content"] = "locally rewritten content"
+    with pytest.raises(ValueError, match="SHA-256"):
+        Capture.model_validate(raw)
+    raw["payload"]["sources"][0]["sha256"] = digest(raw["payload"]["sources"][0]["content"])
+    validate_capture(plan, Capture.model_validate(raw))

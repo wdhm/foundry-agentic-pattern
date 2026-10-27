@@ -168,5 +168,15 @@ exits nonzero; an evaluation failure retains a blocked decision, never a success
 verdict. CLI error text omits upstream bodies and raw model/source content.
 Raw artifacts are not uploaded or committed. Use a private output directory:
 captures use mode `0600` and run directories `0700` where supported.
+Repository-internal output is accepted only at a new, Git-ignored path below
+`evals/results/`, with no tracked files at or beneath that path (including deleted
+tracked files). Other internal paths are rejected before reading inputs,
+obtaining credentials or writing artifacts. Symlinks are resolved before this
+check; external private paths remain supported.
+Deserializing a capture verifies each `SourceSnapshot` content SHA-256, so editing
+Git content without updating its digest is rejected. Someone able to rewrite
+both captured Git content and its digest can still produce a locally consistent
+capture: these hashes do not independently attest membership in the named remote
+commit. Preserve the trusted capture file and its externally recorded hash.
 No automatic evaluation enablement, production permissions, serving routing,
 assessment-only rules or publication approvals are changed.
