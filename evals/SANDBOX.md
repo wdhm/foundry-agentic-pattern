@@ -11,8 +11,9 @@ There are two deliberately separate steps:
 1. **Capture:** a dedicated application identity GETs at most five exact repository
    files at one commit and one wiki page at a wiki commit plus expected page ETag.
    The reader checks returned paths, code commit/blob hashes and wiki ETag/content
-   hash. Redirects, arbitrary URLs, branch/latest references, delegated user
-   identities, writes and automatic retries are not accepted.
+   hash. Redirects, arbitrary URLs, branch/latest references, writes and automatic
+   retries are not accepted. Application mode remains the default; delegated
+   users require the separate manual-only approval described below.
 2. **Evaluate:** the checked-out assessment agent calls the isolated Foundry
    candidate model using those captured sources, with tools disabled. The existing
    runner captures actual model response IDs, instructions, schema/evidence
@@ -139,12 +140,75 @@ EVAL_LOOP_APPROVED=true python -m tools.sandbox_eval evaluate \
   --execute-approved-isolated
 ```
 
-Evaluation also preflights the Azure CLI application identity against the same
-tenant/object/client IDs using a Foundry-audience token. Keep that CLI identity
+Evaluation preflights `model_identity` (or, for existing application plans only,
+`read_identity`) using a Foundry-audience token. Keep that CLI identity
 selected for the entire run; do not concurrently switch accounts in the shared
 CLI cache. The existing runner creates fresh CLI credentials for individual
 assessment calls. A token preflight is not a recorded service-side principal
 attestation for every response.
+
+## Manual capture with Sasha's own login
+
+Basic organization membership is **not** repository Read permission or admin
+access. Sasha must personally sign in; do not share credentials, select another
+person's cached login, reuse production identities, or grant permissions here.
+Both desktop and WSL CLI inspection currently show a different tenant
+(`72f988bf-86f1-41af-91ab-2d7cd011db47`), so no authenticated ADO reads were
+attempted for this follow-up. Interactive sign-in and verified source permissions
+remain blockers; exact code/wiki pins are still unverified.
+
+In a private copy of the example plan, replace `read_identity` with:
+
+```json
+{
+  "mode": "delegated_user",
+  "tenant_id": "cc48e4fe-6662-414d-aeff-4eb633735b38",
+  "object_id": "cbc26d4a-7626-45bc-bd50-c2161c41bd71"
+}
+```
+
+Also set `model_identity` to the existing approved isolated UAMI's
+tenant/object/client IDs from the table above (optionally `"mode": "application"`)
+and `model_identity_review_reference` to the reviewed Foundry permission evidence.
+These are separate identities; source capture does not grant model access.
+Explicit model identities always require that review reference. A delegated
+model identity is supported only with separately reviewed, verified isolated
+Foundry permissions and the same manual opt-in, never CI.
+
+Use an existing Python environment with the repository's extras available.
+This Bash subshell uses a new private CLI cache, not the shared Azure default.
+Sasha completes the interactive login as
+`SashaO@M365CPI54615665.OnMicrosoft.com`:
+
+```bash
+(
+  export AZURE_CONFIG_DIR="$(mktemp -d)"
+  chmod 700 "$AZURE_CONFIG_DIR"
+  az login --tenant cc48e4fe-6662-414d-aeff-4eb633735b38 --allow-no-subscriptions
+  SANDBOX_READ_APPROVED=true SANDBOX_MANUAL_USER_APPROVED=true \
+    python -m tools.sandbox_eval capture \
+      --plan /private/sandbox-plan.json --output /private/sandbox-capture.json \
+      --capture-approved-readonly --manual-user-approved
+)
+```
+
+Retain/manage the private cache according to local credential policy; do not
+commit it. No `az account set`, shared default mutation, or `az logout` is needed.
+Tokens are obtained by `AzureCliCredential`; decoded claims are only a usage
+guard, **not signature authentication**. Exact audience, tenant and user object
+plus nonempty delegated `scp` are required, and `idtyp=app` is rejected. CLI
+`appid`/`azp` identifies the client, not Sasha. User mode rejects CI/GitHub Actions
+even with both approval switches.
+
+For evaluation, use the earlier evaluate command from a separate session/cache
+already authorized as the reviewed isolated model identity. No model run is
+automatic or authorized by read approval. If explicitly reviewed user-mode model
+execution is chosen instead, add `SANDBOX_MANUAL_USER_APPROVED=true` and
+`--manual-user-approved` to that command in Sasha's private login subshell.
+Capture identity remains in the replay file; the manifest records both source
+and model identity and the model review reference. Changing identity or pins
+invalidates the plan digest. Local hashes remain unsigned provenance, not remote
+attestation. Keep the chosen model cache stable for all assessment and judge calls.
 
 Run from the checked-out repository using a clean, committed `src`,
 `data/knowledge` and `pyproject.toml`. The manifest freezes source/config/capture

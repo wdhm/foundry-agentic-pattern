@@ -71,9 +71,29 @@ def restricted_output(output: Path) -> Path:
 
 
 class ReadIdentity(StrictModel):
+    mode: Literal["application"] = "application"
     tenant_id: UUID
     object_id: UUID
     client_id: UUID
+
+
+class UserIdentity(StrictModel):
+    mode: Literal["delegated_user"]
+    tenant_id: UUID
+    object_id: UUID
+
+
+Identity = ReadIdentity | UserIdentity
+
+
+def approve_identity(identity: Identity, manual_user_approved: bool) -> None:
+    if isinstance(identity, UserIdentity):
+        if any(os.environ.get(key, "").lower() not in {"", "false", "0"} for key in (
+            "CI", "GITHUB_ACTIONS", "TF_BUILD", "BUILD_BUILDID",
+        )):
+            raise SandboxError("Delegated user mode is forbidden in CI.")
+        if not manual_user_approved or os.environ.get("SANDBOX_MANUAL_USER_APPROVED") != "true":
+            raise SandboxError("Explicit manual delegated-user approval is required.")
 
 
 class SandboxPlan(StrictModel):
@@ -86,7 +106,9 @@ class SandboxPlan(StrictModel):
     wiki_path: str
     wiki_commit: Pin
     wiki_etag: Pin
-    read_identity: ReadIdentity
+    read_identity: Identity
+    model_identity: Identity | None = None
+    model_identity_review_reference: Annotated[str, Field(min_length=1)] | None = None
     read_approval_reference: Annotated[str, Field(min_length=1)]
     question: Annotated[str, Field(min_length=1, max_length=8000)]
     scope: Literal["change_review", "information_review"]
@@ -95,6 +117,10 @@ class SandboxPlan(StrictModel):
 
     @model_validator(mode="after")
     def bounded_paths(self) -> Self:
+        if isinstance(self.read_identity, UserIdentity) and self.model_identity is None:
+            raise SandboxError("Delegated capture requires an explicit reviewed model identity.")
+        if self.model_identity is not None and not self.model_identity_review_reference:
+            raise SandboxError("Explicit model identity requires a permissions review reference.")
         if len(set(self.paths)) != len(self.paths):
             raise SandboxError("Repository paths must be unique.")
         for path in [*self.paths, self.wiki_path]:
@@ -124,7 +150,7 @@ class Capture(StrictModel):
     kind: Literal["azure_devops_get_capture"] = "azure_devops_get_capture"
     captured_at: datetime
     plan_sha256: str
-    identity: ReadIdentity
+    identity: Identity
     payload: EvaluationRequest
 
 
@@ -132,18 +158,28 @@ def digest(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()
 
 
-def check_identity(token: str, expected: ReadIdentity, *, audience: str = ADO_AUDIENCE) -> None:
+def check_identity(token: str, expected: Identity, *, audience: str = ADO_AUDIENCE) -> None:
     """The SDK acquires the token; claims restrict its use, not authenticate external tokens."""
     try:
         encoded = token.split(".")[1]
         claims = json.loads(base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)))
-        actual = ReadIdentity(
-            tenant_id=claims["tid"], object_id=claims["oid"], client_id=claims.get("appid", claims.get("azp")),
-        )
+        if isinstance(expected, UserIdentity):
+            actual: Identity = UserIdentity(
+                mode="delegated_user", tenant_id=claims["tid"], object_id=claims["oid"],
+            )
+        else:
+            actual = ReadIdentity(
+                tenant_id=claims["tid"], object_id=claims["oid"], client_id=claims.get("appid", claims.get("azp")),
+            )
     except (ValueError, KeyError, IndexError, TypeError) as exc:
         raise SandboxError("Cannot establish the dedicated Azure DevOps read identity.") from exc
-    if actual != expected or claims.get("aud") != audience or claims.get("scp"):
-        raise SandboxError("Token is not the approved application identity and requested audience.")
+    delegated = isinstance(claims.get("scp"), str) and bool(claims["scp"].strip())
+    if (
+        actual != expected or claims.get("aud") != audience
+        or (isinstance(expected, UserIdentity) and (not delegated or claims.get("idtyp") == "app"))
+        or (isinstance(expected, ReadIdentity) and bool(claims.get("scp")))
+    ):
+        raise SandboxError("Token is not the approved application identity or delegated user and requested audience.")
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -154,7 +190,8 @@ class NoRedirect(HTTPRedirectHandler):
 class AzureDevOpsReader:
     """No generic URL or write method is exposed to the caller or the model."""
 
-    def __init__(self, plan: SandboxPlan, token: str) -> None:
+    def __init__(self, plan: SandboxPlan, token: str, *, manual_user_approved: bool = False) -> None:
+        approve_identity(plan.read_identity, manual_user_approved)
         check_identity(token, plan.read_identity)
         self.plan, self.token = plan, token
         self.allowed = {
@@ -311,6 +348,9 @@ async def evaluate_capture(
         "capture_sha256": digest(capture.model_dump_json()), "captured_at": capture.captured_at.isoformat(),
         "source_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
         "config_sha256": digest(config.model_dump_json()), "coverage": demo.coverage,
+        "source_identity": capture.identity.model_dump(mode="json"),
+        "model_identity": (plan.model_identity or plan.read_identity).model_dump(mode="json"),
+        "model_identity_review_reference": plan.model_identity_review_reference,
         "frozen_files": {
             str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
             for folder in ("src", "data/knowledge")
@@ -343,6 +383,7 @@ def main(argv: list[str] | None = None) -> int:
         command = commands.add_parser(name)
         command.add_argument("--plan", type=Path, required=True)
         command.add_argument("--output", type=Path, required=True)
+        command.add_argument("--manual-user-approved", action="store_true")
         if name == "capture":
             command.add_argument("--capture-approved-readonly", action="store_true")
         else:
@@ -358,9 +399,10 @@ def main(argv: list[str] | None = None) -> int:
                 raise SandboxError("Explicit read-only source capture approval is required.")
             from azure.identity import AzureCliCredential
 
-            with AzureCliCredential() as credential:
+            approve_identity(plan.read_identity, args.manual_user_approved)
+            with AzureCliCredential(tenant_id=str(plan.read_identity.tenant_id)) as credential:
                 token = credential.get_token(ADO_AUDIENCE + "/.default").token
-                reader = AzureDevOpsReader(plan, token)
+                reader = AzureDevOpsReader(plan, token, manual_user_approved=args.manual_user_approved)
                 capture = capture_sources(plan, reader.get)
             validate_capture(plan, capture)
             args.output.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -387,10 +429,12 @@ def main(argv: list[str] | None = None) -> int:
             ["git", "diff", "--exit-code", "HEAD", "--", "src", "data/knowledge", "pyproject.toml"],
             cwd=ROOT, check=True, capture_output=True,
         )
-        with AzureCliCredential() as credential:
+        model_identity = plan.model_identity or plan.read_identity
+        approve_identity(model_identity, args.manual_user_approved)
+        with AzureCliCredential(tenant_id=str(model_identity.tenant_id)) as credential:
             check_identity(
                 credential.get_token("https://ai.azure.com/.default").token,
-                plan.read_identity, audience="https://ai.azure.com",
+                model_identity, audience="https://ai.azure.com",
             )
             with (
                 AIProjectClient(endpoint=settings.project_endpoint, credential=credential) as project,
