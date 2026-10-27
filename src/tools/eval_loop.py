@@ -520,7 +520,7 @@ class LiveDemo:
             self.cases = [case for case in self.cases if case["mode"] == "supplied_sources"]
             if len(self.cases) != 3 or len(excluded) != 2:
                 raise OperationalError(Stage.SUITE, Reason.PARTIAL_SUITE_MISMATCH)
-        self.coverage = {
+        self.coverage: dict[str, Any] = {
             "mode": config.mode, "selected_case_ids": [case["id"] for case in self.cases],
             "excluded_case_ids": excluded,
             "tool_call_accuracy": "not_evaluated" if excluded else "two_live_cases_only",
@@ -607,7 +607,7 @@ class LiveDemo:
         deterministic = []
         for case in self.cases:
             self.telemetry.stage = Stage.INPUT
-            payload = evaluation_request(case, SCOPES[case["id"]])
+            payload = evaluation_request(case, case["scope"] if "scope" in case else SCOPES[case["id"]])
             live = case["mode"] == "live_sources"
             base = AssessmentAgent(self.settings) if isinstance(self.settings, AssessmentSettings) else None
             if live and base is None:
