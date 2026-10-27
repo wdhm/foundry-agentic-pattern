@@ -10,6 +10,12 @@ The separately selected `supplied_sources_only` mode runs only the three existin
 tools-disabled cases, needs no toolbox/source credentials, and can report only
 `partial_passed` with `full_suite_passed=false`. Full mode remains the default;
 manual selection must match the reviewed environment configuration.
+The [documentation-quality thin slice](../../evals/documentation-quality/README.md)
+also runs in the offline job, including focused lint/type checks. Pushes changing
+only that module, dataset/docs, or tests are excluded from the isolated job even
+when enabled. Push eligibility uses the full before/after diff and the original
+live-input path allowlist; PR credential exclusion and manual dispatch remain
+unchanged. Missing initial-push history does not grant live eligibility.
 
 [`agent-release.yml`](agent-release.yml) targets hosted **`documentation-agent`**.
 It is the single platform-first MVP workflow

@@ -162,6 +162,16 @@ not catch operational errors and turn them into zero scores.
 
 Focused verification:
 
+The evaluation-loop workflow runs these offline tests on pushes to `main` and
+PRs changing the module, this dataset directory, or its regression tests. Its
+focused Ruff and strict configured mypy checks include the module (`MYPYPATH=src`).
+Documentation-quality-only pushes cannot start the paid isolated job, even if
+the live enable switch is later set: push eligibility requires a changed path
+from the pre-existing live evaluation inputs. Mixed pushes retain that eligibility;
+PRs never receive cloud credentials, and manual dispatch and all existing live
+approval/enable guards are unchanged. This adds no semantic gate or calibration
+evidence.
+
 ```powershell
 python -m pytest tests\evals\test_documentation_quality.py tests\evals\test_datasets.py -q
 ruff check evals\documentation_quality.py tests\evals\test_documentation_quality.py
