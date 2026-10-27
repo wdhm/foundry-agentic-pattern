@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from tools.eval_loop import LoopConfig
     from tools.release import FoundryEvaluation
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path.cwd()
 ADO_AUDIENCE = "499b84ac-1321-427f-aa17-267ca6975798"
 MAX_RESPONSE_BYTES = 200_000
 MAX_SOURCE_BYTES = 80_000
