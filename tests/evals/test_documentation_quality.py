@@ -93,7 +93,7 @@ def test_workflow_live_path_classifier(tmp_path, monkeypatch, paths, expected):
         return "\0".join(paths) + "\0"
 
     monkeypatch.setattr(subprocess, "check_output", diff)
-    script = workflow_text().split("        run: |\n", 1)[1].split("\n      - uses:", 1)[0]
+    script = workflow_text().split("        run: |\n", 1)[1].split("\n      - name:", 1)[0]
     exec(compile(textwrap.dedent(script), "<live-paths>", "exec"), {})
     assert output.read_text() == f"changed={str(expected).lower()}\n"
 
@@ -109,7 +109,7 @@ def test_workflow_live_path_classifier_fails_closed(tmp_path, monkeypatch, befor
         raise subprocess.CalledProcessError(128, "git")
 
     monkeypatch.setattr(subprocess, "check_output", unavailable)
-    script = workflow_text().split("        run: |\n", 1)[1].split("\n      - uses:", 1)[0]
+    script = workflow_text().split("        run: |\n", 1)[1].split("\n      - name:", 1)[0]
     if before == "a" * 40:
         with pytest.raises(subprocess.CalledProcessError):
             exec(compile(textwrap.dedent(script), "<live-paths>", "exec"), {})

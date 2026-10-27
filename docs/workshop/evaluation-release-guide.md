@@ -6,6 +6,41 @@ The former prompt `doc-agent` runner remains an explicitly selected compatibilit
 path. This package does not claim promotion, rollback or Teams delivery by the
 release tooling.
 
+## Reading the Actions demo
+
+Open **Agent quality - validate, evaluate and improve** for the iterative demo,
+or **Agent release - offline preflight and optional candidate evaluation** for
+the hosted candidate preflight. The graph deliberately has only two jobs:
+**1. offline validation** followed by **2. optional approved live evaluation**.
+Expand each job for named checkout, dependency, test, lint, type, configuration,
+identity and execution steps. Open the run summary for the plain-language
+inputs/actions/outcomes stage map.
+
+A green offline job means repository checks passed, **not** that the model
+answered correctly. A grey/skipped live job means **not evaluated**; it is normal
+for PRs, disabled environments, offline-only changes or default release dispatch.
+An environment approval wait is not inference in progress. Coverage is shown in
+the loop's reviewed-configuration and runtime summaries: `supplied_sources_only`
+excludes the two live cases and tool-call accuracy, so `partial_passed` is never
+a full-suite pass.
+
+The execution step contains the actual runtime sequence: candidate inference,
+structural/source/evidence checks, semantic judging, then a decision. The loop
+can revise instructions after failure and evaluate up to five candidates.
+Its shared single correction retry per case is schema/evidence repair, not
+another unlimited optimization loop. The hosted release path evaluates a
+candidate without instruction optimization. These internal phases are explained
+in a table, **not represented as fabricated completed Actions steps**.
+Existing deadlines, token budgets, schema constraints and quality thresholds
+still apply. A blocked/interrupted result is not success; even an eligible
+candidate requires separate manual review and is never automatically promoted.
+
+Public summaries use fixed descriptions and allowlisted decisions; no model
+answers, prompts, arbitrary case labels, source excerpts or raw errors are
+rendered by the demo reporter. Restricted artifact publication remains behind
+its existing separate approval flag. This UI change enables no cloud execution,
+deployment, promotion, wiki write or Teams message.
+
 ## Live gate evidence (2026-10-20)
 
 The full gate ran live twice against isolated candidates, with the same five

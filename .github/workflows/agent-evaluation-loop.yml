@@ -1,4 +1,4 @@
-name: Isolated agent evaluation loop
+name: Agent quality - validate, evaluate and improve
 
 on:
   push:
@@ -49,16 +49,18 @@ concurrency:
 
 jobs:
   offline:
+    name: 1. Validate code offline (no model calls)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
       live_changed: ${{ steps.live-paths.outputs.changed }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out code without saved credentials
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Identify live evaluation changes
+      - name: Classify push changes - offline only or live evaluation eligible
         id: live-paths
         if: github.event_name == 'push'
         env:
@@ -86,20 +88,29 @@ jobs:
               changed = any(fnmatchcase(path, pattern) for path in paths for pattern in patterns)
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               output.write(f"changed={str(changed).lower()}\n")
-      - uses: actions/setup-python@v5
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - run: python -m pip install '.[agent,prompt,dev]'
-      - run: python -m pytest tests/release/test_eval_loop.py tests/agents/test_hosted_evaluation.py tests/evals -q
-      - run: python -m ruff check src/tools/eval_loop.py tests/release/test_eval_loop.py evals/documentation_quality.py tests/evals/test_documentation_quality.py
-      - run: python -m mypy src/tools/eval_loop.py evals/documentation_quality.py
+      - name: Install runtime and offline check dependencies
+        run: python -m pip install '.[agent,prompt,dev]'
+      - name: Test loop safeguards and synthetic evaluation fixtures
+        run: python -m pytest tests/release/test_eval_loop.py tests/agents/test_hosted_evaluation.py tests/evals -q
+      - name: Lint evaluation code and tests
+        run: python -m ruff check src/tools/eval_loop.py tests/release/test_eval_loop.py evals/documentation_quality.py tests/evals/test_documentation_quality.py
+      - name: Check evaluation types
+        run: python -m mypy src/tools/eval_loop.py evals/documentation_quality.py
         env:
           MYPYPATH: src
-      - name: Explain scope
-        run: echo 'Offline checks only. Changed-agent quality requires the separately approved isolated job.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Explain stages and what offline success does not prove
+        if: always()
+        env:
+          PYTHONPATH: src
+          OFFLINE_OUTCOME: ${{ job.status }}
+        run: python -m tools.workflow_summary --workflow loop
 
   isolated:
-    name: isolated (${{ inputs.evaluation_mode || vars.EVAL_LOOP_MODE || 'full_suite' }})
+    name: 2. Evaluate and improve isolated candidate (approval required)
     needs: offline
     # Never give PR code (including same-repository PRs) cloud credentials.
     if: >-
@@ -115,14 +126,17 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out the exact trusted revision
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - run: python -m pip install '.[agent,prompt,dev]'
+      - name: Install isolated evaluation dependencies
+        run: python -m pip install '.[agent,prompt,dev]'
       - name: Require explicitly reviewed isolated configuration
         env:
           LOOP_CONFIG: ${{ vars.EVAL_LOOP_CONFIG }}
@@ -141,12 +155,13 @@ jobs:
               if value.mode == "supplied_sources_only":
                   summary.write("Partial coverage only. Excluded: order-sync-retry, "
                                 "order-sync-information-missing. Tool-call accuracy not evaluated.\n\n")
-      - uses: azure/login@v2
+      - name: Sign in to Azure with approved environment identity (OIDC)
+        uses: azure/login@v2
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-      - name: Fresh candidate evaluations and bounded instruction improvements
+      - name: Run inference, source checks, semantic judging and bounded improvements
         env:
           EVAL_LOOP_APPROVED: "true"
         run: >-
