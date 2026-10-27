@@ -3,6 +3,9 @@
 import json
 import os
 import runpy
+import subprocess
+import textwrap
+import tomllib
 from copy import deepcopy
 from pathlib import Path
 from types import SimpleNamespace
@@ -12,6 +15,108 @@ from pydantic import ValidationError
 
 ROOT = Path(__file__).parents[2]
 DQ = SimpleNamespace(**runpy.run_path(str(ROOT / "evals" / "documentation_quality.py")))
+
+
+def workflow_text():
+    return (ROOT / ".github" / "workflows" / "agent-evaluation-loop.yml").read_text()
+
+
+def test_workflow_documentation_quality_offline_coverage():
+    workflow = workflow_text()
+    triggers, jobs = workflow.split("\njobs:\n")
+    for event in ("push", "pull_request"):
+        block = triggers.split(f"  {event}:\n", 1)[1].split("\n  workflow_dispatch:", 1)[0]
+        if event == "push":
+            block = block.split("\n  pull_request:", 1)[0]
+        for path in (
+            "evals/documentation_quality.py",
+            "evals/documentation-quality/**",
+            "tests/evals/test_documentation_quality.py",
+        ):
+            assert f'      - "{path}"' in block
+    offline = jobs.split("\n  isolated:\n", 1)[0]
+    assert (
+        "python -m pytest tests/release/test_eval_loop.py tests/agents/test_hosted_evaluation.py tests/evals -q"
+    ) in offline
+    assert (
+        "python -m ruff check src/tools/eval_loop.py tests/release/test_eval_loop.py "
+        "evals/documentation_quality.py tests/evals/test_documentation_quality.py"
+    ) in offline
+    assert (
+        "python -m mypy src/tools/eval_loop.py evals/documentation_quality.py\n        env:\n          MYPYPATH: src"
+    ) in offline
+    config = tomllib.loads((ROOT / "pyproject.toml").read_text())
+    assert config["tool"]["mypy"]["strict"] is True
+    assert "fetch-depth: 0" in offline
+    assert "live_changed: ${{ steps.live-paths.outputs.changed }}" in offline
+    assert "id: live-paths\n        if: github.event_name == 'push'" in offline
+    assert "BEFORE: ${{ github.event.before }}" in offline
+    assert "AFTER: ${{ github.sha }}" in offline
+    isolated = jobs.split("\n  isolated:\n", 1)[1]
+    condition = isolated.split("    if: >-\n", 1)[1].split("\n    environment:", 1)[0]
+    assert " ".join(condition.split()) == (
+        "github.event_name != 'pull_request' && "
+        "(github.event_name == 'workflow_dispatch' || "
+        "(github.event_name == 'push' && needs.offline.outputs.live_changed == 'true')) && "
+        "github.ref == 'refs/heads/main' && vars.EVAL_LOOP_ENABLED == 'true'"
+    )
+
+
+@pytest.mark.parametrize(
+    ("paths", "expected"),
+    [
+        (["evals/documentation_quality.py"], False),
+        (["evals/documentation-quality/three-cases.json"], False),
+        (["evals/documentation-quality/nested/example.json"], False),
+        (["evals/documentation-quality/README.md"], False),
+        (["tests/evals/test_documentation_quality.py"], False),
+        (["docs/workshop/evaluation-release-guide.md"], False),
+        (["evals/documentation_quality.py", "src/tools/eval_loop.py"], True),
+        *[([path], True) for path in (
+            "src/agents/documentation-agent/app/main.py", "src/contracts/request.py",
+            "src/tools/eval_loop.py", "evals/datasets/suite.json", "data/knowledge/standard.md",
+            "infra/isolated-evaluation/main.bicep", "pyproject.toml", "tests/release/test_eval_loop.py",
+            ".github/workflows/agent-evaluation-loop.yml",
+        )],
+        ([], False),
+    ],
+)
+def test_workflow_live_path_classifier(tmp_path, monkeypatch, paths, expected):
+    output = tmp_path / "output"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+    monkeypatch.setenv("BEFORE", "a" * 40)
+    monkeypatch.setenv("AFTER", "b" * 40)
+
+    def diff(command, *, text):
+        assert command == ["git", "diff", "--name-only", "-z", "a" * 40, "b" * 40, "--"]
+        assert text is True
+        return "\0".join(paths) + "\0"
+
+    monkeypatch.setattr(subprocess, "check_output", diff)
+    script = workflow_text().split("        run: |\n", 1)[1].split("\n      - uses:", 1)[0]
+    exec(compile(textwrap.dedent(script), "<live-paths>", "exec"), {})
+    assert output.read_text() == f"changed={str(expected).lower()}\n"
+
+
+@pytest.mark.parametrize("before", ["", "0" * 40, "a" * 40])
+def test_workflow_live_path_classifier_fails_closed(tmp_path, monkeypatch, before):
+    output = tmp_path / "output"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+    monkeypatch.setenv("BEFORE", before)
+    monkeypatch.setenv("AFTER", "b" * 40)
+
+    def unavailable(*args, **kwargs):
+        raise subprocess.CalledProcessError(128, "git")
+
+    monkeypatch.setattr(subprocess, "check_output", unavailable)
+    script = workflow_text().split("        run: |\n", 1)[1].split("\n      - uses:", 1)[0]
+    if before == "a" * 40:
+        with pytest.raises(subprocess.CalledProcessError):
+            exec(compile(textwrap.dedent(script), "<live-paths>", "exec"), {})
+        assert not output.exists()
+    else:
+        exec(compile(textwrap.dedent(script), "<live-paths>", "exec"), {})
+        assert output.read_text() == "changed=false\n"
 
 
 @pytest.fixture

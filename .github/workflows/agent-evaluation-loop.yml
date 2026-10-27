@@ -8,6 +8,9 @@ on:
       - "src/contracts/**"
       - "src/tools/**"
       - "evals/datasets/**"
+      - "evals/documentation_quality.py"
+      - "evals/documentation-quality/**"
+      - "tests/evals/test_documentation_quality.py"
       - "data/knowledge/**"
       - "infra/isolated-evaluation/**"
       - "pyproject.toml"
@@ -19,6 +22,9 @@ on:
       - "src/contracts/**"
       - "src/tools/**"
       - "evals/datasets/**"
+      - "evals/documentation_quality.py"
+      - "evals/documentation-quality/**"
+      - "tests/evals/test_documentation_quality.py"
       - "data/knowledge/**"
       - "infra/isolated-evaluation/**"
       - "pyproject.toml"
@@ -45,17 +51,50 @@ jobs:
   offline:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      live_changed: ${{ steps.live-paths.outputs.changed }}
     steps:
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           persist-credentials: false
+      - name: Identify live evaluation changes
+        id: live-paths
+        if: github.event_name == 'push'
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        shell: python
+        run: |
+          import os
+          import subprocess
+          from fnmatch import fnmatchcase
+
+          patterns = (
+              "src/agents/documentation-agent/**", "src/contracts/**", "src/tools/**",
+              "evals/datasets/**", "data/knowledge/**", "infra/isolated-evaluation/**",
+              "pyproject.toml", "tests/release/test_eval_loop.py",
+              ".github/workflows/agent-evaluation-loop.yml",
+          )
+          before = os.environ["BEFORE"]
+          changed = False
+          if before and set(before) != {"0"}:
+              paths = subprocess.check_output(
+                  ["git", "diff", "--name-only", "-z", before, os.environ["AFTER"], "--"],
+                  text=True,
+              ).split("\0")
+              changed = any(fnmatchcase(path, pattern) for path in paths for pattern in patterns)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"changed={str(changed).lower()}\n")
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
       - run: python -m pip install '.[agent,prompt,dev]'
       - run: python -m pytest tests/release/test_eval_loop.py tests/agents/test_hosted_evaluation.py tests/evals -q
-      - run: python -m ruff check src/tools/eval_loop.py tests/release/test_eval_loop.py
-      - run: python -m mypy src/tools/eval_loop.py
+      - run: python -m ruff check src/tools/eval_loop.py tests/release/test_eval_loop.py evals/documentation_quality.py tests/evals/test_documentation_quality.py
+      - run: python -m mypy src/tools/eval_loop.py evals/documentation_quality.py
+        env:
+          MYPYPATH: src
       - name: Explain scope
         run: echo 'Offline checks only. Changed-agent quality requires the separately approved isolated job.' >> "$GITHUB_STEP_SUMMARY"
 
@@ -65,6 +104,8 @@ jobs:
     # Never give PR code (including same-repository PRs) cloud credentials.
     if: >-
       github.event_name != 'pull_request' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'push' && needs.offline.outputs.live_changed == 'true')) &&
       github.ref == 'refs/heads/main' &&
       vars.EVAL_LOOP_ENABLED == 'true'
     environment: isolated-agent-evaluation
