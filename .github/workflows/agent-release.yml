@@ -1,4 +1,4 @@
-name: Hosted documentation-agent release preflight
+name: Agent release - offline preflight and optional candidate evaluation
 
 on:
   workflow_dispatch:
@@ -21,23 +21,38 @@ concurrency:
 
 jobs:
   offline:
+    name: 1. Validate and package locally (no cloud calls)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out code without saved credentials
+        uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - run: python -m pip install '.[agent,prompt,dev]'
-      - run: python -m pytest tests/release tests/evals tests/tools tests/contracts tests/agents -q
-      - run: python -m ruff check src/tools tests/release tests/tools
-      - run: python -m mypy src/tools/cli.py src/tools/hosted.py src/tools/hosted_evaluation.py src/tools/hosted_release.py src/tools/release.py src/tools/release_sources.py
-      - run: python -m contracts.generate_schema --check
+      - name: Install runtime and offline check dependencies
+        run: python -m pip install '.[agent,prompt,dev]'
+      - name: Test contracts, runtime and release safeguards offline
+        run: python -m pytest tests/release tests/evals tests/tools tests/contracts tests/agents -q
+      - name: Lint release tooling and tests
+        run: python -m ruff check src/tools tests/release tests/tools
+      - name: Check release tooling types
+        run: python -m mypy src/tools/cli.py src/tools/hosted.py src/tools/hosted_evaluation.py src/tools/hosted_release.py src/tools/release.py src/tools/release_sources.py
+      - name: Verify generated contracts match committed schemas
+        run: python -m contracts.generate_schema --check
       - name: Build Python runtime artifact without a container build or publication
         run: python -m pip wheel --no-deps --wheel-dir dist .
+      - name: Explain stages and what offline success does not prove
+        if: always()
+        env:
+          PYTHONPATH: src
+          OFFLINE_OUTCOME: ${{ job.status }}
+        run: python -m tools.workflow_summary --workflow release
 
   candidate-evaluation:
+    name: 2. Evaluate hosted candidate (manual opt-in, never promote)
     needs: offline
     if: >-
       inputs.execute_approved_cloud &&
@@ -56,14 +71,17 @@ jobs:
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out the exact trusted revision
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - run: python -m pip install '.[agent,prompt,dev]'
+      - name: Install hosted evaluation dependencies
+        run: python -m pip install '.[agent,prompt,dev]'
       - name: Fail before login on missing local prerequisites
         shell: bash
         run: |
@@ -76,39 +94,19 @@ jobs:
       - name: Validate reviewed isolated evaluation plan locally before Azure login
         # Local success never certifies cloud/version/identity/evaluator readiness.
         run: python -m tools.release --plan "$PLAN_PATH" --output evals/results/preflight --preflight-only
-      - uses: azure/login@v2
+      - name: Sign in to Azure with approved environment identity (OIDC)
+        uses: azure/login@v2
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-      - name: Guarded isolated hosted candidate evaluation; never promote
+      - name: Run hosted candidate inference, source validation and semantic gate
         run: python -m tools.release --plan "$PLAN_PATH" --output evals/results/release --execute-approved-cloud
-      - name: Publish gate decision and scores (no source content) to the job summary
+      - name: Explain sanitized gate decision (no source or model content)
         if: always()
-        shell: python
-        run: |
-          import glob, json, os
-          from pathlib import Path
-          out = ["## Eval gate"]
-          d = Path("evals/results/release/decision.json")
-          if d.exists():
-              dec = json.loads(d.read_text(encoding="utf-8"))
-              out.append(f"**{dec.get('status')}** — candidate v{dec.get('candidate_version')}, "
-                         f"serving v{dec.get('serving_version')}, promoted={dec.get('promoted')}, "
-                         f"thresholds={dec.get('thresholds')}")
-          else:
-              out.append("No decision was written; see the step logs.")
-          rows = []
-          for f in sorted(glob.glob("evals/results/release/*-scores.json")):
-              for item in json.loads(Path(f).read_text(encoding="utf-8")):
-                  case = (item.get("datasource_item") or {}).get("case_id")
-                  res = {r.get("name"): r for r in item.get("results", [])}
-                  cell = lambda n: (f"{res[n].get('score')} {'✅' if res[n].get('passed') else '❌'}" if n in res else "–")
-                  rows.append(f"| {case} | {cell('groundedness')} | {cell('task_adherence')} | {cell('tool_call_accuracy')} |")
-          if rows:
-              out += ["", "| Case | Groundedness | Task adherence | Tool-call accuracy |", "|---|---|---|---|", *rows]
-          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as s:
-              s.write("\n".join(out) + "\n")
+        env:
+          PYTHONPATH: src
+        run: python -m tools.workflow_summary --workflow release --decision evals/results/release/decision.json
       - name: Retain restricted diagnostic artifacts, including blocked decisions
         if: always() && vars.P3_ARTIFACT_PUBLICATION_APPROVED == 'true'
         uses: actions/upload-artifact@v4
