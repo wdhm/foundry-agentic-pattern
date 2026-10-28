@@ -36,9 +36,10 @@ documentation-agent = "documentation_agent.main:main"
 documentation-prompt = "contracts.prompt:main"
 documentation-trigger = "tools.cli:main"
 documentation-code-eval = "tools.code_eval:main"
+documentation-precision-recall = "tools.precision_recall.__main__:main"
 
 [tool.setuptools]
-packages = ["contracts", "documentation_agent", "tools"]
+packages = ["contracts", "documentation_agent", "tools", "tools.precision_recall"]
 
 [tool.setuptools.package-dir]
 contracts = "src/contracts"

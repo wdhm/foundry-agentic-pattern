@@ -10,12 +10,14 @@ on:
       - "evals/datasets/**"
       - "evals/documentation_quality.py"
       - "evals/documentation-quality/**"
+      - "evals/precision-recall*.json"
       - "tests/evals/test_documentation_quality.py"
       - "data/knowledge/**"
       - "infra/isolated-evaluation/**"
       - "pyproject.toml"
       - "tests/release/test_eval_loop.py"
       - "tests/release/test_sandbox_eval.py"
+      - "tests/release/test_precision_recall.py"
       - ".github/workflows/agent-evaluation-loop.yml"
   pull_request:
     paths:
@@ -25,15 +27,26 @@ on:
       - "evals/datasets/**"
       - "evals/documentation_quality.py"
       - "evals/documentation-quality/**"
+      - "evals/precision-recall*.json"
       - "tests/evals/test_documentation_quality.py"
       - "data/knowledge/**"
       - "infra/isolated-evaluation/**"
       - "pyproject.toml"
       - "tests/release/test_eval_loop.py"
       - "tests/release/test_sandbox_eval.py"
+      - "tests/release/test_precision_recall.py"
       - ".github/workflows/agent-evaluation-loop.yml"
   workflow_dispatch:
     inputs:
+      pipeline:
+        description: "Independent paths: legacy assessments or paired scoring of pinned real wiki/code"
+        type: choice
+        options: [legacy_assessments, precision_recall]
+        default: legacy_assessments
+      publish_precomputed:
+        description: "Paired path only: separately approved source-free Foundry code pass rates"
+        type: boolean
+        default: false
       evaluation_mode:
         description: "Explicit coverage; supplied-only is never a full-suite pass"
         type: choice
@@ -97,11 +110,19 @@ jobs:
       - name: Install runtime and offline check dependencies
         run: python -m pip install '.[agent,prompt,dev]'
       - name: Test loop safeguards and synthetic evaluation fixtures
-        run: python -m pytest tests/release/test_eval_loop.py tests/release/test_sandbox_eval.py tests/agents/test_hosted_evaluation.py tests/evals -q
+        run: >-
+          python -m pytest tests/release/test_eval_loop.py tests/release/test_sandbox_eval.py
+          tests/release/test_precision_recall.py tests/agents/test_hosted_evaluation.py tests/evals -q
       - name: Lint evaluation code and tests
-        run: python -m ruff check src/tools/eval_loop.py src/tools/sandbox_eval.py tests/release/test_eval_loop.py tests/release/test_sandbox_eval.py evals/documentation_quality.py tests/evals/test_documentation_quality.py
+        run: >-
+          python -m ruff check src/tools/eval_loop.py src/tools/sandbox_eval.py src/tools/ado_transport.py
+          src/tools/precision_recall tests/release/test_precision_recall.py
+          tests/release/test_eval_loop.py tests/release/test_sandbox_eval.py
+          evals/documentation_quality.py tests/evals/test_documentation_quality.py
       - name: Check evaluation types
-        run: python -m mypy src/tools/eval_loop.py src/tools/sandbox_eval.py evals/documentation_quality.py
+        run: >-
+          python -m mypy src/tools/eval_loop.py src/tools/sandbox_eval.py src/tools/ado_transport.py
+          src/tools/precision_recall evals/documentation_quality.py
         env:
           MYPYPATH: src
       - name: Explain stages and what offline success does not prove
@@ -117,6 +138,7 @@ jobs:
     # Never give PR code (including same-repository PRs) cloud credentials.
     if: >-
       github.event_name != 'pull_request' &&
+      inputs.pipeline != 'precision_recall' &&
       (github.event_name == 'workflow_dispatch' ||
        (github.event_name == 'push' && needs.offline.outputs.live_changed == 'true')) &&
       github.ref == 'refs/heads/main' &&
@@ -184,5 +206,103 @@ jobs:
         with:
           name: isolated-eval-${{ inputs.evaluation_mode || vars.EVAL_LOOP_MODE || 'full_suite' }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: evals/results/isolated-loop/
+          retention-days: 3
+          if-no-files-found: warn
+
+  precision-recall:
+    name: 2. Paired pinned wiki/code measurement (not agent replay or release gate)
+    needs: offline
+    # No PR credentials, implicit pushes, personal login, or legacy-loop substitution.
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      inputs.pipeline == 'precision_recall' &&
+      github.ref == 'refs/heads/main' &&
+      vars.EVAL_LOOP_ENABLED == 'true' &&
+      vars.PRECISION_RECALL_ENABLED == 'true'
+    environment: isolated-agent-evaluation
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out trusted source without saved credentials
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install existing evaluation dependencies
+        run: python -m pip install '.[prompt,dev]'
+      - name: Validate approved real manifest and exact execution bounds before login
+        env:
+          PAIRED_MANIFEST: ${{ vars.PRECISION_RECALL_MANIFEST }}
+          PAIRED_CONFIG: ${{ vars.PRECISION_RECALL_CONFIG }}
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+          from tools.precision_recall.models import Manifest, Config
+          from tools.precision_recall.sources import private_json
+          try:
+              manifest = Manifest.model_validate_json(os.environ["PAIRED_MANIFEST"])
+              config = Config.model_validate_json(os.environ["PAIRED_CONFIG"])
+              assert manifest.read_identity.mode == config.model_identity.mode == "application"
+              # This job has one OIDC login; require both reviewed identities to match it.
+              assert manifest.read_identity == config.model_identity
+              Path("evals/results/paired").mkdir(parents=True, mode=0o700)
+              private_json(Path("evals/results/paired/manifest.json"), manifest.model_dump(mode="json"))
+              private_json(Path("evals/results/paired/config.json"), config.model_dump(mode="json"))
+          except Exception as exc:
+              # Pydantic/SDK errors can include the source-bearing manifest.
+              raise SystemExit("Paired configuration blocked: " + type(exc).__name__) from None
+      - name: Sign in with approved environment application identity (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Discover and cache complete pinned declared code trees and wiki page (GET only)
+        env:
+          SANDBOX_READ_APPROVED: "true"
+        run: >-
+          timeout --signal=TERM --kill-after=10s 15m
+          python -m tools.precision_recall capture
+          --manifest evals/results/paired/manifest.json --config evals/results/paired/config.json
+          --cache evals/results/paired/source-cache --output evals/results/paired/capture.json
+          --capture-approved-readonly
+      - name: Extract claims then run both verifier chains with fixed engineer facts
+        env:
+          EVAL_LOOP_APPROVED: "true"
+        run: >-
+          timeout --signal=TERM --kill-after=10s 30m
+          python -m tools.precision_recall run
+          --manifest evals/results/paired/manifest.json --config evals/results/paired/config.json
+          --capture evals/results/paired/capture.json --cache evals/results/paired/extraction-cache
+          --output evals/results/paired/run --execute-approved-isolated
+      - name: Publish approved source-free projections to Foundry (not new LLM judging)
+        if: inputs.publish_precomputed && vars.PRECISION_RECALL_PUBLICATION_APPROVED == 'true'
+        env:
+          PRECISION_RECALL_PUBLICATION_APPROVED: "true"
+        run: >-
+          timeout --signal=TERM --kill-after=10s 12m
+          python -m tools.precision_recall publish
+          --manifest evals/results/paired/manifest.json --config evals/results/paired/config.json
+          --run evals/results/paired/run --output evals/results/paired/foundry
+          --run-id gh-${{ github.run_id }}-${{ github.run_attempt }} --publish-approved-sanitized
+      - name: Report paired measurement state without a semantic release gate
+        if: always()
+        run: >-
+          python -m tools.workflow_summary --workflow precision-recall
+          --decision evals/results/paired/run/precision_recall_summary.json
+      - name: Retain source-bearing outputs only after explicit artifact/access approval
+        if: always() && vars.EVAL_LOOP_ARTIFACTS_APPROVED == 'true' && vars.PRECISION_RECALL_ARTIFACTS_APPROVED == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: precision-recall-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: evals/results/paired/run/
           retention-days: 3
           if-no-files-found: warn

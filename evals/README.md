@@ -1,12 +1,17 @@
 # evals/
 
-**Optional local documentation-quality measurement:** the
-[three-case offline thin slice](documentation-quality/README.md) measures curated
-document excerpts, atomic claims and critical-fact coverage from explicitly
-imported labels, and exports human-calibration templates. It performs no inference,
-run submission or publication and enables no semantic release gates. Its curated
-examples and synthetic regression labels are not historical agent outputs or
-observed calibration. The existing five-case assessment suite below is unchanged.
+**Precision and recall:** start with the [real pinned-source pipeline](PRECISION_RECALL.md).
+It discovers complete declared ADO code repositories and a pinned wiki Markdown
+page, extracts claims, verifies all critical plus a seeded normal sample, and
+checks fixed engineer facts against the page. Both flows produce restricted
+results together. Cloud execution/publication are explicit opt-ins; no semantic
+release gates are enabled before human calibration.
+
+The [older three-case offline thin slice](documentation-quality/README.md)
+and its curated claims/labels are **unit-test/regression examples only**, never
+the new demo, real outputs, or observed human calibration. The new brief replaces
+that extraction/evidence approach. The five-case assessment suite below remains
+separate; an assessment/gap report is not a finished wiki page.
 
 **Primary runtime update (2026-10-16):** hosted `documentation-agent`, per
 ADR 0024 and P3's confirmed target. The unchanged five-case dataset below is

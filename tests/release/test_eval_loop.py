@@ -1204,7 +1204,7 @@ def test_demo_workflows_keep_real_execution_and_approval_boundaries():
     ):
         text = (root / ".github" / "workflows" / filename).read_text()
         assert text.count(execution) == 1
-        assert text.count("    runs-on:") == 2
+        assert text.count("    runs-on:") == (3 if job == "isolated" else 2)
         assert f"vars.{flag} == 'true'" in text
         assert "github.ref == 'refs/heads/main'" in text
         assert f"environment: {environment}" in text

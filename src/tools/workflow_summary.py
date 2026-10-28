@@ -71,13 +71,34 @@ def release_decision(path: Path) -> str:
     )
 
 
+def paired_decision(path: Path) -> str:
+    state = "not evaluated or interrupted"
+    if path.exists():
+        value = json.loads(path.read_text(encoding="utf-8"))
+        if value.get("overall", {}).get("complete") is True:
+            state = "paired measurements recorded; uncalibrated"
+        else:
+            state = "incomplete; requires review"
+        if (path.parent / "operation_error.json").exists():
+            state = "operational error; requires review"
+    return (
+        "## Precision and recall\n\nState: **" + state + "**.\n\n"
+        "Pinned ADO trees/page -> heading claims + fixed engineer facts -> separate verifier -> "
+        "citation checks -> paired metrics. This job does not generate or publish a wiki page. "
+        "Existing-page provenance is not an agent replay. Critical negatives and citation failures "
+        "remain review items. Semantic release gates are disabled pending human calibration. "
+        "Foundry publication, if separately approved, scores precomputed verdicts with code; "
+        "it is not new independent judging. No promotion.\n"
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--workflow", choices=("loop", "release"), required=True)
+    parser.add_argument("--workflow", choices=("loop", "release", "precision-recall"), required=True)
     parser.add_argument("--decision", type=Path)
     args = parser.parse_args()
     text = (
-        release_decision(args.decision)
+        (paired_decision(args.decision) if args.workflow == "precision-recall" else release_decision(args.decision))
         if args.decision is not None
         else overview(args.workflow, os.environ.get("OFFLINE_OUTCOME", "unknown"))
     )

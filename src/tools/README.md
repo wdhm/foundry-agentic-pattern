@@ -1,5 +1,10 @@
 # src/tools/
 
+`python -m tools.precision_recall --help` is the real pinned wiki/code evaluation
+entrypoint. Read [the stage map and private runnable path](../../evals/PRECISION_RECALL.md)
+before using capture/model/publication approvals. This is separate from the
+assessment-only agent and never writes wiki pages.
+
 Tool and API integrations exposed to agents through a Foundry **Toolbox** (MCP) ([ADR 0011](../../docs/adr/0011-knowledge-foundry-iq-and-toolbox.md)).
 
 ## Implemented code

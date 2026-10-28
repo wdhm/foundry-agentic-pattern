@@ -33,22 +33,26 @@ def test_workflow_documentation_quality_offline_coverage():
             "evals/documentation-quality/**",
             "tests/evals/test_documentation_quality.py",
             "tests/release/test_sandbox_eval.py",
+            "tests/release/test_precision_recall.py",
         ):
             assert f'      - "{path}"' in block
     offline = jobs.split("\n  isolated:\n", 1)[0]
+    normalized = " ".join(offline.split())
     assert (
         "python -m pytest tests/release/test_eval_loop.py tests/release/test_sandbox_eval.py "
-        "tests/agents/test_hosted_evaluation.py tests/evals -q"
-    ) in offline
+        "tests/release/test_precision_recall.py tests/agents/test_hosted_evaluation.py tests/evals -q"
+    ) in normalized
     assert (
         "python -m ruff check src/tools/eval_loop.py src/tools/sandbox_eval.py "
+        "src/tools/ado_transport.py src/tools/precision_recall tests/release/test_precision_recall.py "
         "tests/release/test_eval_loop.py tests/release/test_sandbox_eval.py "
         "evals/documentation_quality.py tests/evals/test_documentation_quality.py"
-    ) in offline
+    ) in normalized
     assert (
         "python -m mypy src/tools/eval_loop.py src/tools/sandbox_eval.py "
-        "evals/documentation_quality.py\n        env:\n          MYPYPATH: src"
-    ) in offline
+        "src/tools/ado_transport.py src/tools/precision_recall "
+        "evals/documentation_quality.py env: MYPYPATH: src"
+    ) in normalized
     config = tomllib.loads((ROOT / "pyproject.toml").read_text())
     assert config["tool"]["mypy"]["strict"] is True
     assert "fetch-depth: 0" in offline
@@ -60,6 +64,7 @@ def test_workflow_documentation_quality_offline_coverage():
     condition = isolated.split("    if: >-\n", 1)[1].split("\n    environment:", 1)[0]
     assert " ".join(condition.split()) == (
         "github.event_name != 'pull_request' && "
+        "inputs.pipeline != 'precision_recall' && "
         "(github.event_name == 'workflow_dispatch' || "
         "(github.event_name == 'push' && needs.offline.outputs.live_changed == 'true')) && "
         "github.ref == 'refs/heads/main' && vars.EVAL_LOOP_ENABLED == 'true'"
