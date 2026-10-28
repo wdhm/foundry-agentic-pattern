@@ -12,9 +12,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Literal, Self
-from urllib.error import HTTPError
 from urllib.parse import quote, urlencode
-from urllib.request import HTTPRedirectHandler, Request, build_opener
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -22,6 +20,10 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from contracts.evaluation import EvaluationRequest, SourceSnapshot, SuppliedStandard
 from contracts.repositories import AzureRepository, azure_file_uri
 from contracts.v1 import AgentRequest, AssessmentTask
+from tools.ado_transport import MAX_RESPONSE_BYTES as MAX_RESPONSE_BYTES
+from tools.ado_transport import JsonGet
+from tools.ado_transport import NoRedirect as NoRedirect
+from tools.ado_transport import SandboxError as SandboxError
 from tools.release_sources import blob_id
 
 if TYPE_CHECKING:
@@ -30,7 +32,6 @@ if TYPE_CHECKING:
 
 ROOT = Path.cwd()
 ADO_AUDIENCE = "499b84ac-1321-427f-aa17-267ca6975798"
-MAX_RESPONSE_BYTES = 200_000
 MAX_SOURCE_BYTES = 80_000
 Pin = Annotated[str, Field(pattern=r"^[0-9a-f]{40}$")]
 Name = Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")]
@@ -40,11 +41,7 @@ class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class SandboxError(ValueError):
-    """Fixed local diagnostic text, safe to show without upstream payloads."""
-
-
-def restricted_output(output: Path) -> Path:
+def restricted_output(output: Path, *, allow_existing_directory: bool = False) -> Path:
     root = Path(subprocess.check_output(
         ["git", "rev-parse", "--show-toplevel"], cwd=ROOT, text=True, stderr=subprocess.PIPE,
     ).strip()).resolve()
@@ -65,7 +62,7 @@ def restricted_output(output: Path) -> Path:
         )
         if tracked.stdout or ignored.returncode != 0:
             raise SandboxError("Repository output must be ignored and contain no tracked paths.")
-    if resolved.exists():
+    if resolved.exists() and not (allow_existing_directory and resolved.is_dir()):
         raise SandboxError("Output already exists; refusing to overwrite evidence.")
     return resolved
 
@@ -182,45 +179,21 @@ def check_identity(token: str, expected: Identity, *, audience: str = ADO_AUDIEN
         raise SandboxError("Token is not the approved application identity or delegated user and requested audience.")
 
 
-class NoRedirect(HTTPRedirectHandler):
-    def redirect_request(self, req: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str) -> None:
-        return None
-
-
-class AzureDevOpsReader:
+class AzureDevOpsReader(JsonGet):
     """No generic URL or write method is exposed to the caller or the model."""
 
     def __init__(self, plan: SandboxPlan, token: str, *, manual_user_approved: bool = False) -> None:
         approve_identity(plan.read_identity, manual_user_approved)
         check_identity(token, plan.read_identity)
-        self.plan, self.token = plan, token
-        self.allowed = {
+        self.plan = plan
+        allowed = {
             **{
                 azure_file_uri(plan.repo, path, plan.commit) + "&api-version=7.1&includeContent=true": "git"
                 for path in plan.paths
             },
             plan.wiki_uri + "&includeContent=true": "wiki",
         }
-        self.remaining = len(self.allowed)
-        self.opener = build_opener(NoRedirect())
-
-    def get(self, uri: str) -> tuple[dict[str, Any], dict[str, str]]:
-        if uri not in self.allowed or self.remaining <= 0:
-            raise SandboxError("Read exceeds the approved source boundary or request budget.")
-        self.remaining -= 1
-        request = Request(uri, headers={"Authorization": "Bearer " + self.token, "Accept": "application/json"})
-        try:
-            with self.opener.open(request, timeout=30) as response:
-                body = response.read(MAX_RESPONSE_BYTES + 1)
-                if len(body) > MAX_RESPONSE_BYTES:
-                    raise SandboxError("Source response exceeds the capture limit.")
-                payload = json.loads(body)
-                if not isinstance(payload, dict):
-                    raise SandboxError("Source response must be a JSON object.")
-                return payload, {key.lower(): value for key, value in response.headers.items()}
-        except HTTPError as exc:
-            # HTTPError retains the request URL and may include upstream response bodies.
-            raise SandboxError(f"Azure DevOps GET failed (HTTP {exc.code}); capture stopped.") from None
+        super().__init__(token, allowed, len(allowed))
 
 
 def source(source_id: str, kind: Literal["git", "wiki"], uri: str, version: str, content: str) -> SourceSnapshot:

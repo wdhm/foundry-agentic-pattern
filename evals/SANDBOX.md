@@ -1,5 +1,10 @@
 # Real Azure DevOps sources and real assessment output
 
+For the newer **whole-repository precision/recall pipeline**, start with
+[PRECISION_RECALL.md](PRECISION_RECALL.md). This page describes only the earlier
+five-file assessment capture and its still-relevant authentication prerequisites.
+It is not the whole-source/page-evaluation demo.
+
 `python -m tools.sandbox_eval` connects **actual Azure DevOps GET responses** to
 the existing assessment runtime, contracts, evidence checks, execution capture
 and Foundry groundedness/task-adherence judges. It does not create another mock

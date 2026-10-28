@@ -490,6 +490,21 @@ def test_only_ignored_untracked_repo_results_allowed(output_repo):
     assert not output.exists()
 
 
+def test_existing_cache_directory_retains_full_tracked_path_guard(output_repo):
+    from tools.precision_recall.__main__ import cache_directory
+
+    cache = output_repo / "evals/results/cache"
+    assert cache_directory(cache) == cache
+    assert cache_directory(cache) == cache
+    tracked = cache / "tracked.json"
+    tracked.write_text("test-only")
+    subprocess.run(["git", "add", "--force", str(tracked)], cwd=output_repo, check=True)
+    with pytest.raises(ValueError, match="no tracked paths"):
+        cache_directory(cache)
+    with pytest.raises(ValueError, match="Repository output must"):
+        cache_directory(output_repo / "src")
+
+
 def test_tracked_results_are_rejected_even_when_deleted(output_repo):
     tracked = output_repo / "evals/results/capture.json"
     tracked.parent.mkdir(parents=True)

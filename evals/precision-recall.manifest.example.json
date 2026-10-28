@@ -1,0 +1,60 @@
+{
+  "schema_version": "1",
+  "read_identity": {
+    "mode": "application",
+    "tenant_id": "REPLACE_WITH_APPROVED_TENANT_UUID",
+    "object_id": "REPLACE_WITH_APPROVED_OBJECT_UUID",
+    "client_id": "REPLACE_WITH_APPROVED_CLIENT_UUID"
+  },
+  "read_approval_reference": "REPLACE_WITH_EXACT_REPOSITORY_READ_APPROVAL",
+  "cases": [
+    {
+      "id": "REPLACE_WITH_REAL_CASE_ID",
+      "integration_repo": {
+        "id": "integration",
+        "organization": "foundry-agentic",
+        "project": "integration-team",
+        "repository": "integration-team",
+        "commit": "REPLACE_WITH_AUTHORIZED_RESOLVED_MERGE_COMMIT"
+      },
+      "merge_commit": "REPLACE_WITH_SAME_MERGE_COMMIT",
+      "base_commit": "REPLACE_WITH_REVIEWED_DIFF_BASE_COMMIT",
+      "related_repos": [
+        {
+          "id": "related",
+          "organization": "REPLACE_WITH_APPROVED_ORGANIZATION",
+          "project": "REPLACE_WITH_APPROVED_PROJECT",
+          "repository": "REPLACE_WITH_APPROVED_RELATED_REPOSITORY",
+          "commit": "REPLACE_WITH_AUTHORIZED_RESOLVED_RELATED_COMMIT"
+        }
+      ],
+      "page": {
+        "repo": {
+          "id": "wiki",
+          "organization": "foundry-agentic",
+          "project": "integration-team",
+          "repository": "integration-team.wiki",
+          "commit": "REPLACE_WITH_AUTHORIZED_RESOLVED_WIKI_COMMIT"
+        },
+        "path": "/REPLACE_WITH_ACTUAL_BACKING_GIT_PAGE_PATH.md",
+        "origin": "existing_wiki_page",
+        "provenance_reference": "REPLACE_WITH_EXISTING_PAGE_REVIEW_REFERENCE_NOT_ASSESSMENT_JSON"
+      },
+      "critical_facts": [
+        {
+          "fact_id": "REPLACE_WITH_ENGINEER_FACT_ID",
+          "fact": "REPLACE_WITH_SELF_CONTAINED_ENGINEER_AUTHORED_FACT",
+          "severity": "critical",
+          "category": "other",
+          "source": {
+            "file": "integration@REPLACE_WITH_MERGE_COMMIT:/REPLACE_WITH_REAL_CODE_PATH",
+            "line": 1,
+            "text": "REPLACE_WITH_EXACT_PINNED_SOURCE_LINE_AND_CORRECT_LINE_NUMBER"
+          }
+        }
+      ],
+      "facts_author": "REPLACE_WITH_ENGINEER_AUTHOR",
+      "facts_review_reference": "REPLACE_WITH_HUMAN_REVIEW_REFERENCE"
+    }
+  ]
+}

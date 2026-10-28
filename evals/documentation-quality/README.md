@@ -1,6 +1,11 @@
 # Local documentation-quality thin slice
 
-This is an **offline, no-remote-write demonstrator**, separate from assessment
+**Superseded extraction/evidence example:** the
+[Precision & Recall pipeline](../PRECISION_RECALL.md) replaces this curated
+approach. Keep the examples below for **unit/regression tests only**, never
+real demo results, human calibration, or generated wiki pages.
+
+This is an **offline, no-remote-write regression tool**, separate from assessment
 status evaluation and release certification. It makes no cloud, inference or
 Foundry calls, submits no runs, publishes nothing, and changes no serving prompts,
 request/source guards, workflows, retries, thresholds or release gates.

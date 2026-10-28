@@ -10,8 +10,18 @@ The separately selected `supplied_sources_only` mode runs only the three existin
 tools-disabled cases, needs no toolbox/source credentials, and can report only
 `partial_passed` with `full_suite_passed=false`. Full mode remains the default;
 manual selection must match the reviewed environment configuration.
-The [documentation-quality thin slice](../../evals/documentation-quality/README.md)
-also runs in the offline job, including focused lint/type checks. Pushes changing
+The [paired precision/recall pipeline](../../evals/PRECISION_RECALL.md) has its own
+explicitly selected `precision-recall` job after offline validation. It captures
+whole pinned declared ADO trees and a real existing/approved wiki Markdown page,
+then executes both chains and reports metrics without a release gate. It does
+not invent a replay job or treat assessment JSON as a generated page. Dispatch
+requires trusted main, both enable flags and protected environment approval;
+PRs get no credentials. Raw artifacts and source-free Foundry publication each
+have additional opt-ins, disabled by default.
+
+The older [documentation-quality fixtures](../../evals/documentation-quality/README.md)
+remain unit/regression examples, not the demo. Both new pipeline and older tests
+run in the offline job with lint/type checks. Pushes changing
 only that module, dataset/docs, or tests are excluded from the isolated job even
 when enabled. Push eligibility uses the full before/after diff and the original
 live-input path allowlist; PR credential exclusion and manual dispatch remain

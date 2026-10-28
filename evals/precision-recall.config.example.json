@@ -1,0 +1,39 @@
+{
+  "schema_version": "1",
+  "project_endpoint": "https://foundry-eval-ci-r8n3ld.services.ai.azure.com/api/projects/evaluation-ci",
+  "serving_project_endpoint": "REPLACE_WITH_REVIEWED_SEPARATE_SERVING_PROJECT_ENDPOINT",
+  "model_identity": {
+    "mode": "application",
+    "tenant_id": "REPLACE_WITH_APPROVED_TENANT_UUID",
+    "object_id": "REPLACE_WITH_APPROVED_OBJECT_UUID",
+    "client_id": "REPLACE_WITH_APPROVED_CLIENT_UUID"
+  },
+  "isolation_review_reference": "REPLACE_WITH_ISOLATION_AND_DEPLOYMENT_METADATA_REVIEW",
+  "source_exposure_approval_reference": "REPLACE_WITH_BOUNDED_MODEL_INPUT_EXPOSURE_APPROVAL",
+  "candidate": {
+    "deployment": "eval-candidate-full",
+    "model": "REPLACE_WITH_RECHECKED_CANDIDATE_MODEL_NAME",
+    "version": "REPLACE_WITH_RECHECKED_CANDIDATE_MODEL_VERSION"
+  },
+  "extractor": {
+    "deployment": "eval-judge",
+    "model": "REPLACE_WITH_RECHECKED_JUDGE_MODEL_NAME",
+    "version": "REPLACE_WITH_RECHECKED_JUDGE_MODEL_VERSION"
+  },
+  "verifier": {
+    "deployment": "eval-judge",
+    "model": "REPLACE_WITH_SAME_RECHECKED_JUDGE_MODEL_NAME",
+    "version": "REPLACE_WITH_SAME_RECHECKED_JUDGE_MODEL_VERSION"
+  },
+  "seed": 42,
+  "normal_sample": 10,
+  "max_files": 500,
+  "max_source_bytes": 8000000,
+  "max_requests": 600,
+  "max_calls": 100,
+  "max_input_bytes": 100000,
+  "max_output_tokens": 4096,
+  "timeout_seconds": 60,
+  "run_timeout_seconds": 1200,
+  "evidence_bytes": 24000
+}
