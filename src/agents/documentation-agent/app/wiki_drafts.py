@@ -1,12 +1,12 @@
 """Automatic writes limited to fresh review pages, never the published page."""
 
 import asyncio
-import re
 from uuid import UUID
 
 from contracts.wiki import WikiDraftBundle, WikiSnapshot
 
 from .approval import Connector, ToolApprovalPolicy, WikiRead, connect_tool, validate_schema
+from .draft_layout import review_path, writable_path
 
 
 class WikiDraftPublisher:
@@ -30,24 +30,32 @@ class WikiDraftPublisher:
             raise ValueError("Invalid draft PR or page content.")
         if notes is not None and (not notes.strip() or len(notes) > 64000):
             raise ValueError("Invalid review notes.")
-        suffix = f"-revision-{revision_id}" if revision_id else ""
-        path = f"{self.root}/PR-{pr_id}-{event_id}{suffix}"
+        review = review_path(event_id, pr_id)
+        container = f"{review}/Revisions/Revision-{revision_id}" if revision_id else review
         async with asyncio.timeout(self.policy.timeout_seconds):
             # The parent must already exist. Never mistake permission/network
             # failures for permission to create arbitrary parent pages.
             parent = await self.reader(self.root)
             if parent.path != self.root:
                 raise ValueError("Draft root readback does not match.")
-            page = await self.write_once(path, content)
-            review = await self.write_once(path + "-review", notes) if notes is not None else None
-        return WikiDraftBundle(page=page, notes=review)
+            if revision_id is None:
+                await self.write_once(
+                    f"{self.root}/PR-{pr_id}",
+                    f"# PR {pr_id} documentation reviews\n\nGenerated review area. Not published documentation.\n",
+                )
+                await self.write_once(review, "# Documentation review\n\nRead **Draft** and **Changes** below.\n")
+                await self.write_once(review + "/Revisions", "# Revisions\n\nEach revision requires a new approval.\n")
+            else:
+                existing = await self.reader(review + "/Revisions")
+                if existing.path != review + "/Revisions":
+                    raise ValueError("Revision parent belongs to another review.")
+                await self.write_once(container, "# Revised proposal\n\nRead **Draft** and **Changes** below.\n")
+            page = await self.write_once(container + "/Draft", content)
+            changes = await self.write_once(container + "/Changes", notes) if notes is not None else None
+        return WikiDraftBundle(page=page, notes=changes)
 
     async def write_once(self, path: str, content: str) -> WikiSnapshot:
-        tail = path.removeprefix(self.root + "/")
-        if (
-            not path.startswith(self.root + "/PR-")
-            or re.fullmatch(r"PR-[1-9]\d*-[0-9a-f-]{36}(?:-revision-[0-9a-f-]{36})?(?:-review)?", tail) is None
-        ):
+        if not writable_path(path):
             raise ValueError("Automatic writes cannot target published documentation.")
         values = self.policy.model_dump()
         values.update(

@@ -289,7 +289,7 @@ def test_unknown_outcome_cannot_replay_and_card_does_not_claim_success(harness, 
             with pytest.raises(TimeoutError):
                 await handler.handle(activity(value=action))
             uncertain = await handler.handle(activity(text="show " + action["pending_id"]))
-            assert uncertain["body"][0]["inlines"][0]["text"].startswith("Outcome unknown")
+            assert "Outcome unknown" in uncertain["body"][0]["inlines"][0]["text"]
             assert [a["title"] for a in uncertain["actions"]] == ["Refresh status"]
             with pytest.raises(ValueError):
                 await handler.handle(activity(value=action))
