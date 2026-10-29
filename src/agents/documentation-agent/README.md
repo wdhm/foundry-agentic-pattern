@@ -92,6 +92,11 @@ It does **not** invoke `doc-agent` or forward to another prompt agent.
 
 ## Optional conversational Toolbox path
 
+The [review-experience update](TEAMS_APPROVAL.md#review-experience-update-not-yet-deployed)
+adds state-specific native cards, PR/review/revision wiki grouping and an opt-in
+durable channel-decision acknowledgement path. These changes require a new hosted
+deployment; the recorded v32 demo does not exercise them.
+
 Optional [shared channel reviews](TEAMS_APPROVAL.md#shared-channel-reviews)
 add channel-thread notifications, discussion and multi-person decisions using
 either live channel membership (the selected demo rule) or an explicit allowlist.

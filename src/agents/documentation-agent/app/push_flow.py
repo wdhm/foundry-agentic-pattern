@@ -27,7 +27,7 @@ from .channel_policy import SharedReviewScope
 from .channel_reviews import MemberCheck
 from .conversation import ConversationService
 from .teams import ChannelBinding, TeamsApproval
-from .teams_card import card, linked_review_card, review_card, text
+from .teams_card import card, linked_review_card, review_card, status_header, text
 from .wiki_drafts import WikiDraftPublisher
 
 LOGGER = logging.getLogger(__name__)
@@ -516,7 +516,7 @@ class PushFlow:
         bundle = WikiDraftBundle.model_validate(record["wiki_draft"])
         result = AgentResult.model_validate(record["result"])
         notification = card([
-            text("Documentation draft ready", weight="Bolder", size="Medium"),
+            status_header("pending", title="Documentation draft ready"),
             text(f"Merged PR #{record['request']['pull_request_id']}"),
             text(f"Findings: {len(result.findings)}; missing facts: {len(result.missing_information)}."),
             text(f"Publish target: {self.policy.write_target}. The published page has not changed."),

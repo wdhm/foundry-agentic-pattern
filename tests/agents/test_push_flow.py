@@ -10,6 +10,7 @@ import pytest
 from azure.ai.agentserver.core import FoundryAgentRequestContext, reset_request_context, set_request_context
 from azure.ai.agentserver.core.storage import FoundryStateStore
 from documentation_agent.approval import STORE_NAME, ToolApprovalAgent, ToolApprovalPolicy
+from documentation_agent.channel_jobs import STORE as JOB_STORE
 from documentation_agent.channel_reviews import STORE as CHANNEL_STORE
 from documentation_agent.conversation import STORE as CHAT_STORE
 from documentation_agent.conversation import ConversationService, ConversationSources
@@ -79,14 +80,17 @@ def harness(tmp_path, monkeypatch):
     monkeypatch.delenv("FOUNDRY_HOSTING_ENVIRONMENT", raising=False)
     monkeypatch.setenv("AGENTSERVER_STATE_ROOT", str(tmp_path / "state"))
     stores = {
-        name: asyncio.run(FoundryStateStore.get_or_create(name, user_isolation=name not in {STORE, CHANNEL_STORE}))
+        name: asyncio.run(FoundryStateStore.get_or_create(
+            name, user_isolation=name not in {STORE, CHANNEL_STORE, JOB_STORE},
+        ))
         for name in [
-            STORE, CHANNEL_STORE, STORE_NAME, BINDING_STORE, CHAT_STORE, "function_approvals", "agent_sessions",
+            STORE, CHANNEL_STORE, JOB_STORE, STORE_NAME, BINDING_STORE, CHAT_STORE,
+            "function_approvals", "agent_sessions",
         ]
     }
 
     async def get_store(name, **kwargs):
-        assert kwargs["user_isolation"] == (name not in {STORE, CHANNEL_STORE})
+        assert kwargs["user_isolation"] == (name not in {STORE, CHANNEL_STORE, JOB_STORE})
         return stores[name]
 
     monkeypatch.setattr(FoundryStateStore, "get_or_create", get_store)

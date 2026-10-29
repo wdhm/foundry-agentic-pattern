@@ -22,6 +22,78 @@ locally under ignored `.azure/teams-card-deployment/`, and the handoff is on #16
 
 ## What the card does
 
+### Review-experience update (not yet deployed)
+
+The new cards pair a status icon with readable state text and Teams semantic
+colors: Accent for review/processing, Good for published, Warning for expired,
+Attention for unknown outcomes and neutral for rejected/replaced. Color is never
+the only status cue. The original heading format, layout, Draft/Changes/PR links,
+decision buttons, technical IDs and expiry fields are retained. Only the heading
+icon/color and state-appropriate feedback are enhanced, rather than a card redesign.
+Terminal cards do not tell the reviewer to approve again. Outgoing cards have no separate
+text body, avoiding duplicate-looking Teams messages.
+
+New wiki drafts use this hierarchy:
+
+```text
+/Drafts/Order Sync/PR-<number>/
+  Review-<event UUID>/
+    Draft
+    Changes
+    Revisions/
+      Revision-<revision UUID>/
+        Draft
+        Changes
+```
+
+The parent pages are application-managed navigation containers, not integration
+documentation. The publisher creates them only within its generated path grammar.
+Each PR event is claimed before publication as before. Revisions retain the
+original review and create new leaf pages; the old approval is invalidated.
+Approval checks bind **Draft** to its sibling **Changes**. Legacy flat paths
+remain readable for existing approval validation but are no longer generated.
+Do not author manual content in generated parent pages. No cleanup happens
+automatically in the runtime.
+
+On 2026-10-29 the user explicitly authorized removal of the old demo pages.
+Twelve inventoried PR 1-6 draft/review leaf pages were backed up locally, deleted
+individually with their current ETags, and confirmed absent. The root/Order Sync
+parent pages and published wiki content/ETag were preserved. Old card links to
+those demo pages no longer work; old write approvals cannot pass draft readback.
+New approvals require a fresh event, not a retry of those removed drafts.
+
+**Durable decision acknowledgement is separately opt-in:**
+`DOCUMENTATION_ENABLE_DURABLE_DECISIONS=true`, with the existing hosted channel,
+push-flow and bot identity configuration. The default synchronous behavior is
+unchanged when the flag is off.
+
+For channel Approve/Reject/New proposal submissions, the handler validates the
+signed actor, scope and saved proposal, persists one decision job per pending ID,
+and starts a registered Foundry SDK resilient task. It then returns **Decision
+received - processing**, not a publication success. The worker rechecks the
+current member, event, draft and wiki version through the existing approval path,
+and sends the final result to the saved channel root. Task input is only the job
+ID; actor/action/activity data comes from the server-created durable record, not
+caller-supplied task input. Platform user context is never forged on recovery.
+
+Jobs use the separate `documentation-channel-decision-jobs-v1` shared store.
+An execution claim is persisted before processing, task failure retries are
+disabled, and a recovered already-claimed job **does not replay the decision**.
+A crash between job claim and final delivery requires operator reconciliation;
+the pending approval state is the publication authority, not task completion.
+Failed processing sends an attention card when delivery is available. Failed
+result delivery never retries the wiki write. Refresh status hides decision
+controls while a pending proposal has an outstanding job.
+
+The local SDK task lifecycle and slow-write tests demonstrate that enqueue does
+not wait for the external write. **This is not yet live proof of a Teams timeout
+fix.** Hosted resilient-task availability, survival after HTTP completion,
+membership checks and final-card delivery must be validated on an isolated
+candidate before enabling the flag for the shared deployment. Opening Review,
+status reads, registration and personal-chat actions remain synchronous; their
+latency may still produce a Teams banner. No generic early success or
+untracked `asyncio.create_task` write is used.
+
 The optional [merged-PR draft flow](PUSH_FLOW.md#merged-pr-draft-review-new-code-not-live-enabled)
 uses a compact card with a commit-pinned Azure Repos draft link instead of inline
 content/evidence. Notification follows a completed PR, not an open PR. The

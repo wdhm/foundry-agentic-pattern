@@ -29,6 +29,7 @@ from contracts.wiki import WikiETag, WikiSnapshot
 from .agent import request_text
 from .approval_common import ApprovalAgentBase, approval_decision, canonical_hash
 from .channel_policy import SharedReviewScope
+from .draft_layout import changes_path
 
 LOGGER = logging.getLogger(__name__)
 STORE_NAME = "documentation-tool-approvals-v1"
@@ -343,7 +344,7 @@ class ToolApprovalAgent(ApprovalAgentBase):
                 raise ValueError("Approval requires the exact versioned review draft in the configured draft area.")
         elif draft is not None:
             raise ValueError("This policy does not accept external draft references.")
-        if notes is not None and (draft is None or notes.path != draft.path + "-review"):
+        if notes is not None and (draft is None or notes.path != changes_path(draft.path)):
             raise ValueError("Review notes must belong to the same draft revision.")
 
     def from_result(self, command: ProposeResult) -> tuple[ProposeCall, ProposalOrigin]:

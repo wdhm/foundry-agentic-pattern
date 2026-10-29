@@ -149,14 +149,24 @@ class TeamsApproval:
                 raise ValueError("This card belongs to another user, conversation or session, or predates Teams cards.")
 
     async def verify_member(self, context: TurnContext, expected: ChannelBinding) -> None:
-        from microsoft_agents.hosting.core.connector import ConnectorClientBase, TeamsConnectorClient
-
         if self.binding(context.activity) != expected:
             raise ValueError("Teams member lookup context differs from the acting user or channel.")
+        await self.verify_saved_member(context, expected)
+
+    async def verify_saved_member(self, context: TurnContext, expected: ChannelBinding) -> None:
+        """Recheck a server-persisted decision using a fresh authenticated bot connector."""
+        from microsoft_agents.hosting.core.connector import ConnectorClientBase, TeamsConnectorClient
+
+        if self.channels is None or expected.shared_scope is None:
+            raise ValueError("A saved channel decision requires its scoped policy.")
+        if self.channels.policy.scope(context.activity) != expected.shared_scope:
+            raise ValueError("Saved decision belongs to another channel thread.")
         sender = context.activity.from_property
         conversation = context.activity.conversation
         if sender is None or not sender.id or conversation is None or not conversation.id:
             raise ValueError("Current channel membership cannot be verified without sender/conversation IDs.")
+        if sender.aad_object_id != str(expected.aad_object_id):
+            raise ValueError("Saved decision sender identity does not match the verified actor.")
         # The SDK registers this service under its abstract base-class key.
         connector = context.services.get(ConnectorClientBase)  # type: ignore[type-abstract]
         if connector is None:
@@ -489,6 +499,18 @@ def create_teams_server(
 
         host.invoke_handler(on_push)
 
+    decision_jobs = None
+    decision_task = None
+    if os.environ.get("DOCUMENTATION_ENABLE_DURABLE_DECISIONS") == "true":
+        from .channel_jobs import ChannelDecisionJobs, register_decision_task
+
+        if channel_policy is None or host.adapter is None:
+            raise ValueError("Durable decisions require the configured channel adapter.")
+        decision_jobs = ChannelDecisionJobs(
+            handler, host.adapter, os.environ.get("FOUNDRY_AGENT_INSTANCE_CLIENT_ID", ""),
+        )
+        decision_task = register_decision_task(decision_jobs)
+
     @host.agent_app.activity("message")
     async def on_message(context: TurnContext, state: TurnState) -> None:
         # Action.Submit is a message with value, not a five-second Action.Execute
@@ -525,6 +547,18 @@ def create_teams_server(
             flow = handler.push_flow
             output: dict[str, Any] | str
             if (
+                decision_jobs is not None and decision_task is not None
+                and activity.conversation is not None and activity.conversation.conversation_type == "channel"
+                and isinstance(activity.value, dict) and activity.value.get("action") in {"approve", "reject", "modify"}
+            ):
+                output = await decision_jobs.enqueue(activity, decision_task.start)
+            elif (
+                decision_jobs is not None and activity.conversation is not None
+                and activity.conversation.conversation_type == "channel"
+                and isinstance(activity.value, dict) and activity.value.get("action") == "inspect"
+            ):
+                output = await decision_jobs.status(activity)
+            elif (
                 flow is not None and (activity.text or "").strip().lower() in {"connect repo", "enable notifications"}
                 and activity.value is None
             ):
@@ -571,7 +605,6 @@ def create_teams_server(
         else:
             await context.send_activity(Activity(
                 type="message",
-                text="Documentation approval",
                 attachments=[Attachment(content_type=CARD_TYPE, content=output)],
             ))
 

@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
-from documentation_agent.approval import ToolApprovalPolicy
+from documentation_agent.approval import ToolApprovalAgent, ToolApprovalPolicy
 from documentation_agent.wiki_drafts import WikiDraftPublisher
 from mcp.types import Tool
 
@@ -58,12 +58,22 @@ def test_publisher_creates_only_generated_draft_pages_and_checks_readback():
         publisher, pages, writes, _, call = harness()
         event = uuid4()
         bundle = await publisher.publish(event, 12, "# Proposed actual page", "# Diff and evidence")
-        assert bundle.page.path == f"/Drafts/Order Sync/PR-12-{event}"
-        assert bundle.notes.path == bundle.page.path + "-review"
+        assert bundle.page.path == f"/Drafts/Order Sync/PR-12/Review-{event}/Draft"
+        assert bundle.notes.path == bundle.page.path.removesuffix("/Draft") + "/Changes"
         assert bundle.page.content == "# Proposed actual page"
         assert bundle.notes.content == "# Diff and evidence"
-        assert len(writes) == 2 and call.await_count == 2
+        assert len(writes) == 5 and call.await_count == 5
         assert "/Order Sync/Overview" not in pages
+        revision = uuid4()
+        revised = await publisher.publish(event, 12, "Revised", "New notes", revision_id=revision)
+        assert revised.page.path == f"/Drafts/Order Sync/PR-12/Review-{event}/Revisions/Revision-{revision}/Draft"
+        assert len(writes) == 8
+        assert pages[bundle.page.path].content == "# Proposed actual page"
+        agent = ToolApprovalAgent(publisher.policy, wiki_reader=publisher.reader)
+        agent.check_draft(bundle.page, bundle.page.content, bundle.notes)
+        agent.check_draft(revised.page, revised.page.content, revised.notes)
+        with pytest.raises(ValueError, match="same draft"):
+            agent.check_draft(revised.page, revised.page.content, bundle.notes)
 
     asyncio.run(run())
 
@@ -89,7 +99,7 @@ def test_publisher_does_not_report_success_on_readback_mismatch():
         event = uuid4()
         reader.side_effect = [
             snapshot("/Drafts/Order Sync", "# Drafts"),
-            snapshot(f"/Drafts/Order Sync/PR-12-{event}", "Different content"),
+            snapshot("/Drafts/Order Sync/PR-12", "Different content"),
         ]
         with pytest.raises(ValueError, match="readback differs"):
             await publisher.publish(event, 12, "Expected content", None)

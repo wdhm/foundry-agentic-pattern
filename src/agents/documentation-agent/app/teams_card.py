@@ -10,6 +10,30 @@ CARD_TYPE = "application/vnd.microsoft.card.adaptive"
 MAX_CARD_BYTES = 26000
 
 
+def status_header(status: str, *, title: str | None = None) -> dict[str, Any]:
+    states = {
+        "pending": ("◷", "Ready for review", "Accent"),
+        "executing": ("↻", "Publishing — awaiting confirmation", "Accent"),
+        "succeeded": ("✓", "Published", "Good"),
+        "rejected": ("×", "Rejected — not published", "Default"),
+        "modified": ("↻", "Replaced by a new proposal", "Default"),
+        "expired": ("!", "Review expired", "Warning"),
+        "outcome_unknown": ("!", "Publication outcome unknown", "Attention"),
+    }
+    icon, label, color = states[status]
+    return {
+        "type": "RichTextBlock",
+        "inlines": [{
+            "type": "TextRun", "text": f"{icon}  {title or label}",
+            "weight": "Bolder", "size": "Medium", "color": color,
+        }],
+    }
+
+
+def secondary(value: str) -> dict[str, Any]:
+    return {"type": "TextBlock", "text": value, "wrap": True, "size": "Small", "isSubtle": True}
+
+
 def text(value: str, *, weight: str = "Default", size: str = "Default") -> dict[str, Any]:
     # TextRun is plain text: source/proposal Markdown cannot hide the exact content.
     return {
@@ -56,13 +80,24 @@ def linked_review_card(
     pending = record.status == "pending" and record.expires_at > datetime.now(UTC)
     status = "expired" if record.status == "pending" and not pending else record.status
     body = [
-        text(
-            "Review documentation draft" if pending else f"Documentation proposal: {status}",
-            weight="Bolder", size="Medium",
+        status_header(
+            status, title="Review documentation draft" if pending else f"Documentation proposal: {status}",
         ),
         text(f"Target: {target}"),
         text(f"Findings: {findings}; missing facts: {missing}."),
         text(
+            "The published page was verified against the approved content."
+            if status == "succeeded" and record.result and record.result.get("wiki_readback") else
+            "The tool reported success. Check the published destination."
+            if status == "succeeded" else
+            "No publication was approved. The draft is retained for reference."
+            if status == "rejected" else
+            "Use the replacement proposal; this card can no longer authorize publication."
+            if status == "modified" else
+            "This review expired. Generate a fresh proposal before publishing."
+            if status == "expired" else
+            "Do not approve again. Publication has started but is not yet confirmed."
+            if status in {"executing", "outcome_unknown"} else
             "Read the exact draft before approving. The update is bound to the wiki version used to create it."
             if page_update and matches_draft else
             "Read the linked, commit-pinned draft before approving. Approval writes that exact content to the sandbox."
@@ -109,7 +144,7 @@ def review_card(
         "outcome_unknown": "Outcome unknown - do not retry",
     }
     body = [
-        text(titles[status], weight="Bolder", size="Medium"),
+        status_header(status, title=titles[status]),
         text(
             "No write until you approve. Approval attempts the exact call below once."
             if pending
