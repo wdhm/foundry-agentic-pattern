@@ -33,6 +33,15 @@ icon/color and state-appropriate feedback are enhanced, rather than a card redes
 Terminal cards do not tell the reviewer to approve again. Outgoing cards have no separate
 text body, avoiding duplicate-looking Teams messages.
 
+**Compact Modify form:** only the page target (when available), one explanation,
+the complete editable draft, the required reason, **New proposal** and **Cancel
+edit** are shown. Tool arguments, evidence excerpts, hashes, run IDs and expiry
+details remain on the full review screen, not repeated inside the editing form.
+The complete content value and validation limits are unchanged. Opening or
+cancelling the form does not change the proposal; submitting still invalidates
+the original and requires a separate approval. Expired/terminal proposals never
+render editable controls.
+
 New wiki drafts use this hierarchy:
 
 ```text
@@ -76,6 +85,17 @@ and sends the final result to the saved channel root. Task input is only the job
 ID; actor/action/activity data comes from the server-created durable record, not
 caller-supplied task input. Platform user context is never forged on recovery.
 
+**Initial Review now uses the same opt-in queue:** the `review_push` card action
+validates the signed channel binding and current event/policy, stores one
+`review-<event-id>` job, and returns **Opening review** after task submission.
+The worker rechecks current channel membership and event/thread eligibility before
+creating or reopening the shared pending proposal and posting its review card.
+It never submits an approval or writes wiki content. Repeated clicks share one
+job and preserve its original requester. Completed duplicate clicks direct users
+to the existing card; a failed/claimed job is not automatically replayed. A
+processing failure posts **Review needs attention** when delivery is possible.
+Source and membership failures are not converted into apparent success.
+
 Jobs use the separate `documentation-channel-decision-jobs-v1` shared store.
 An execution claim is persisted before processing, task failure retries are
 disabled, and a recovered already-claimed job **does not replay the decision**.
@@ -85,13 +105,15 @@ Failed processing sends an attention card when delivery is available. Failed
 result delivery never retries the wiki write. Refresh status hides decision
 controls while a pending proposal has an outstanding job.
 
-The local SDK task lifecycle and slow-write tests demonstrate that enqueue does
-not wait for the external write. **This is not yet live proof of a Teams timeout
+The local SDK task lifecycle and slow-write/review-preparation tests demonstrate
+that enqueue does not wait for the external operation. **This is not yet live proof of a Teams timeout
 fix.** Hosted resilient-task availability, survival after HTTP completion,
 membership checks and final-card delivery must be validated on an isolated
-candidate before enabling the flag for the shared deployment. Opening Review,
-status reads, registration and personal-chat actions remain synchronous; their
-latency may still produce a Teams banner. No generic early success or
+candidate before enabling the flag for the shared deployment. Incoming identity,
+team metadata and durable submission still take time; no absolute latency bound
+is promised. Status reads, opening the Modify editor, text `review <event-id>`,
+registration and personal-chat actions remain synchronous; their latency may
+still produce a Teams banner. No generic early success or
 untracked `asyncio.create_task` write is used.
 
 The optional [merged-PR draft flow](PUSH_FLOW.md#merged-pr-draft-review-new-code-not-live-enabled)

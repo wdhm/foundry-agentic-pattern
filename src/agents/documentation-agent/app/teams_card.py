@@ -143,23 +143,15 @@ def review_card(
         "succeeded": "Tool reported success",
         "outcome_unknown": "Outcome unknown - do not retry",
     }
-    body = [
-        status_header(status, title=titles[status]),
-        text(
-            "No write until you approve. Approval attempts the exact call below once."
-            if pending
-            else "This card cannot authorize another execution. Inspect the target if the outcome is uncertain."
-        ),
-        text(f"Tool: {record.tool}"),
-        text("Target and fixed arguments", weight="Bolder"),
-        text(json.dumps(
-            {k: v for k, v in record.arguments.items() if k != content_parameter}, ensure_ascii=False, indent=2
-        )),
-    ]
     if view == "edit" and pending:
-        body += [
-            text("Revise the proposal", weight="Bolder"),
-            text("Saving invalidates the old proposal. The new text still requires a separate approval."),
+        target = record.arguments.get("path") or (record.origin.target_page if record.origin else None)
+        # Editing is not approval: keep the full evidence and tool details on
+        # the review screen, not between the editor and its submit button.
+        body = [
+            status_header("pending", title="Modify documentation draft"),
+            *([text(f"Target: {target}")] if isinstance(target, str) else []),
+            text("Edit the complete draft below. New proposal replaces this proposal; "
+                 "publishing still needs a separate approval."),
             {
                 "type": "Input.Text",
                 "id": "content",
@@ -179,17 +171,28 @@ def review_card(
                 "errorMessage": "Explain the change before creating a new proposal.",
             },
         ]
-        actions = [
+        return card(body, [
             action(record, "modify", "New proposal", inputs=True),
             action(record, "inspect", "Cancel edit"),
-        ]
-    else:
-        body += [text("Proposed content (exact)", weight="Bolder"), text(str(record.arguments[content_parameter]))]
-        actions = (
-            [action(record, "approve", "Approve"), action(record, "edit", "Modify"), action(record, "reject", "Reject")]
+        ])
+    body = [
+        status_header(status, title=titles[status]),
+        text(
+            "No write until you approve. Approval attempts the exact call below once."
             if pending
-            else []
-        )
+            else "This card cannot authorize another execution. Inspect the target if the outcome is uncertain."
+        ),
+        text(f"Tool: {record.tool}"),
+        text("Target and fixed arguments", weight="Bolder"),
+        text(json.dumps(
+            {k: v for k, v in record.arguments.items() if k != content_parameter}, ensure_ascii=False, indent=2
+        )),
+        text("Proposed content (exact)", weight="Bolder"), text(str(record.arguments[content_parameter])),
+    ]
+    actions = (
+        [action(record, "approve", "Approve"), action(record, "edit", "Modify"), action(record, "reject", "Reject")]
+        if pending else []
+    )
     body += [
         text("Evidence", weight="Bolder"),
         text("Supplied with the proposal; this approval screen does not independently verify the source."),

@@ -549,6 +549,12 @@ def create_teams_server(
             if (
                 decision_jobs is not None and decision_task is not None
                 and activity.conversation is not None and activity.conversation.conversation_type == "channel"
+                and isinstance(activity.value, dict) and activity.value.get("action") == "review_push"
+            ):
+                output = await decision_jobs.enqueue_review(activity, decision_task.start)
+            elif (
+                decision_jobs is not None and decision_task is not None
+                and activity.conversation is not None and activity.conversation.conversation_type == "channel"
                 and isinstance(activity.value, dict) and activity.value.get("action") in {"approve", "reject", "modify"}
             ):
                 output = await decision_jobs.enqueue(activity, decision_task.start)
