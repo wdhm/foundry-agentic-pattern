@@ -707,6 +707,43 @@ class PushFlow:
 
     async def open_review(self, activity: Activity, event_id: UUID) -> dict[str, Any]:
         binding = self.reviewer(activity)
+        return await self._open_review(binding, event_id)
+
+    def check_review_binding(self, record: dict[str, Any], binding: ChannelBinding) -> None:
+        if record["policy_hash"] != canonical_hash(self.policy.model_dump(mode="json")):
+            raise ValueError("Automation policy changed; this stored review is no longer eligible.")
+        expected = Recipient.model_validate(record["recipient"]).binding
+        if binding.shared_scope is not None:
+            if self.teams.channels is None:
+                raise ValueError("Channel reviews are not enabled.")
+            self.teams.channels.authorize(binding)
+            if record.get("shared_scope") != binding.shared_scope.model_dump(mode="json"):
+                raise ValueError("Review belongs to another channel or thread.")
+        elif expected.shared_scope is not None or (
+            binding.owner != expected.owner or binding.aad_object_id != expected.aad_object_id
+            or binding.tenant_id != expected.tenant_id or binding.conversation_id != expected.conversation_id
+        ):
+            raise ValueError("Review belongs to another reviewer or conversation.")
+
+    async def check_channel_review(self, binding: ChannelBinding, event_id: UUID) -> None:
+        if binding.shared_scope is None:
+            raise ValueError("Queued review requires a channel binding.")
+        store = await self.store()
+        async with store:
+            item = await store.get_item(str(event_id))
+            latest = await store.get_item("latest")
+            if item is None or latest is None or latest.value["event_id"] != str(event_id):
+                raise ValueError("Review is unavailable or superseded by a newer push.")
+            self.check_review_binding(item.value, binding)
+            if item.value["state"] not in {"notified", "notification_unknown", "notifying", "opened"}:
+                raise ValueError("Review is not ready; inspect its saved status before retrying.")
+
+    async def open_saved_channel_review(self, binding: ChannelBinding, event_id: UUID) -> dict[str, Any]:
+        """Worker-only entry: the binding comes from a persisted authenticated job."""
+        await self.check_channel_review(binding, event_id)
+        return await self._open_review(binding, event_id)
+
+    async def _open_review(self, binding: ChannelBinding, event_id: UUID) -> dict[str, Any]:
         store = await self.store()
         async with store:
             item = await store.get_item(str(event_id))
@@ -714,19 +751,7 @@ class PushFlow:
             if item is None or latest is None or latest.value["event_id"] != str(event_id):
                 raise ValueError("Review is unavailable or superseded by a newer push.")
             record = item.value
-            if record["policy_hash"] != canonical_hash(self.policy.model_dump(mode="json")):
-                raise ValueError("Automation policy changed; this stored review is no longer eligible.")
-            recipient = Recipient.model_validate(record["recipient"])
-            # Allow a fresh platform session, but not a different person/chat.
-            expected = recipient.binding
-            if binding.shared_scope is not None:
-                if record.get("shared_scope") != binding.shared_scope.model_dump(mode="json"):
-                    raise ValueError("Review belongs to another channel or thread.")
-            elif expected.shared_scope is not None or (
-                binding.owner != expected.owner or binding.aad_object_id != expected.aad_object_id
-                or binding.tenant_id != expected.tenant_id or binding.conversation_id != expected.conversation_id
-            ):
-                raise ValueError("Review belongs to another reviewer or conversation.")
+            self.check_review_binding(record, binding)
             if record["state"] == "opened":
                 await self.teams.check_binding(UUID(record["pending_id"]), binding)
                 pending = await self.teams.record(UUID(record["pending_id"]), binding)
