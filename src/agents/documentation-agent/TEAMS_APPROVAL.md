@@ -76,6 +76,14 @@ New approvals require a fresh event, not a retry of those removed drafts.
 push-flow and bot identity configuration. The default synchronous behavior is
 unchanged when the flag is off.
 
+The core/Responses/Invocations/Activity hosting SDKs are explicitly pinned in
+`pyproject.toml` to the tested composition. A clean candidate build on 2026-10-29
+otherwise resolved newer core/Responses prereleases and logged `TaskManager NOT
+initialized` despite declared tasks and the opt-in flag. That candidate was not
+promoted. SDK upgrades must pass the composed-host task lifecycle test and show
+`TaskManager initialized with startup recovery` in hosted startup logs; a successful
+Responses greeting alone does not validate the queued Teams path.
+
 For channel Approve/Reject/New proposal submissions, the handler validates the
 signed actor, scope and saved proposal, persists one decision job per pending ID,
 and starts a registered Foundry SDK resilient task. It then returns **Decision
