@@ -1,8 +1,23 @@
+import importlib.metadata
 import shlex
 import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def test_hosting_runtime_matches_reviewed_pins() -> None:
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    dependencies = project["project"]["optional-dependencies"]["agent"]
+    expected = {
+        "azure-ai-agentserver-core": "2.2.0",
+        "azure-ai-agentserver-responses": "2.3.0b2",
+        "azure-ai-agentserver-invocations": "1.2.0",
+        "azure-ai-agentserver-activity": "1.0.0b4",
+    }
+    for package, version in expected.items():
+        assert f"{package}=={version}" in dependencies
+        assert importlib.metadata.version(package) == version
 
 
 def test_container_includes_declared_packages() -> None:

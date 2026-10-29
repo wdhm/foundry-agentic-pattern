@@ -184,9 +184,9 @@ def test_unknown_job_and_unauthorized_queue_are_rejected(shared):
 
 @pytest.mark.parametrize("opening", [False, True])
 def test_actual_sdk_durable_task_runs_after_submission(shared, monkeypatch, opening):
-    from azure.ai.agentserver.core import AgentServerHost
     from azure.ai.agentserver.core.tasks import set_resilient_tasks_enabled
     from documentation_agent.channel_jobs import register_decision_task
+    from documentation_agent.teams import PushTeamsHost
 
     async def run():
         event = await deliver(shared)
@@ -194,8 +194,8 @@ def test_actual_sdk_durable_task_runs_after_submission(shared, monkeypatch, open
         jobs, sent = job_harness(shared)
         monkeypatch.setattr(shared.teams, "verify_saved_member", AsyncMock())
         monkeypatch.delenv("FOUNDRY_HOSTING_ENVIRONMENT")
+        host = PushTeamsHost(agent=shared.teams.agent, history_source="agent")
         work = register_decision_task(jobs)
-        host = AgentServerHost()
         try:
             async with host.router.lifespan_context(host):
                 monkeypatch.setenv("FOUNDRY_HOSTING_ENVIRONMENT", "true")

@@ -19,6 +19,9 @@ agent = [
   "agent-framework-core==1.19.0",
   "agent-framework-foundry==1.13.1",
   "agent-framework-foundry-hosting==1.0.0b260918",
+  "azure-ai-agentserver-core==2.2.0",
+  "azure-ai-agentserver-responses==2.3.0b2",
+  "azure-ai-agentserver-invocations==1.2.0",
   "azure-ai-agentserver-activity==1.0.0b4",
 ]
 dev = [
