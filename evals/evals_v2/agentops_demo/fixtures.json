@@ -1,0 +1,16 @@
+{
+  "passing-release": {
+    "wiki-answer-supported": {"wiki-claims": 0.98, "wiki-accuracy": 0.97, "groundedness": 5, "task-adherence": 1, "tool-call-accuracy": null},
+    "wiki-information-missing": {"wiki-claims": 0.95, "wiki-accuracy": 0.96, "groundedness": 4, "task-adherence": 1, "tool-call-accuracy": null},
+    "wiki-conflicting-sources": {"wiki-claims": 0.96, "wiki-accuracy": 0.95, "groundedness": 4, "task-adherence": 1, "tool-call-accuracy": null},
+    "tool-retry": {"wiki-claims": null, "wiki-accuracy": null, "groundedness": null, "task-adherence": 1, "tool-call-accuracy": 5},
+    "tool-unavailable": {"wiki-claims": null, "wiki-accuracy": null, "groundedness": null, "task-adherence": 1, "tool-call-accuracy": 4}
+  },
+  "blocked-by-groundedness": {
+    "wiki-answer-supported": {"wiki-claims": 0.98, "wiki-accuracy": 0.97, "groundedness": 3, "task-adherence": 1, "tool-call-accuracy": null},
+    "wiki-information-missing": {"wiki-claims": 0.95, "wiki-accuracy": 0.96, "groundedness": 2, "task-adherence": 1, "tool-call-accuracy": null},
+    "wiki-conflicting-sources": {"wiki-claims": 0.96, "wiki-accuracy": 0.95, "groundedness": 3, "task-adherence": 1, "tool-call-accuracy": null},
+    "tool-retry": {"wiki-claims": null, "wiki-accuracy": null, "groundedness": null, "task-adherence": 1, "tool-call-accuracy": 5},
+    "tool-unavailable": {"wiki-claims": null, "wiki-accuracy": null, "groundedness": null, "task-adherence": 1, "tool-call-accuracy": 4}
+  }
+}
