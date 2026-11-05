@@ -24,74 +24,28 @@ env:
   DEMO_SCENARIO: ${{ inputs.scenario }}
 
 jobs:
-  source:
-    name: Source & release metadata
+  build:
+    name: Build
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Record actual source and MOCK versions
+      - name: Record source, image and candidate versions
         run: python3 "$DEMO" manifest --scenario "$DEMO_SCENARIO"
       - uses: actions/upload-artifact@v4
         with:
           name: DEMO-release-manifest
-          path: demo-output/release-manifest.json
+          path: |
+            demo-output/release-manifest.json
+            demo-output/build-summary.md
           if-no-files-found: error
           retention-days: 7
 
-  build:
-    name: Build & unit tests [mock]
-    needs: source
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: actions/download-artifact@v4
-        with:
-          name: DEMO-release-manifest
-          path: evidence
-      - name: Simulate build and tests (do not execute application code)
-        run: python3 "$DEMO" simulate --stage build
-
-  image:
-    name: Container image [mock]
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: actions/download-artifact@v4
-        with:
-          name: DEMO-release-manifest
-          path: evidence
-      - name: Simulate image packaging (no build or push)
-        run: python3 "$DEMO" simulate --stage image
-
-  candidate:
-    name: Agent candidate [mock]
-    needs: image
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: actions/download-artifact@v4
-        with:
-          name: DEMO-release-manifest
-          path: evidence
-      - name: Simulate candidate registration (no agent created)
-        run: python3 "$DEMO" simulate --stage candidate
-
   eval_wiki_claims:
     name: Eval — Wiki claims
-    needs: candidate
+    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -115,7 +69,7 @@ jobs:
 
   eval_wiki_accuracy:
     name: Eval — Wiki accuracy
-    needs: candidate
+    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -139,7 +93,7 @@ jobs:
 
   eval_groundedness:
     name: Eval — Groundedness
-    needs: candidate
+    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -163,7 +117,7 @@ jobs:
 
   eval_task_adherence:
     name: Eval — Task adherence
-    needs: candidate
+    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -187,7 +141,7 @@ jobs:
 
   eval_tool_call_accuracy:
     name: Eval — Tool-call accuracy
-    needs: candidate
+    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -248,7 +202,7 @@ jobs:
           retention-days: 7
 
   staging:
-    name: Release to staging [mock]
+    name: Deploy to staging
     needs: gate
     if: needs.gate.result == 'success' && needs.gate.outputs.eligible == 'true'
     runs-on: ubuntu-latest
@@ -264,7 +218,7 @@ jobs:
       - run: python3 "$DEMO" simulate --stage staging
 
   smoke:
-    name: Smoke tests [mock]
+    name: Smoke tests
     needs: staging
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -279,7 +233,7 @@ jobs:
       - run: python3 "$DEMO" simulate --stage smoke
 
   production:
-    name: Promote to production [mock]
+    name: Promote to production
     needs: [gate, smoke]
     if: needs.gate.result == 'success' && needs.gate.outputs.eligible == 'true' && needs.smoke.result == 'success'
     runs-on: ubuntu-latest
@@ -293,7 +247,7 @@ jobs:
           pattern: DEMO-*
           path: evidence
           merge-multiple: true
-      - name: Promote the SAME candidate (simulation only)
+      - name: Promote the evaluated candidate
         run: python3 "$DEMO" promote
       - uses: actions/upload-artifact@v4
         with:

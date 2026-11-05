@@ -6,10 +6,9 @@ It never imports their code or invokes their paths.
 
 ## Run the two scenarios
 
-The new workflow and demo files must first be committed and pushed **by an
-authorized person**. GitHub requires the manual workflow to exist on the
-default branch before it can be dispatched. No push or dispatch was performed
-as part of this implementation.
+The workflow is available on the default branch. This simplified revision
+must be committed and pushed by an authorized person before it can be used
+in GitHub Actions. No push or dispatch was performed for this refinement.
 
 In GitHub: **Actions → DEMO — AgentOps CI/CD → Run workflow**.
 Select the branch containing these files, then select:
@@ -36,18 +35,17 @@ Run names include the scenario. Open each run's graph and its
 ## What to show
 
 ```text
-Source & release metadata
-  → Build & unit tests [mock]
-  → Container image [mock]
-  → Agent candidate [mock]
+Build
   → five parallel Eval jobs
   → AgentOps quality gate
-  → Release to staging [mock]
-  → Smoke tests [mock]
-  → Promote to production [mock]
+  → Deploy to staging
+  → Smoke tests
+  → Promote to production
 ```
 
 - Start with the graph: normal delivery stages surround an AgentOps gate.
+- Open Build: source metadata, image digest and candidate identity are prepared
+  together. Its summary shows prompt/config, model and evaluation revisions.
 - Open the gate summary: candidate/previous versions, version manifest,
   metric scores and per-case scores, then the release decision.
 - Compare both scenarios. Groundedness changes from 4.333 to 2.667 against
@@ -56,6 +54,10 @@ Source & release metadata
   On failure, the gate explains why mock serving remains unchanged.
 - Download the `DEMO-*` artifacts if you want to inspect JSON evidence.
   Evaluation artifacts upload even if their threshold comparison fails.
+
+Job names are kept short for presentation. The gate summary carries one
+disclaimer: "Simulation only. No models called or external resources changed."
+Other job summaries show only their versions, scores or outcomes.
 
 ## Scores and applicability
 
@@ -114,11 +116,13 @@ python3 -m unittest discover -s evals/evals_v2/agentops_demo -p 'test_*.py' -v
 actionlint .github/workflows/demo-agentops.yml
 ```
 
-Tests execute both scenarios, all mock stages, failed/missing/invalid evidence,
-threshold comparisons, version identity and promotion rejection. They do not
+Tests execute both scenarios, failed/missing/invalid evidence, threshold
+comparisons, Build version summaries, candidate identity and promotion rejection.
+They also check the ten-job graph and explicit release conditions. They do not
 run application tests or contact external services.
-GitHub-hosted graph execution still requires the separate dispatch described
-above; local validation is not a claim that hosted runs were verified.
+The earlier, granular workflow was verified in hosted runs. The simplified
+graph has only been checked locally; hosted verification needs a new dispatch
+with permission.
 
 ## Files
 
