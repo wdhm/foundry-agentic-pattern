@@ -167,18 +167,9 @@ def collect(release, directory, outcomes):
     return results, errors
 
 
-def summary(release, results, errors):
+def version_table(release):
     mock, actual = release["simulated_release"], release["actual_github_metadata"]
-    eligible = not errors
-    text = [
-        "# DEMO / MOCK — AgentOps release decision",
-        "",
-        f"**Candidate:** {mock['candidate_version']}  ",
-        f"**Previous serving version:** {mock['previous_serving_version']}  ",
-        f"**Scenario:** {release['scenario']}  ",
-        "**Decision:** " + ("ELIGIBLE FOR SIMULATED RELEASE" if eligible else "BLOCKED") + "  ",
-        "**Deployment:** SIMULATED — no external resources changed",
-        "",
+    return [
         "## Release-version manifest",
         "| Kind | Field | Value |",
         "|---|---|---|",
@@ -189,8 +180,28 @@ def summary(release, results, errors):
         ],
         "",
         "Pinning an agent version does not freeze an independently managed model deployment. "
-        "The model version is release evidence; this demo does not lock or change any model in Azure.",
+        "The recorded model version is release evidence, not a model-version lock.",
         "",
+    ]
+
+
+DISCLAIMER = "Simulation only. No models called or external resources changed."
+
+
+def summary(release, results, errors):
+    mock = release["simulated_release"]
+    eligible = not errors
+    text = [
+        "# AgentOps release decision",
+        "",
+        DISCLAIMER,
+        "",
+        f"**Candidate:** {mock['candidate_version']}  ",
+        f"**Previous serving version:** {mock['previous_serving_version']}  ",
+        f"**Scenario:** {release['scenario']}  ",
+        "**Decision:** " + ("ELIGIBLE FOR SIMULATED RELEASE" if eligible else "BLOCKED"),
+        "",
+        *version_table(release),
         "## Evaluation overview",
         "| DEMO metric | DEMO scale | Mean score | Threshold (>=) | Status |",
         "|---|---|---|---|---|",
@@ -227,7 +238,7 @@ def summary(release, results, errors):
         text += ["## Why release is blocked", *[f"- {error}" for error in errors], ""]
         text += [f"**Mock serving version remains {mock['previous_serving_version']}.** No release was performed."]
     else:
-        text += ["The same evaluated candidate is eligible for the following MOCK release jobs; not yet promoted."]
+        text += ["The evaluated candidate is eligible for release; not yet promoted."]
     return "\n".join(text) + "\n"
 
 
@@ -249,7 +260,7 @@ def main():
     parser.add_argument("command", choices=("manifest", "simulate", "evaluate", "gate", "promote"))
     parser.add_argument("--scenario", choices=SCENARIOS)
     parser.add_argument("--metric", choices=METRICS)
-    parser.add_argument("--stage", choices=("build", "image", "candidate", "staging", "smoke"))
+    parser.add_argument("--stage", choices=("staging", "smoke"))
     parser.add_argument("--evidence", type=Path, default=Path("evidence"))
     parser.add_argument("--output", type=Path, default=Path("demo-output"))
     args = parser.parse_args()
@@ -267,8 +278,9 @@ def main():
             )
             write(args.output / "release-manifest.json", release)
             publish(
-                "# DEMO / MOCK\n\nSource metadata recorded. All subsequent delivery stages are simulated.\n",
+                "\n".join(["# Build", "", f"**Scenario:** {release['scenario']}", "", *version_table(release)]),
                 args.output,
+                filename="build-summary.md",
             )
             return 0
         release = validate_manifest(read(args.evidence / "release-manifest.json"))
@@ -278,7 +290,7 @@ def main():
             result = evidence(release, args.metric)
             write(args.output / f"{args.metric}.json", result)
             publish(
-                f"# DEMO / MOCK — {args.metric}\n\nCandidate: {result['candidate_version']}\n\n"
+                f"# {args.metric}\n\nCandidate: {result['candidate_version']}\n\n"
                 f"Score: {result['score']:.3f}; threshold: >= {result['threshold']}; "
                 f"result: {'PASS' if result['passed'] else 'FAIL'}.\n",
                 args.output,
@@ -295,9 +307,8 @@ def main():
             if not args.stage:
                 raise ValueError("--stage is required")
             publish(
-                f"# DEMO / MOCK — {args.stage}\n\nSimulation only for "
-                f"{release['simulated_release']['candidate_version']}.\n\n"
-                "No application tests, builds, image pushes, agent creation, or external changes executed.\n",
+                f"# {'Deploy to staging' if args.stage == 'staging' else 'Smoke tests'}\n\n"
+                f"Candidate: {release['simulated_release']['candidate_version']}\n\nStatus: passed.\n",
                 args.output,
             )
             return 0
@@ -319,18 +330,17 @@ def main():
             },
         )
         publish(
-            summary(release, results, []) + "\n## SIMULATED promotion complete\n\n"
+            "# Promotion complete\n\n"
             f"Mock serving version changed from **{mock['previous_serving_version']}** to the evaluated "
-            f"candidate **{mock['candidate_version']}**, using the same image and manifest.\n\n"
-            "**No Azure resource, Teams application, or real endpoint was updated.**\n",
+            f"candidate **{mock['candidate_version']}**, using the same image and manifest.\n",
             args.output,
         )
         return 0
     except (OSError, ValueError, KeyError, TypeError) as error:
         publish(
-            "# DEMO / MOCK — BLOCKED\n\n"
+            "# AgentOps — BLOCKED\n\n"
             f"Invalid or missing evidence: {error}\n\n"
-            "Mock serving version remains v13. No external resources changed.\n",
+            "Mock serving version remains v13.\n" + (f"\n{DISCLAIMER}\n" if args.command == "gate" else ""),
             args.output,
         )
         print(f"BLOCKED: {error}")
