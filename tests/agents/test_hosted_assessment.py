@@ -425,9 +425,21 @@ def test_http_host_uses_assessment_contract(settings, request_v1):
 
 @pytest.mark.parametrize("fault", [None, "missing-tool", "model-error", "approval", "filtered"])
 @pytest.mark.parametrize("gateway_enabled", [False, True])
-def test_production_runner_wiring_and_cleanup(settings, request_v1, monkeypatch, fault, gateway_enabled):
+@pytest.mark.parametrize("repository_kind", ["github", "azure"])
+def test_production_runner_wiring_and_cleanup(
+    settings, request_v1, monkeypatch, fault, gateway_enabled, repository_kind,
+):
     """Run the production adapter against in-memory SDK boundaries; no Azure resources."""
     events = []
+    expected_tools = READ_TOOLS
+    excluded_tool = "ado___repo_file"
+    if repository_kind == "azure":
+        settings.ado_organization = "example"
+        request_v1.subject.repo = "https://dev.azure.com/example/demo-project/_git/repo"
+        expected_tools = (
+            tuple(name for name in READ_TOOLS if name != "github___get_file_contents") + ("ado___repo_file",)
+        )
+        excluded_tool = "github___get_file_contents"
     if gateway_enabled:
         settings.model_gateway_endpoint = "https://example.azure-api.net/documentation-model/"
         settings.toolbox_gateway_endpoint = "https://example.azure-api.net/documentation-tools/mcp?api-version=v1"
@@ -454,12 +466,13 @@ def test_production_runner_wiring_and_cleanup(settings, request_v1, monkeypatch,
     class Toolbox(Resource):
         def __init__(self, credential, **kwargs):
             assert kwargs["url"] == (settings.toolbox_gateway_endpoint or settings.toolbox_endpoint)
-            assert kwargs["allowed_tools"] == READ_TOOLS
+            assert kwargs["allowed_tools"] == expected_tools
             assert kwargs["parse_tool_results"] is parse_read_result
             assert kwargs["tool_name_prefix"] == ""
-            self.functions = [FunctionTool(name=name) for name in READ_TOOLS]
+            self.functions = [FunctionTool(name=name) for name in expected_tools]
             if fault == "missing-tool":
                 self.functions.pop()
+            self.functions.append(FunctionTool(name=excluded_tool))
 
     class Client:
         def __init__(self, **kwargs):
@@ -478,7 +491,7 @@ def test_production_runner_wiring_and_cleanup(settings, request_v1, monkeypatch,
             assert kwargs["default_options"]["store"] is False
             assert kwargs["default_options"]["response_format"].__name__ == "AnalysisOutput"
             assert isinstance(kwargs["middleware"][0], ReadOnlyPolicy)
-            assert {tool.name for tool in kwargs["tools"]} == set(READ_TOOLS)
+            assert {tool.name for tool in kwargs["tools"]} == set(expected_tools)
 
         def create_session(self):
             return object()

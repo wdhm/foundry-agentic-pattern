@@ -249,9 +249,17 @@ def test_actual_model_tool_loop_cannot_write(settings, sources):
 
 @pytest.mark.parametrize("fault", [None, "missing-tool", "model-error", "approval", "filtered", "length"])
 @pytest.mark.parametrize("gateway", [False, True])
+@pytest.mark.parametrize("repository_kind", ["github", "azure"])
 def test_production_chat_runner_uses_read_tools_plain_text_and_closes_resources(settings, sources, monkeypatch,
-                                                                             fault, gateway):
+                                                                             fault, gateway, repository_kind):
     exits = []
+    if repository_kind == "azure":
+        settings.ado_organization = "example"
+        sources.subject.repo = f"https://dev.azure.com/example/{settings.ado_project}/_git/repo"
+    else:
+        sources.subject.repo = "example/repo"
+    expected_tools = read_tools(settings, repository=sources.subject.repo)
+    excluded_tool = "github___get_file_contents" if repository_kind == "azure" else "ado___repo_file"
     if gateway:
         settings.model_gateway_endpoint = "https://test.azure-api.net/documentation-model/"
         settings.toolbox_gateway_endpoint = "https://test.azure-api.net/documentation-tools/mcp?api-version=v1"
@@ -273,12 +281,13 @@ def test_production_chat_runner_uses_read_tools_plain_text_and_closes_resources(
     class Toolbox(Resource):
         def __init__(self, credential, **kwargs):
             assert kwargs["url"] == (settings.toolbox_gateway_endpoint or settings.toolbox_endpoint)
-            assert kwargs["allowed_tools"] == read_tools(settings)
+            assert kwargs["allowed_tools"] == expected_tools
             assert kwargs["parse_tool_results"] is parse_read_result
             assert kwargs["approval_mode"] == "never_require"
-            self.functions = [FunctionTool(name=name) for name in read_tools(settings)]
+            self.functions = [FunctionTool(name=name) for name in expected_tools]
             if fault == "missing-tool":
                 self.functions.pop()
+            self.functions.append(FunctionTool(name=excluded_tool))
 
     class Client:
         def __init__(self, **kwargs):
@@ -291,7 +300,7 @@ def test_production_chat_runner_uses_read_tools_plain_text_and_closes_resources(
         def __init__(self, **kwargs):
             assert kwargs["default_options"] == {"store": False}
             assert isinstance(kwargs["middleware"][0], ReadOnlyPolicy)
-            assert {tool.name for tool in kwargs["tools"]} == set(read_tools(settings))
+            assert {tool.name for tool in kwargs["tools"]} == set(expected_tools)
             if gateway:
                 assert kwargs["client"].client.base_url == settings.model_gateway_endpoint
                 assert kwargs["client"].client.max_retries == 0

@@ -21,12 +21,21 @@ READ_TOOLS = (
 )
 
 
-def read_tools(settings: AssessmentSettings) -> tuple[str, ...]:
-    return READ_TOOLS + (("ado___repo_file",) if settings.ado_organization is not None else ())
+def read_tools(settings: AssessmentSettings, *, repository: str | None = None) -> tuple[str, ...]:
+    tools = READ_TOOLS + (("ado___repo_file",) if settings.ado_organization is not None else ())
+    if repository is None:
+        return tools
+    repository_tool = (
+        "ado___repo_file" if repository.startswith("https://dev.azure.com/") else "github___get_file_contents"
+    )
+    return tuple(
+        name for name in tools
+        if name not in {"github___get_file_contents", "ado___repo_file"} or name == repository_tool
+    )
 
 
 def require_read(name: str, arguments: Mapping[str, Any], request: AgentRequest, settings: AssessmentSettings) -> None:
-    if name not in read_tools(settings):
+    if name not in read_tools(settings, repository=request.subject.repo):
         raise MiddlewareFailure(f"Tool is not allowed for documentation assessment: {name}")
     if name == "github___get_file_contents":
         repo = request.subject.repo

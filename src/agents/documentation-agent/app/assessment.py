@@ -69,26 +69,27 @@ class FoundryAnalysisRunner:
         from azure.identity.aio import AzureCliCredential, ManagedIdentityCredential
 
         credential = AzureCliCredential() if self.settings.auth_mode == "azure_cli" else ManagedIdentityCredential()
+        allowed_tools = read_tools(self.settings, repository=request.subject.repo)
         async with (
             credential,
             AIProjectClient(endpoint=self.settings.project_endpoint, credential=credential) as project,
             FoundryToolbox(
                 credential,
                 url=self.settings.toolbox_gateway_endpoint or self.settings.toolbox_endpoint,
-                allowed_tools=read_tools(self.settings),
+                allowed_tools=allowed_tools,
                 tool_name_prefix="",
                 approval_mode="never_require",
                 parse_tool_results=parse_read_result,
             ) as toolbox,
         ):
-            available = {function.name for function in toolbox.functions}
-            missing = set(read_tools(self.settings)) - available
+            functions = [function for function in toolbox.functions if function.name in allowed_tools]
+            missing = set(allowed_tools) - {function.name for function in functions}
             if missing:
                 raise RuntimeError(f"P2 toolbox is missing required read tools: {', '.join(sorted(missing))}")
             if guard.record is not None:
                 guard.record.tool_schemas = [
                     {"name": function.name, "description": function.description, "parameters": function.parameters()}
-                    for function in toolbox.functions
+                    for function in functions
                 ]
             client: FoundryChatClient[OpenAIChatOptions[AnalysisOutput]] = FoundryChatClient(
                 project_client=project,
@@ -109,7 +110,7 @@ class FoundryAnalysisRunner:
                     client=client,
                     name="documentation-analysis",
                     instructions=instructions,
-                    tools=toolbox.functions,
+                    tools=functions,
                     middleware=[guard],
                     default_options={"store": False, "response_format": AnalysisOutput},
                 )
@@ -140,7 +141,7 @@ class AssessmentAgent(DocumentationAgent):
                 "Only when task is omitted or null, assess changed_paths and context; "
                 "if changed_paths is empty, assess the supplied sources. "
                 "The full commit_sha is already provided: do not resolve a newer PR head. "
-                "Use the tools named " + ", ".join(read_tools(settings)) + ". "
+                "Use only the tools exposed for this request. "
                 "Git get_file_contents accepts a directory path for discovery and a file path for content; "
                 "use sha=<request commit_sha> on every read. "
                 "Use ado wiki action=get_page with includeContent=true, or wit_work_item action=get. "
