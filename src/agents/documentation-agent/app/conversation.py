@@ -79,16 +79,18 @@ class FoundryConversationRunner:
         from azure.identity.aio import AzureCliCredential, ManagedIdentityCredential
 
         credential = AzureCliCredential() if self.settings.auth_mode == "azure_cli" else ManagedIdentityCredential()
+        allowed_tools = read_tools(self.settings, repository=guard.request.subject.repo)
         async with (
             credential,
             AIProjectClient(endpoint=self.settings.project_endpoint, credential=credential) as project,
             FoundryToolbox(
                 credential, url=self.settings.toolbox_gateway_endpoint or self.settings.toolbox_endpoint,
-                allowed_tools=read_tools(self.settings), tool_name_prefix="",
+                allowed_tools=allowed_tools, tool_name_prefix="",
                 approval_mode="never_require", parse_tool_results=parse_read_result,
             ) as toolbox,
         ):
-            missing = set(read_tools(self.settings)) - {function.name for function in toolbox.functions}
+            functions = [function for function in toolbox.functions if function.name in allowed_tools]
+            missing = set(allowed_tools) - {function.name for function in functions}
             if missing:
                 raise RuntimeError(f"Conversation toolbox is missing required read tools: {', '.join(sorted(missing))}")
             client = FoundryChatClient(
@@ -103,7 +105,7 @@ class FoundryConversationRunner:
             async with client.client:
                 agent = Agent(
                     client=client, name="documentation-conversation", instructions=instructions,
-                    tools=toolbox.functions, middleware=[guard], default_options={"store": False},
+                    tools=functions, middleware=[guard], default_options={"store": False},
                 )
                 response = await agent.run([Message(turn.role, [turn.text]) for turn in turns])
                 if response.user_input_requests:
@@ -143,7 +145,7 @@ class ConversationService:
         self.instructions = (
             prompt + "\n\nOperator-reviewed source scope:\n" + sources.model_dump_json()
             + "\nADO project: " + settings.ado_project + "\nWiki: " + settings.ado_wiki
-            + "\nAvailable read tools: " + ", ".join(read_tools(settings))
+            + "\nAvailable read tools: " + ", ".join(read_tools(settings, repository=sources.subject.repo))
             + repository_instructions
         )
         self.scope_hash = canonical_hash({

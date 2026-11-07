@@ -263,6 +263,11 @@ exact exposed names:
 | `ado___wiki` | `action=get_page`, configured project/wiki, requested page path |
 | `ado___wit_work_item` | `action=get`, configured project, requested integer work-item ID |
 
+Repository tools are filtered per request: Azure Repos subjects expose only
+`ado___repo_file`, and GitHub subjects expose only `github___get_file_contents`.
+The existing source/commit guards still run before dispatch; the documentation
+standard remains available through the knowledge tool.
+
 ### Azure Repos source support (opt-in)
 
 On 2026-10-20 this support was deployed as non-serving assessment version 11

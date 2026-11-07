@@ -67,6 +67,19 @@ def test_azure_repos_requires_operator_opt_in(settings, request_v1):
     require_read("ado___repo_file", arguments(), request_v1, settings)
 
 
+def test_repository_tools_follow_the_request_not_just_operator_capabilities(settings, request_v1):
+    azure_tools = read_tools(settings, repository=request_v1.subject.repo)
+    assert "ado___repo_file" in azure_tools
+    assert "github___get_file_contents" not in azure_tools
+    assert "knowledge___knowledge_base_retrieve" in azure_tools
+    github_tools = read_tools(settings, repository="example/repo")
+    assert github_tools == READ_TOOLS
+    with pytest.raises(MiddlewareFailure, match="not allowed"):
+        require_read("github___get_file_contents", {
+            "owner": "example", "repo": "standards", "path": "documentation-standard.md", "sha": COMMIT,
+        }, request_v1, settings)
+
+
 @pytest.mark.parametrize(("key", "value"), [
     ("action", "update"), ("action", "list_directory"), ("project", "other-project"),
     ("repositoryId", "other-repository"), ("version", "main"), ("version", "b" * 40),
