@@ -159,7 +159,11 @@ def source_trace():
                 "id": 1,
                 "rev": 2,
                 "url": item_uri,
-                "fields": {"System.Title": "Maintain Order Sync", "System.Description": "A &amp; B"},
+                "fields": {
+                    "System.Title": "Maintain Order Sync",
+                    "System.Description": "A &amp; B",
+                    "System.State": "Done",
+                },
             },
         ),
     ]
@@ -182,6 +186,67 @@ def source_trace():
 def test_trace_matches_source_uri_version_and_actual_excerpt(source_trace):
     raw, result = source_trace
     assert checker.trace_evidence_problems(raw, result) == []
+
+
+@pytest.mark.parametrize("excerpt", [
+    '"System.State": "Done"',
+    '"System.State":"Done"',
+    '  "System.State" :\n "Done"  ',
+    '{"System.State": "Done"}',
+])
+def test_trace_accepts_exact_work_item_state_with_json_whitespace(source_trace, excerpt):
+    raw, result = source_trace
+    result["evidence"][2]["excerpt"] = excerpt
+    assert checker.trace_evidence_problems(raw, result) == []
+
+
+@pytest.mark.parametrize("excerpt", [
+    '"System.State": "Active"',
+    '"System.State": "done"',
+    '"System.State": " Done "',
+    '"System.State": "Done", "System.State": "Done"',
+    '"System.State": "Active", "System.State": "Done"',
+    '"System.State": "Done", "System.Reason": "Completed"',
+    '"System.Reason": "Done"',
+    '"System.State": null',
+    '"System.State": ["Done"]',
+    '"System.State": "Done",',
+    'System.State: Done',
+    'Done',
+    'The work item is Done.',
+])
+def test_trace_rejects_incorrect_or_ambiguous_work_item_state(source_trace, excerpt):
+    raw, result = source_trace
+    result["evidence"][2]["excerpt"] = excerpt
+    assert checker.trace_evidence_problems(raw, result) == [
+        "evidence I1 excerpt is not a verbatim passage from the source read",
+    ]
+
+
+@pytest.mark.parametrize("state", [None, "", 1, ["Done"], {"value": "Done"}])
+def test_trace_requires_an_observed_string_state(source_trace, state):
+    raw, result = source_trace
+    payload = json.loads(raw["output"][3]["output"])
+    if state is None:
+        del payload["fields"]["System.State"]
+    else:
+        payload["fields"]["System.State"] = state
+    raw["output"][3]["output"] = json.dumps(payload)
+    result["evidence"][2]["excerpt"] = '"System.State": "Done"'
+    assert checker.trace_evidence_problems(raw, result)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("uri", "https://dev.azure.com/example/project/_workitems/edit/999"),
+    ("version", "999"),
+    ("source", "wiki"),
+])
+def test_trace_state_citation_still_requires_exact_source_and_revision(source_trace, field, value):
+    raw, result = source_trace
+    result["evidence"][2].update(excerpt='"System.State": "Done"', **{field: value})
+    assert checker.trace_evidence_problems(raw, result) == [
+        "evidence I1 URI/version does not match an actual source read",
+    ]
 
 
 @pytest.mark.parametrize(
