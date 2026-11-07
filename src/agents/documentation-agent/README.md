@@ -310,6 +310,9 @@ file as an embedded text `resource`; `parse_read_result` maps it to
 `documents[].content`. Unsupported evidence is rejected. This matches
 actual source excerpts, not the truth of every generated inference.
 
+Work-item evidence also accepts a single `"System.State": "Done"` field citation
+with flexible JSON whitespace, but requires the exact observed value, URI and revision.
+
 ### Run assessment mode after P2 supplies access
 
 Install `.[agent,prompt,dev]` from the repo root. Set the environment explicitly;

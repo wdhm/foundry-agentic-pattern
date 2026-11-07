@@ -72,6 +72,7 @@ def source_records(raw: dict[str, Any]) -> list[dict[str, Any]]:
                     "source": "work_item",
                     "version": str(payload.get("rev", "")),
                     "uris": [api_url, html_url, payload.get("_links", {}).get("html", {}).get("href", "")],
+                    "work_item_state": fields.get("System.State"),
                     "content": "\n".join(
                         str(fields.get(key, ""))
                         for key in ("System.Title", "System.Description", "Microsoft.VSTS.Common.AcceptanceCriteria")
@@ -79,6 +80,20 @@ def source_records(raw: dict[str, Any]) -> list[dict[str, Any]]:
                 }
             )
     return records
+
+
+def _work_item_state_matches(excerpt: str, state: object) -> bool:
+    if not isinstance(state, str) or not state:
+        return False
+    quoted = excerpt.strip()
+    if not quoted.startswith("{"):
+        quoted = "{" + quoted + "}"
+    try:
+        # Preserve duplicate keys so conflicting/repeated status claims cannot be collapsed.
+        fields = json.loads(quoted, object_pairs_hook=list)
+    except json.JSONDecodeError:
+        return False
+    return isinstance(fields, list) and fields == [("System.State", state)]
 
 
 def trace_evidence_problems(raw: dict[str, Any], result: dict[str, Any]) -> list[str]:
@@ -112,6 +127,10 @@ def trace_evidence_problems(raw: dict[str, Any], result: dict[str, Any]) -> list
             problems.append(f"evidence {item['id']} URI/version does not match an actual source read")
         elif not any(
             " ".join(item["excerpt"].split()) in " ".join(html.unescape(record["content"]).split())
+            or (
+                record["source"] == "work_item"
+                and _work_item_state_matches(item["excerpt"], record.get("work_item_state"))
+            )
             for record in matches
         ):
             problems.append(f"evidence {item['id']} excerpt is not a verbatim passage from the source read")
