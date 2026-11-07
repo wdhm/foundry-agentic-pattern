@@ -1,0 +1,257 @@
+name: DEMO — AgentOps CI/CD
+run-name: "DEMO / MOCK — ${{ inputs.scenario }} — ${{ github.run_number }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: "Synthetic AgentOps release scenario (no deployment)"
+        type: choice
+        default: passing-release
+        options:
+          - passing-release
+          - blocked-by-groundedness
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  DEMO: evals/evals_v2/agentops_demo/demo.py
+  DEMO_SCENARIO: ${{ inputs.scenario }}
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Record source, image and candidate versions
+        run: python3 "$DEMO" manifest --scenario "$DEMO_SCENARIO"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DEMO-release-manifest
+          path: |
+            demo-output/release-manifest.json
+            demo-output/build-summary.md
+          if-no-files-found: error
+          retention-days: 7
+
+  eval_wiki_claims:
+    name: Eval — Wiki claims
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: DEMO-release-manifest
+          path: evidence
+      - name: Compare synthetic scores to threshold
+        run: python3 "$DEMO" evaluate --metric wiki-claims
+      - name: Keep evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEMO-eval-wiki-claims
+          path: demo-output/
+          if-no-files-found: error
+          retention-days: 7
+
+  eval_wiki_accuracy:
+    name: Eval — Wiki accuracy
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: DEMO-release-manifest
+          path: evidence
+      - name: Compare synthetic scores to threshold
+        run: python3 "$DEMO" evaluate --metric wiki-accuracy
+      - name: Keep evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEMO-eval-wiki-accuracy
+          path: demo-output/
+          if-no-files-found: error
+          retention-days: 7
+
+  eval_groundedness:
+    name: Eval — Groundedness
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: DEMO-release-manifest
+          path: evidence
+      - name: Compare synthetic scores to threshold
+        run: python3 "$DEMO" evaluate --metric groundedness
+      - name: Keep evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEMO-eval-groundedness
+          path: demo-output/
+          if-no-files-found: error
+          retention-days: 7
+
+  eval_task_adherence:
+    name: Eval — Task adherence
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: DEMO-release-manifest
+          path: evidence
+      - name: Compare synthetic scores to threshold
+        run: python3 "$DEMO" evaluate --metric task-adherence
+      - name: Keep evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEMO-eval-task-adherence
+          path: demo-output/
+          if-no-files-found: error
+          retention-days: 7
+
+  eval_tool_call_accuracy:
+    name: Eval — Tool-call accuracy
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: DEMO-release-manifest
+          path: evidence
+      - name: Compare synthetic scores to threshold
+        run: python3 "$DEMO" evaluate --metric tool-call-accuracy
+      - name: Keep evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEMO-eval-tool-call-accuracy
+          path: demo-output/
+          if-no-files-found: error
+          retention-days: 7
+
+  gate:
+    name: AgentOps quality gate
+    needs:
+      - eval_wiki_claims
+      - eval_wiki_accuracy
+      - eval_groundedness
+      - eval_task_adherence
+      - eval_tool_call_accuracy
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      eligible: ${{ steps.decision.outputs.eligible }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Collect manifest and available evidence
+        uses: actions/download-artifact@v4
+        with:
+          pattern: DEMO-*
+          path: evidence
+          merge-multiple: true
+      - name: Validate evidence and publish release decision
+        id: decision
+        if: always()
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: python3 "$DEMO" gate
+      - name: Keep release decision even when blocked
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEMO-quality-gate
+          path: demo-output/
+          if-no-files-found: error
+          retention-days: 7
+
+  staging:
+    name: Deploy to staging
+    needs: gate
+    if: needs.gate.result == 'success' && needs.gate.outputs.eligible == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: DEMO-release-manifest
+          path: evidence
+      - run: python3 "$DEMO" simulate --stage staging
+
+  smoke:
+    name: Smoke tests
+    needs: staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: DEMO-release-manifest
+          path: evidence
+      - run: python3 "$DEMO" simulate --stage smoke
+
+  production:
+    name: Promote to production
+    needs: [gate, smoke]
+    if: needs.gate.result == 'success' && needs.gate.outputs.eligible == 'true' && needs.smoke.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: DEMO-*
+          path: evidence
+          merge-multiple: true
+      - name: Promote the evaluated candidate
+        run: python3 "$DEMO" promote
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DEMO-simulated-promotion
+          path: demo-output/
+          if-no-files-found: error
+          retention-days: 7
