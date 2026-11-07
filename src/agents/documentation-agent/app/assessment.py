@@ -3,12 +3,13 @@ import hashlib
 import json
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, TypeVar
 from uuid import uuid4
 
 from agent_framework import Agent, AgentResponse, AgentRunInputs
 from agent_framework.exceptions import AgentInvalidRequestException
-from pydantic import ValidationError
+from agent_framework.openai import OpenAIChatOptions
+from pydantic import BaseModel, ValidationError
 
 from contracts.evaluation import EvaluationResponse, ExecutionRecord
 from contracts.evidence import trace_evidence_problems
@@ -24,6 +25,7 @@ APP_VERSION = "0.4.0"
 APP_DIR = Path(__file__).parent
 
 Check = Callable[[str], list[str]]
+ResponseT = TypeVar("ResponseT", bound=BaseModel | None)
 
 
 def repair_message(problems: list[str]) -> str:
@@ -35,7 +37,9 @@ def repair_message(problems: list[str]) -> str:
     )
 
 
-async def run_with_repair(agent: Agent, message: str, check: Check | None) -> AgentResponse[Any]:
+async def run_with_repair(
+    agent: Agent[OpenAIChatOptions[ResponseT]], message: str, check: Check | None
+) -> AgentResponse[Any]:
     """Run once; if verification finds problems, give the model one corrected attempt in the same session."""
     session = agent.create_session()
     response = await agent.run(message, session=session)
@@ -86,7 +90,7 @@ class FoundryAnalysisRunner:
                     {"name": function.name, "description": function.description, "parameters": function.parameters()}
                     for function in toolbox.functions
                 ]
-            client = FoundryChatClient(
+            client: FoundryChatClient[OpenAIChatOptions[AnalysisOutput]] = FoundryChatClient(
                 project_client=project,
                 model=self.settings.model,
                 middleware=[CaptureModel(guard.record)] if guard.record is not None else None,
