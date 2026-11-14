@@ -20,6 +20,8 @@ from .execution import CaptureModel
 from .gateway import route_model_client
 from .read_policy import ReadOnlyPolicy, parse_read_result, read_tools
 from .settings import AssessmentSettings
+from .visualization import add_visualization
+from .visualization_agent_client import FoundryVisualizationClient, VisualizationClient
 
 APP_VERSION = "0.4.0"
 APP_DIR = Path(__file__).parent
@@ -125,11 +127,19 @@ class FoundryAnalysisRunner:
 class AssessmentAgent(DocumentationAgent):
     result_model = AgentResult
 
-    def __init__(self, settings: AssessmentSettings, runner: AnalysisRunner | None = None) -> None:
+    def __init__(
+        self, settings: AssessmentSettings, runner: AnalysisRunner | None = None,
+        visualization_client: VisualizationClient | None = None,
+    ) -> None:
         super().__init__()
         self.description = "Read-only documentation gap analysis with contract v1."
         self.settings = settings
         self.runner = runner if runner is not None else FoundryAnalysisRunner(settings)
+        if visualization_client is not None and settings.visualization is None:
+            raise ValueError("A visualization client requires explicit visualization settings.")
+        self.visualization_client = visualization_client
+        if settings.visualization is not None and self.visualization_client is None:
+            self.visualization_client = FoundryVisualizationClient(settings.visualization, settings.auth_mode)
         prompt = (APP_DIR / "prompts" / "gap-analysis-v1.1.txt").read_text(encoding="utf-8").strip()
         policy = (APP_DIR / "policies" / "documentation-analysis-v1.txt").read_text(encoding="utf-8").strip()
         self.instructions = "\n\n".join(
@@ -169,6 +179,15 @@ class AssessmentAgent(DocumentationAgent):
                 ),
             ]
         )
+        if settings.visualization is not None:
+            self.instructions += (
+                "\n\nAn independent visualization agent reviews the captured sources after this assessment. "
+                "Do not author Mermaid or propose any change to the reserved H2 section 'Architecture diagram', "
+                "including within grouped section proposals. Continue all other assessment and prose drafting. "
+                "Read the requested target wiki and relevant implementation files so the specialist can compare "
+                "the current diagram with the implemented architecture. Only read within the existing request scope. "
+                "The configured diagram target page is " + settings.visualization.target_page + "."
+            )
         self.provenance = Provenance(
             contract_version=CONTRACT_VERSION,
             agent_name="documentation-agent",
@@ -223,6 +242,12 @@ class AssessmentAgent(DocumentationAgent):
         return problems + trace_evidence_problems({"output": guard.calls}, output.model_dump(mode="json"))
 
     async def assess(self, request: AgentRequest, record: ExecutionRecord | None = None) -> AgentResult:
+        deadline = asyncio.get_running_loop().time() + self.settings.timeout_seconds
+        if (
+            self.settings.visualization is not None
+            and self.settings.visualization.target_page not in request.context.wiki_page_paths
+        ):
+            raise ValueError("Visualization target page is outside the assessment request.")
         guard = ReadOnlyPolicy(request, self.settings, record)
         async with asyncio.timeout(self.settings.timeout_seconds):
             text = await self.runner.analyze(
@@ -240,4 +265,12 @@ class AssessmentAgent(DocumentationAgent):
         problems = trace_evidence_problems({"output": guard.calls}, output.model_dump(mode="json"))
         if problems:
             raise ValueError("Evidence verification failed: " + "; ".join(problems))
-        return assemble_result(request, output, self.provenance)
+        result = assemble_result(request, output, self.provenance)
+        if self.settings.visualization is not None:
+            if self.visualization_client is None:
+                raise RuntimeError("Visualization is enabled without an available client.")
+            async with asyncio.timeout_at(deadline):
+                result = await add_visualization(
+                    request, result, guard.calls, self.settings.visualization, self.visualization_client,
+                )
+        return result

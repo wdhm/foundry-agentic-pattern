@@ -118,10 +118,20 @@ class AnalysisOutput(ContractModel):
         return self
 
 
+class VisualizationReview(ContractModel):
+    decision: Literal["keep", "create", "update", "insufficient_context"]
+    reason: NonBlank
+    agent_name: NonBlank
+    agent_card_version: NonBlank
+    guidelines_version: NonBlank
+    input_sha256: Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")]
+
+
 class AgentResult(AnalysisOutput):
     contract_version: Literal["1.0.0"]
     request_id: UUID
     provenance: Provenance
+    visualization: VisualizationReview | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 def request_status_conflict(request: AgentRequest, output: AnalysisOutput) -> bool:

@@ -7,6 +7,8 @@ from pydantic import Field, model_validator
 
 from contracts.models import ContractModel, NonBlank
 
+from .visualization_settings import VisualizationSettings
+
 
 class AssessmentSettings(ContractModel):
     project_endpoint: NonBlank
@@ -20,6 +22,7 @@ class AssessmentSettings(ContractModel):
     toolbox_gateway_endpoint: NonBlank | None = None
     auth_mode: Literal["managed_identity", "azure_cli"] = "managed_identity"
     timeout_seconds: int = Field(default=180, gt=0, le=600)
+    visualization: VisualizationSettings | None = None
 
     @model_validator(mode="after")
     def valid_endpoints(self) -> Self:
@@ -61,4 +64,20 @@ class AssessmentSettings(ContractModel):
             "toolbox_gateway_endpoint": "DOCUMENTATION_TOOLBOX_GATEWAY_ENDPOINT",
             "auth_mode": "DOCUMENTATION_AUTH_MODE",
         }
-        return cls.model_validate({field: values[env] for field, env in names.items() if env in values})
+        settings = cls.model_validate({field: values[env] for field, env in names.items() if env in values})
+        enabled = values.get("DOCUMENTATION_ENABLE_VISUALIZATION", "false")
+        if enabled not in {"true", "false"}:
+            raise ValueError("DOCUMENTATION_ENABLE_VISUALIZATION must be true or false.")
+        if enabled == "true":
+            settings.visualization = VisualizationSettings.model_validate({
+                field: values[env]
+                for field, env in {
+                    "endpoint": "DOCUMENTATION_VISUALIZATION_ENDPOINT",
+                    "agent_name": "DOCUMENTATION_VISUALIZATION_AGENT_NAME",
+                    "card_version": "DOCUMENTATION_VISUALIZATION_CARD_VERSION",
+                    "guidelines_version": "DOCUMENTATION_VISUALIZATION_GUIDELINES_VERSION",
+                    "target_page": "DOCUMENTATION_VISUALIZATION_TARGET_PAGE",
+                }.items()
+                if env in values
+            })
+        return settings

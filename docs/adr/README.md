@@ -30,3 +30,4 @@ We record significant design decisions as ADRs in a [MADR](https://adr.github.io
 | [0024](0024-hosted-documentation-runtime.md) | Hosted Agent Framework app as the main documentation runtime | Proposed; P1 direction confirmed 2026-10-16 | |
 | [0026](0026-explicit-assessment-task.md) | Explicit assessment task and scope, preserving legacy requests | Proposed | |
 | [0027](0027-opt-in-ai-gateway.md) | Opt-in APIM model/read-toolbox/assessment Responses routes; live traffic unchanged | Proposed | [R4](../risks.md#r4) |
+| [0028](0028-opt-in-visualization-agent.md) | Opt-in A2A visualization specialist; existing assessment and approval retained | Proposed | |

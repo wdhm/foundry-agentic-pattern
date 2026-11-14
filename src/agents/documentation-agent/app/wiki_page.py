@@ -204,4 +204,12 @@ def review_notes(snapshot: WikiSnapshot, updated: str, result: AgentResult) -> s
     ]
     for item in result.evidence:
         parts.extend([f"- {item.id}: {item.uri}", f"  Version: {item.version}", f"  {item.excerpt}"])
+    if result.visualization is not None:
+        review = result.visualization
+        parts.extend([
+            "", "## Architecture visualization review",
+            f"Decision: {review.decision}", review.reason,
+            f"Agent: {review.agent_name}; card version: {review.agent_card_version}",
+            f"Guidelines: {review.guidelines_version}; input SHA-256: {review.input_sha256}",
+        ])
     return "\n".join(parts) + "\n"

@@ -15,6 +15,7 @@ prompt = [
   "azure-identity>=1.26,<2",
 ]
 agent = [
+  "httpx>=0.28,<1",
   "jsonschema>=4.23,<5",
   "agent-framework-core==1.19.0",
   "agent-framework-foundry==1.13.1",
@@ -50,7 +51,7 @@ documentation_agent = "src/agents/documentation-agent/app"
 tools = "src/tools"
 
 [tool.setuptools.package-data]
-contracts = ["schema/*.json", "schema/v1/*.json", "schema/evaluation/*.json", "py.typed"]
+contracts = ["schema/*.json", "schema/v1/*.json", "schema/evaluation/*.json", "schema/visualization/*.json", "py.typed"]
 documentation_agent = ["py.typed", "prompts/*.txt", "policies/*.txt"]
 
 [tool.pytest.ini_options]
@@ -70,7 +71,6 @@ plugins = ["pydantic.mypy"]
 files = [
   "src/contracts",
   "src/agents/documentation-agent/app",
-  "src/agents/documentation-prompt/configure.py",
   "src/tools/cli.py",
 ]
 

@@ -26,6 +26,7 @@ from documentation_agent.execution import CaptureModel
 from documentation_agent.main import create_server
 from documentation_agent.read_policy import ReadOnlyPolicy
 from documentation_agent.settings import AssessmentSettings
+from documentation_agent.visualization_settings import VisualizationSettings
 from httpx import ASGITransport, AsyncClient
 from pydantic import ValidationError
 
@@ -108,6 +109,15 @@ def output_for(payload):
         "confidence": 0.5,
         "requires_human_review": True,
     }
+
+
+def test_supplied_evaluation_does_not_silently_skip_enabled_visualization(settings, payload):
+    settings.visualization = VisualizationSettings(
+        endpoint="https://example.services.ai.azure.com/api/projects/test/agents/visualizer/endpoint/protocols/a2a",
+        agent_name="visualizer", card_version="1.0", guidelines_version="1.0.0", target_page="/Overview",
+    )
+    with pytest.raises(ValueError, match="does not support visualization"):
+        asyncio.run(EvaluationAgent(settings).evaluate(json.dumps(payload)))
 
 
 @pytest.mark.parametrize("retain_outer", [True, False])

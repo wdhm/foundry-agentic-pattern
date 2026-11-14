@@ -1,0 +1,247 @@
+{
+  "$defs": {
+    "ArchitectureDiagram": {
+      "additionalProperties": false,
+      "properties": {
+        "direction": {
+          "enum": [
+            "LR",
+            "TB"
+          ],
+          "title": "Direction",
+          "type": "string"
+        },
+        "edges": {
+          "items": {
+            "$ref": "#/$defs/DiagramEdge"
+          },
+          "maxItems": 24,
+          "title": "Edges",
+          "type": "array"
+        },
+        "nodes": {
+          "items": {
+            "$ref": "#/$defs/DiagramNode"
+          },
+          "maxItems": 12,
+          "minItems": 1,
+          "title": "Nodes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "direction",
+        "nodes",
+        "edges"
+      ],
+      "title": "ArchitectureDiagram",
+      "type": "object"
+    },
+    "DiagramEdge": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_refs": {
+          "items": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "maxItems": 20,
+          "minItems": 1,
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "label": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9 .,:()/+_-]{0,79}$",
+          "title": "Label",
+          "type": "string"
+        },
+        "source": {
+          "pattern": "^n[0-9]{1,3}$",
+          "title": "Source",
+          "type": "string"
+        },
+        "target": {
+          "pattern": "^n[0-9]{1,3}$",
+          "title": "Target",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "target",
+        "label",
+        "evidence_refs"
+      ],
+      "title": "DiagramEdge",
+      "type": "object"
+    },
+    "DiagramNode": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_refs": {
+          "items": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "maxItems": 20,
+          "minItems": 1,
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "id": {
+          "pattern": "^n[0-9]{1,3}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "component",
+            "external",
+            "store"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9 .,:()/+_-]{0,79}$",
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "kind",
+        "evidence_refs"
+      ],
+      "title": "DiagramNode",
+      "type": "object"
+    },
+    "Evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "excerpt": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Excerpt",
+          "type": "string"
+        },
+        "id": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Id",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "git",
+            "wiki",
+            "work_item"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "uri": {
+          "pattern": "^https://[^\\s]+$",
+          "title": "Uri",
+          "type": "string"
+        },
+        "version": {
+          "description": "Exact Git SHA, wiki ETag/version, or work-item revision; never a branch.",
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "uri",
+        "version",
+        "excerpt"
+      ],
+      "title": "Evidence",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "decision": {
+      "enum": [
+        "keep",
+        "create",
+        "update",
+        "insufficient_context"
+      ],
+      "title": "Decision",
+      "type": "string"
+    },
+    "diagram": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ArchitectureDiagram"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "evidence": {
+      "items": {
+        "$ref": "#/$defs/Evidence"
+      },
+      "maxItems": 60,
+      "title": "Evidence",
+      "type": "array"
+    },
+    "guidelines_version": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Guidelines Version",
+      "type": "string"
+    },
+    "input_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Input Sha256",
+      "type": "string"
+    },
+    "missing_information": {
+      "items": {
+        "minLength": 1,
+        "pattern": "\\S",
+        "type": "string"
+      },
+      "maxItems": 10,
+      "title": "Missing Information",
+      "type": "array"
+    },
+    "reason": {
+      "maxLength": 2000,
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Reason",
+      "type": "string"
+    },
+    "request_id": {
+      "format": "uuid",
+      "title": "Request Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "request_id",
+    "input_sha256",
+    "guidelines_version",
+    "decision",
+    "reason",
+    "diagram",
+    "evidence",
+    "missing_information"
+  ],
+  "title": "VisualizationOutput",
+  "type": "object"
+}

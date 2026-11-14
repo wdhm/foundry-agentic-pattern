@@ -11,6 +11,9 @@ historical/reference material. The main runtime is the
 [hosted application](src/agents/documentation-agent/README.md), with its own
 identity and a versioned read-only toolbox. The shared ADO gateway now accepts
 the hosted agent; the prompt agent's ADO access no longer works.
+The legacy prompt-agent configuration folder has been removed. Shared
+`contracts.prompt` helpers and the separate no-tools contract-demo CLI remain;
+this cleanup does not delete or change any Foundry resource.
 
 P3's [CLI](docs/workshop/cli-trigger-guide.md) and single manual
 [release workflow](docs/workshop/evaluation-release-guide.md) now target that
@@ -38,6 +41,14 @@ transport and approved writes remain direct.
 The user-approved first deployment is **public HTTPS, model routing only**;
 the independent Developer bootstrap and model-only configuration do not enable
 tool/agent routes or application traffic automatically.
+
+The optional [Visualization Agent](src/agents/visualization-agent/README.md) adds
+a local, disabled-by-default A2A implementation: a separate prompt specialist
+reviews the integration architecture diagram using its own visualization policy,
+and the hosted application adds validated Mermaid proposals to the existing draft
+and human-approval flow. The prompt specialist is now created in Foundry and has
+passed direct A2A create/keep smoke tests; the hosted candidate rollout and live
+wiki-rendering acceptance remain pending.
 
 ---
 

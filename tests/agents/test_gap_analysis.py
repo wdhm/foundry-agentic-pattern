@@ -1,11 +1,8 @@
 import importlib.util
 import json
-from copy import deepcopy
 from pathlib import Path
 
 import pytest
-
-from contracts.prompt import structured_format
 
 ROOT = Path(__file__).parents[2]
 
@@ -17,50 +14,7 @@ def load_module(name, relative_path):
     return module
 
 
-config = load_module("gap_config", "src/agents/documentation-prompt/configure.py")
 checker = load_module("gap_checker", "evals/check_planted_gaps.py")
-
-
-def test_prompt_config_is_idempotent_and_preserves_existing_tools():
-    original = {
-        "kind": "prompt",
-        "model": "example",
-        "instructions": "Existing instructions. Use knowledge and cite DS-xx; standard is not evidence.",
-        "tools": [
-            {"server_label": "knowledge", "require_approval": "never"},
-            {"server_label": "github", "require_approval": "never"},
-            {"server_label": "ado", "require_approval": {"always": {"tool_names": ["wiki_upsert_page"]}}},
-        ],
-        "reasoning": {"effort": "low"},
-    }
-    before = deepcopy(original)
-    prompt = config.PROMPT_PATH.read_text().strip()
-    policy = config.POLICY_PATH.read_text().strip()
-    updated = config.assessment_definition(original, prompt, policy)
-    assert original == before
-    for field in ("model", "tools", "reasoning"):
-        assert updated[field] == before[field]
-    assert updated["instructions"].startswith(before["instructions"])
-    assert updated["text"]["format"] == structured_format()
-    assert config.assessment_definition(updated, prompt, policy) == updated
-    later = config.assessment_definition(updated, "Updated workflow", policy)
-    assert later["instructions"].count(config.START) == 1
-    assert prompt not in later["instructions"]
-    assert "Updated workflow" in later["instructions"]
-
-
-@pytest.mark.parametrize(
-    "instructions",
-    [
-        config.START,
-        config.END,
-        config.END + config.START,
-        config.START + config.START + config.END,
-    ],
-)
-def test_invalid_prompt_markers_fail(instructions):
-    with pytest.raises(ValueError):
-        config.assessment_definition({"kind": "prompt", "instructions": instructions}, "prompt", "policy")
 
 
 def unknown_result():
@@ -289,11 +243,3 @@ def test_trace_ignores_directory_listing_as_evidence(source_trace):
     raw, result = source_trace
     raw["output"][1]["output"] = '[]\n{"structuredResponse":[]}'
     assert checker.trace_evidence_problems(raw, result)
-
-
-def test_configuration_preserves_instructions_added_after_managed_block():
-    base = config.assessment_definition({"kind": "prompt", "instructions": "Original"}, "Prompt", "Policy")
-    base["instructions"] += "\nLater P2 instructions."
-    updated = config.assessment_definition(base, "Revised prompt", "Policy")
-    assert updated["instructions"].endswith("\nLater P2 instructions.")
-    assert "Revised prompt" in updated["instructions"]

@@ -7,6 +7,7 @@ from .models import AgentRequest, AgentResult
 from .v1 import AgentRequest as AgentRequestV1
 from .v1 import AgentResult as AgentResultV1
 from .v1 import AnalysisOutput
+from .visualization import VisualizationOutput, VisualizationRequest
 
 
 def generate_schemas(output_dir: Path, *, check: bool = False) -> bool:
@@ -19,6 +20,8 @@ def generate_schemas(output_dir: Path, *, check: bool = False) -> bool:
         (AnalysisOutput, output_dir / "v1"),
         (EvaluationRequest, output_dir / "evaluation"),
         (EvaluationResponse, output_dir / "evaluation"),
+        (VisualizationRequest, output_dir / "visualization"),
+        (VisualizationOutput, output_dir / "visualization"),
     ):
         path = directory / f"{model.__name__}.schema.json"
         schema = model.model_json_schema(mode="validation")

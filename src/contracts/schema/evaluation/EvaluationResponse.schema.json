@@ -62,6 +62,17 @@
         "requires_human_review": {
           "title": "Requires Human Review",
           "type": "boolean"
+        },
+        "visualization": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VisualizationReview"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -516,6 +527,60 @@
         "sha256"
       ],
       "title": "SuppliedStandard",
+      "type": "object"
+    },
+    "VisualizationReview": {
+      "additionalProperties": false,
+      "properties": {
+        "agent_card_version": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Agent Card Version",
+          "type": "string"
+        },
+        "agent_name": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Agent Name",
+          "type": "string"
+        },
+        "decision": {
+          "enum": [
+            "keep",
+            "create",
+            "update",
+            "insufficient_context"
+          ],
+          "title": "Decision",
+          "type": "string"
+        },
+        "guidelines_version": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Guidelines Version",
+          "type": "string"
+        },
+        "input_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Input Sha256",
+          "type": "string"
+        },
+        "reason": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "decision",
+        "reason",
+        "agent_name",
+        "agent_card_version",
+        "guidelines_version",
+        "input_sha256"
+      ],
+      "title": "VisualizationReview",
       "type": "object"
     }
   },

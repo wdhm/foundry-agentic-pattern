@@ -1,0 +1,6 @@
+defaultEnvironment: workshop
+environments:
+  workshop:
+    projectEndpoint: https://foundry-agentic-r8n3ld.services.ai.azure.com/api/projects/proj-agentic
+    agentName: visualization-agent
+    agentVersion: "1"

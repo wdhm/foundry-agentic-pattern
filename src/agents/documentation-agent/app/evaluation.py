@@ -160,6 +160,8 @@ class EvaluationAgent(DocumentationAgent):
             ) from None
         if payload.source_mode == "live_sources":
             return await self.live.evaluate_report(payload.request)
+        if self.settings.visualization is not None:
+            raise ValueError("Supplied-source evaluation does not support visualization; disable its opt-in.")
         context = get_request_context()
         record = ExecutionRecord(
             execution_id=uuid4(),

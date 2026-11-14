@@ -1,0 +1,26 @@
+Organization visualization guidelines, version 1.0.0 (fictional workshop policy).
+
+Scope: one integration-level component/data-flow diagram in "Architecture diagram".
+Show the integration, its evidenced external participants and relevant data stores.
+Keep internal functions and retry loops out unless necessary to explain architecture.
+Do not depict the documentation pipeline or Foundry hosting infrastructure.
+
+Prefer left-to-right (LR) flow; top-to-bottom (TB) is allowed for readability.
+Use stable IDs n1, n2, etc., and retain existing IDs/order when they fit the schema.
+Use concise, descriptive ASCII labels (80 characters maximum).
+Allowed punctuation in labels: spaces, period, comma, colon, parentheses, slash,
+plus, underscore and hyphen. No markup, links, directives or line breaks.
+
+Node kinds and rendered shapes:
+- component: rectangle, for the integration and its components.
+- external: rounded rectangle, for external systems and participants.
+- store: cylinder, only for a data store actually evidenced in the sources.
+Label every connection with an evidenced interaction, data item or protocol.
+Arrows show the supported direction of interaction or data transfer.
+Do not guess a protocol or imply a bidirectional connection without evidence.
+
+Maximum 12 nodes and 24 connections; simpler is better. Do not add disconnected
+decorative nodes. Do not reorganize a valid existing diagram merely for aesthetics.
+The host renders this graph as conservative Azure DevOps-compatible Mermaid graph
+syntax. No custom colors, themes, icons, HTML, click handlers or Mermaid directives.
+Semantic consistency and legibility take precedence over branding.

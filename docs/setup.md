@@ -4,6 +4,26 @@
 >
 > **Owner:** P3: Louise ([@llandinl](https://github.com/llandinl)), [#5](https://github.com/wdhm/foundry-agentic-pattern/issues/5). **Rule:** if you change anything in Azure, update this file in the same PR.
 
+## Visualization specialist (2026-11-14)
+
+Created prompt agent `visualization-agent:1` in the existing `proj-agentic` project
+on the existing `gpt-6-luna` model deployment. It has no source-reading or write
+tools; its organization diagram guidelines are version `1.0.0`.
+The approved A2A card is version `1.0` with skill `architecture-visualization`.
+Authenticated readback confirmed the agent and its A2A 1.0 JSONRPC interface.
+The existing hosted `documentation-agent` serving pin remains version **36**.
+No existing model, toolbox, Teams setting or wiki content was changed.
+Direct A2A smoke tests passed: the specialist created a diagram from the fictional
+sample implementation, then kept the same diagram against unchanged sources.
+Host-side checks confirmed request/hash binding and verbatim source citations.
+Hosted candidate deployment and the complete live draft flow are pending.
+Louise's evaluation setup is unchanged; this rollout uses separate smoke tests.
+
+The Windows Azure CLI default subscription belongs to another tenant. Scope
+workshop commands and SDK credentials explicitly to the subscription listed below;
+do not treat an unscoped `az account show` as project-access verification.
+No login or global subscription switch was performed.
+
 ## Shared workshop environment
 
 This is **the** environment for development and the workshop. Don't create parallel resource groups or Foundry resources; add to these. How the resource, project, connections and identities fit together: [resource organisation guide](workshop/resource-organization-guide.md).
@@ -641,7 +661,10 @@ Reproduction commands and API gotchas:
 ### Gap analysis on the existing prompt agent (P1, #13)
 
 On 2026-10-16, `doc-agent` version **3** was created using the versioned
-[assessment prompt and policy](../src/agents/documentation-prompt/README.md).
+[assessment prompt](../src/agents/documentation-agent/app/prompts/gap-analysis-v1.txt)
+and [policy](../src/agents/documentation-agent/app/policies/documentation-analysis-v1.txt).
+The legacy prompt-agent configuration helper has since been removed; these shared
+assets remain with the hosted application. This section records historical behavior.
 Version 2 was an intermediate attempt that found the planted gaps but chose an
 overly broad scope and the wrong overall status. Version 3 restricts change
 reviews to the requested change, prioritizes unavailable facts when the task
