@@ -12,11 +12,50 @@ tools; its organization diagram guidelines are version `1.0.0`.
 The approved A2A card is version `1.0` with skill `architecture-visualization`.
 Authenticated readback confirmed the agent and its A2A 1.0 JSONRPC interface.
 The existing hosted `documentation-agent` serving pin remains version **36**.
-No existing model, toolbox, Teams setting or wiki content was changed.
+No existing model, toolbox or Teams setting was changed. The published wiki page
+was preserved; the candidate test created separate draft/review wiki pages.
 Direct A2A smoke tests passed: the specialist created a diagram from the fictional
 sample implementation, then kept the same diagram against unchanged sources.
 Host-side checks confirmed request/hash binding and verbatim source citations.
-Hosted candidate deployment and the complete live draft flow are pending.
+Hosted candidate **37** is active with visualization enabled. ACR build `dt11`
+produced image
+`acrfoundryagenticr8n3ld.azurecr.io/documentation-agent@sha256:c2ed0b06d94a17dcd0c11c4d8bbf26fc53695e3d61798e62ed9410e5fc5ae677`
+from source commit `283ec02`. The candidate layers the new Python package over the
+exact served-v36 image, preserving its reviewed approval, push and channel policy
+files. The isolated azd deployment overlay retained the v36 serving selector and
+existing authorization schemes; post-deploy API reads verified unchanged serving,
+identity and all 23 existing environment variables. Only the six visualization
+opt-in/target/version settings were added to the candidate.
+The hosted caller already has the project-scoped Foundry User role; no new RBAC
+assignment was made.
+
+Azure DevOps PR 24 added a `hostedVersion` run parameter to the integration
+pipeline, defaulting to **36**, without changing its runtime-code pin.
+Pipeline **29** passed workload-identity preflight against candidate **37**.
+Pipeline **30** then completed the full assessment, A2A consultation, draft
+publication and notification path against **37**, using integration merge commit
+`e4a286e1c37687f5bd1d39ea21711af185c3fc57`.
+The resulting review event is `fc7fefc1-4a6d-5a34-a0d4-8bed96c7decf`.
+Independent wiki API reads confirmed one Mermaid diagram in
+`/Drafts/Order Sync/PR-24/Review-fc7fefc1-4a6d-5a34-a0d4-8bed96c7decf/Draft`
+and a `create` decision in the sibling `Changes` page, attributed to
+`visualization-agent`, card `1.0`, guidelines `1.0.0`.
+The diagram depicts the documented Service Bus queue trigger, Order Sync and
+Fabrikam ERP REST interaction; review notes explicitly distinguish the documented
+trigger from proof of a deployed queue binding.
+
+The published `/Order Sync/Overview` content and ETag
+`63b191436592f9322739059bfedaf4760378ae3d` remained unchanged.
+This proves the live flow through draft storage and reported notification, not a
+human seeing or approving the Teams card. Browser inspection reached Microsoft
+sign-in, so actual Azure DevOps Mermaid rendering remains a manual acceptance step.
+No approval or production promotion was performed. The version-36 Teams runtime
+has not been verified to consume the candidate's extended result; do not assume
+candidate creation makes the old serving version ready to process its approval.
+
+Run evidence:
+[pipeline 29](https://dev.azure.com/foundry-agentic/706bb8db-8cc5-46f4-9ce2-3ed7a4772b8d/_build/results?buildId=29),
+[pipeline 30](https://dev.azure.com/foundry-agentic/706bb8db-8cc5-46f4-9ce2-3ed7a4772b8d/_build/results?buildId=30).
 Louise's evaluation setup is unchanged; this rollout uses separate smoke tests.
 
 The Windows Azure CLI default subscription belongs to another tenant. Scope

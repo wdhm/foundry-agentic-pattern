@@ -1,4 +1,4 @@
-# Architecture Visualization Agent (local implementation)
+# Architecture Visualization Agent
 
 An independently configured **Foundry prompt agent** that reviews the integration
 architecture diagram, not the documentation pipeline's architecture. It owns
@@ -8,9 +8,16 @@ standard, prose assessment, Teams flow and publishing authority.
 
 **Status (2026-11-14):** `visualization-agent:1` has been created in `proj-agentic`
 using the existing `gpt-6-luna` deployment. Its approved A2A 1.0 card is enabled
-and verified. The hosted Documentation Agent remains served at version 36;
-the specialist passed direct A2A create/keep smoke tests using the fictional sample
-source. The visualization-enabled hosted candidate and live flow acceptance are pending.
+and verified, with the specialist's serving selector pinned to version 1. The
+specialist passed direct A2A create/keep smoke tests using the fictional sample
+source. Visualization-enabled hosted candidate **37** is active; the Documentation
+Agent remains served at **36**, with the same identity, endpoint and existing
+environment values. Pipeline 29 passed candidate workload preflight; pipeline 30
+completed assessment, A2A, draft storage and reported Teams notification on 37.
+Independent wiki reads verified a diagram and the specialist's `create` receipt.
+The published page is unchanged. Actual wiki rendering and human approval remain
+unverified; browser inspection requires sign-in. Serving 36 has not been verified
+to handle the candidate's extended result during approval.
 This is not a claim that two agents improve accuracy.
 
 ## Code ownership
@@ -51,6 +58,15 @@ Chat remains unchanged. Calls must include the configured target wiki in their
 allowed source scope. Supplied-source evaluation refuses the opt-in rather than
 silently evaluating only half the flow. Live-source evaluation includes the
 specialist receipt, but does not capture the remote model's internal traces.
+
+The pipeline template exposes a `hostedVersion` run parameter. Keep its reviewed
+default as the serving version; select the candidate explicitly for preflight and
+test runs. The reviewed runtime-code commit remains fixed, not a run parameter.
+Changing the pipeline target does not change the Teams bot's serving selector.
+Consequently, successful candidate draft generation alone does not validate
+approval handling by the older serving runtime. Review compatibility and obtain
+explicit promotion approval before testing candidate-specific decisions through
+the live Teams bot.
 
 ## Local prompt definition
 
@@ -154,6 +170,11 @@ Offline cases exercise disabled behavior, all four decisions, evidence and reque
 binding, A2A v1 JSON-RPC messages/completed artifacts, failures, safe graph
 rendering, and the pipeline-to-draft-to-human-approval path using fake sources and
 a fake specialist. They do not invoke a live model or publish to a real wiki.
+
+On Windows, run the full offline suite with `PYTHONUTF8=1`. One existing sandbox
+test requires OS permission to create directory symlinks. That fixture could not
+run on the deployment workstation; the other 1,329 tests passed. Mermaid parsing
+was also checked separately using the actual Mermaid library.
 
 For live acceptance, include a structurally unchanged refactor (`keep`), an
 evidence-backed new component/connection (`update`), missing diagram (`create`),

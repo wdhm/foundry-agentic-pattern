@@ -2,7 +2,7 @@
 
 The **Documentation Agent**: a Microsoft Foundry **hosted agent** (container) built with the **Microsoft Agent Framework** ([ADR 0009](../../../docs/adr/0009-hosted-agent-runtime.md)).
 
-## Optional architecture visualization (local only)
+## Optional architecture visualization
 
 The opt-in [Visualization Agent](../visualization-agent/README.md) adds an A2A
 consultation after the existing assessment. An independently configured prompt
@@ -10,8 +10,9 @@ agent decides whether to keep, create or update the integration's Mermaid diagra
 or reports insufficient context. The host validates evidence and composes one
 diagram section into the existing human-reviewed draft. Prose assessment,
 documentation-standard access, Teams and publishing remain with this application.
-Disabled behavior is unchanged. No remote agent or serving configuration has been
-changed; see the linked guide for configuration and acceptance limitations.
+Disabled behavior is unchanged. Prompt specialist version 1 and hosted candidate
+version 37 are deployed; production serving remains pinned to hosted version 36.
+See the linked guide for configuration and acceptance limitations.
 
 ## Hosted assessment implementation (P1, #13)
 

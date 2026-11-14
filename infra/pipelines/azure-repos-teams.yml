@@ -4,6 +4,9 @@ parameters:
   - name: preflightOnly
     type: boolean
     default: false
+  - name: hostedVersion
+    type: string
+    default: REVIEWED_HOSTED_VERSION
 
 trigger:
   # One main commit per event: batching can hide an earlier completed PR.
@@ -21,7 +24,7 @@ pool:
 
 variables:
   runtimeCommit: REVIEWED_MERGED_GITHUB_COMMIT
-  hostedVersion: REVIEWED_HOSTED_VERSION
+  hostedVersion: ${{ parameters.hostedVersion }}
   foundryEndpoint: https://foundry-agentic-r8n3ld.services.ai.azure.com/api/projects/proj-agentic
   sourceRepository: https://dev.azure.com/foundry-agentic/integration-team/_git/8321c788-67e4-473c-9ad0-9f8847d077e1
 
