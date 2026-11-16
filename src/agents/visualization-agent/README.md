@@ -6,18 +6,19 @@ architecture diagram, not the documentation pipeline's architecture. It owns
 The Documentation Agent retains its existing source tools, documentation
 standard, prose assessment, Teams flow and publishing authority.
 
-**Status (2026-11-14):** `visualization-agent:1` has been created in `proj-agentic`
+**Status (2026-11-16):** `visualization-agent:1` has been created in `proj-agentic`
 using the existing `gpt-6-luna` deployment. Its approved A2A 1.0 card is enabled
 and verified, with the specialist's serving selector pinned to version 1. The
 specialist passed direct A2A create/keep smoke tests using the fictional sample
-source. Visualization-enabled hosted candidate **37** is active; the Documentation
-Agent remains served at **36**, with the same identity, endpoint and existing
-environment values. Pipeline 29 passed candidate workload preflight; pipeline 30
+source. Visualization-enabled hosted version **37** now serves 100% of traffic
+after explicit user-approved promotion from 36, preserving the identity and other
+endpoint settings. Pipeline 29 passed candidate workload preflight; pipeline 30
 completed assessment, A2A, draft storage and reported Teams notification on 37.
 Independent wiki reads verified a diagram and the specialist's `create` receipt.
-The published page is unchanged. Actual wiki rendering and human approval remain
-unverified; browser inspection requires sign-in. Serving 36 has not been verified
-to handle the candidate's extended result during approval.
+Actual Mermaid rendering was verified in the authenticated Azure DevOps Wiki
+browser on 2026-11-16. The published page remains unchanged at the pre-approval
+check; human approval and publication are left to the user's next merged-change
+test. No approval action has been submitted by the coding agent.
 This is not a claim that two agents improve accuracy.
 
 ## Code ownership

@@ -10,8 +10,8 @@ agent decides whether to keep, create or update the integration's Mermaid diagra
 or reports insufficient context. The host validates evidence and composes one
 diagram section into the existing human-reviewed draft. Prose assessment,
 documentation-standard access, Teams and publishing remain with this application.
-Disabled behavior is unchanged. Prompt specialist version 1 and hosted candidate
-version 37 are deployed; production serving remains pinned to hosted version 36.
+Disabled behavior is unchanged. Prompt specialist version 1 is deployed; hosted
+version 37 was promoted to 100% serving with explicit user approval on 2026-11-16.
 See the linked guide for configuration and acceptance limitations.
 
 ## Hosted assessment implementation (P1, #13)

@@ -4,6 +4,23 @@
 >
 > **Owner:** P3: Louise ([@llandinl](https://github.com/llandinl)), [#5](https://github.com/wdhm/foundry-agentic-pattern/issues/5). **Rule:** if you change anything in Azure, update this file in the same PR.
 
+## Visualization serving promotion (2026-11-16)
+
+The user explicitly approved promoting `documentation-agent:37` and chose to make
+their own integration change to test the flow. A fresh read confirmed candidate
+37 was active with the verified `c2ed0b06` image digest and visualization enabled.
+The only Foundry mutation was the named endpoint's fixed serving selector,
+from version 36 to **37 at 100%**. API readback confirmed unchanged instance
+identity, protocols, authorization schemes and other endpoint settings.
+Version 36 remains available; no agent version was deleted.
+
+Authenticated browser inspection of the PR-24 draft verified that Azure DevOps
+renders the Mermaid diagram as an SVG with the three labelled nodes and two
+connections. Labels are scaled down in the narrow side panel. The published page
+still had its original `63b191436592f9322739059bfedaf4760378ae3d` ETag before
+promotion. No Teams approval or direct published-wiki write was submitted.
+Human approval/publication is deliberately left to the user's next test.
+
 ## Visualization specialist (2026-11-14)
 
 Created prompt agent `visualization-agent:1` in the existing `proj-agentic` project

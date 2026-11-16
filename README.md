@@ -47,11 +47,11 @@ a local, disabled-by-default A2A implementation: a separate prompt specialist
 reviews the integration architecture diagram using its own visualization policy,
 and the hosted application adds validated Mermaid proposals to the existing draft
 and human-approval flow. The prompt specialist is now created in Foundry and has
-passed direct A2A create/keep smoke tests; the hosted candidate rollout and live
-wiki-rendering acceptance are separate. Hosted candidate 37 is active while
-production remains pinned to version 36. Pipeline 30 verified candidate assessment,
-A2A, draft creation and reported notification. Wiki-rendering inspection and human
-approval remain outstanding; the published wiki is unchanged.
+passed direct A2A create/keep smoke tests. Hosted version 37 was promoted to
+100% serving on 2026-11-16 with explicit user approval. Pipeline 30 verified
+candidate assessment, A2A, draft creation and reported notification; the Mermaid
+diagram was subsequently verified rendering in Azure DevOps Wiki. Human approval
+and publication remain for the user's next test; no wiki approval was submitted.
 
 ---
 
