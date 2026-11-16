@@ -21,6 +21,14 @@ still had its original `63b191436592f9322739059bfedaf4760378ae3d` ETag before
 promotion. No Teams approval or direct published-wiki write was submitted.
 Human approval/publication is deliberately left to the user's next test.
 
+Azure DevOps PR 25 subsequently changed only the integration pipeline parameter's
+default from `36` to `37`, merged normally without policy bypass at commit
+`d3fa975c33b2cdc430f79d623fc0047d7807a06c`. Merged-main pipeline previews confirmed
+that an omitted parameter resolves to 37 and an explicit override to 36 still
+works. The runtime-code pin, service connection and all other YAML bytes remain
+unchanged. No additional pipeline run was queued; the user's next qualifying
+merged integration change will select version 37 by default.
+
 ## Visualization specialist (2026-11-14)
 
 Created prompt agent `visualization-agent:1` in the existing `proj-agentic` project
