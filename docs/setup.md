@@ -17,8 +17,28 @@ validation, content limits, target restrictions and human approval are unchanged
 Offline regression coverage includes 11/12 citations and the 100-entry boundary
 through draft preparation and approval; zero and 101 entries remain rejected.
 Both captured failed-run evidence arrays pass the corrected validation locally.
-Deployment and pipeline-version update are pending. Failed-event state has not
-been cleared and failed commits have not been resubmitted.
+Source fix `fce6341` was committed and pushed on `john/a2a-implementation`.
+ACR build `dt12` produced
+`acrfoundryagenticr8n3ld.azurecr.io/documentation-agent@sha256:af654180042194bec4cb5a83b6a764df901c6f1d4bcd878e451f69103c22d949`.
+The image inherits the exact v37 base and its reviewed policy files, installs the
+updated package without dependency changes, and asserts the 100-entry bound during
+the image build. Hosted version **38** is active and now serves **100%** of traffic.
+Readback confirmed unchanged identity, all 29 environment variables and endpoint
+settings other than the serving selector.
+
+Azure DevOps PR 33 changed only the pipeline's `hostedVersion` default from 37 to
+38, merged normally without policy bypass at
+`c7380266030b2423f7dc7246163bc45e19d3555e`. The pipeline's runtime-code pin and service
+connection remain unchanged. Pipeline **37** passed read-only workload preflight
+against agent version **38** before serving promotion. This proves startup,
+version binding and workload authorization, not a new end-to-end documentation
+run. The actual failed response evidence arrays and 11/12/100-citation draft and
+approval paths were verified offline.
+
+Failed-event state has not been cleared and failed commits have not been
+resubmitted. Use a fresh merged-change event for the next full test; the duplicate
+guard remains active. Louise's evaluation setup remains unchanged. No wiki
+approval or publication was performed as part of this fix.
 
 ## Visualization serving promotion (2026-11-16)
 

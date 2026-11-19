@@ -11,7 +11,9 @@ or reports insufficient context. The host validates evidence and composes one
 diagram section into the existing human-reviewed draft. Prose assessment,
 documentation-standard access, Teams and publishing remain with this application.
 Disabled behavior is unchanged. Prompt specialist version 1 is deployed; hosted
-version 37 was promoted to 100% serving with explicit user approval on 2026-11-16.
+version 37 was promoted with explicit user approval on 2026-11-16. Version **38**
+replaced it on 2026-11-19 with the combined evidence-limit fix (1-100 citations)
+and a matching pipeline default; identity and approval controls are unchanged.
 See the linked guide for configuration and acceptance limitations.
 
 ## Hosted assessment implementation (P1, #13)

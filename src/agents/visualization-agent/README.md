@@ -21,6 +21,12 @@ check; human approval and publication are left to the user's next merged-change
 test. No approval action has been submitted by the coding agent.
 This is not a claim that two agents improve accuracy.
 
+**Update (2026-11-19):** hosted version **38** now serves the workflow and is the
+integration pipeline default. It raises the combined approval evidence bound
+from 10 to 100 without dropping citations or changing approval permissions.
+Pipeline 37 passed read-only preflight on version 38; failed-event records were
+preserved. A new complete merged-change test is separate from that preflight.
+
 ## Code ownership
 
 The specialist is a managed prompt agent, not a second Python server. Foundry

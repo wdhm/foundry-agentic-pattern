@@ -52,6 +52,8 @@ passed direct A2A create/keep smoke tests. Hosted version 37 was promoted to
 candidate assessment, A2A, draft creation and reported notification; the Mermaid
 diagram was subsequently verified rendering in Azure DevOps Wiki. Human approval
 and publication remain for the user's next test; no wiki approval was submitted.
+Version **38** is now serving and selected by the integration pipeline (2026-11-19),
+fixing the combined evidence limit that could reject proposals from both agents.
 
 ---
 
