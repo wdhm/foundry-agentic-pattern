@@ -103,7 +103,7 @@ class ProposeCall(ContractModel):
     action: Literal["propose"]
     run_id: UUID
     content: Text
-    evidence: Annotated[list[Evidence], Field(min_length=1, max_length=10)]
+    evidence: Annotated[list[Evidence], Field(min_length=1, max_length=100)]
     expected_wiki_etag: WikiETag | None = None
     review_draft: WikiSnapshot | None = None
     review_notes: WikiSnapshot | None = None

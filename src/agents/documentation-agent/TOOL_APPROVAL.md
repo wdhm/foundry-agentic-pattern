@@ -206,7 +206,7 @@ evidence, expiry, decisions, feedback and returned tool result.
 | Input | Required fields | Successful output |
 |---|---|---|
 | `propose_result` | Full `result`, integer `proposal_index` | Inline preview + native `mcp_approval_request`; state is `pending` |
-| `propose` | `run_id`, `content`, 1-10 evidence entries | Same pending output |
+| `propose` | `run_id`, `content`, 1-100 evidence entries | Same pending output |
 | `modify` | Pending UUID, nonblank `feedback`, replacement `content` | New preview/approval; old state is `modified` |
 | `inspect` | Pending UUID | JSON `PendingCall` in one assistant text item |
 | Native approval response | Returned approval ID, boolean decision, previous response/session binding | JSON `PendingCall`, `succeeded` or `rejected`; failures are not successful decisions |

@@ -118,6 +118,12 @@ proof that a particular prompt was executed.
 
 ## Contracts and safeguards
 
+Approval proposals accept 1-100 evidence entries so combined documentation and
+visualization citations are preserved. Earlier hosted version 37 retained a
+10-entry limit and rejected otherwise valid proposals with 11 or 12 citations.
+The cap remains enforced; nothing is truncated, and existing page-size, review-note,
+evidence-validation and human-approval requirements are unchanged.
+
 The Pydantic contracts are in `src/contracts/visualization.py`; generated schemas
 are in `src/contracts/schema/visualization/`.
 

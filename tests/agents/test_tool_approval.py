@@ -141,7 +141,13 @@ def decision(approval, approve=True):
     return Message("user", [approval.to_function_approval_response(approve)])
 
 
-def test_pending_then_exact_call_only_once_with_native_decision(harness, proposal, policy):
+@pytest.mark.parametrize("evidence_count", [1, 11, 12, 100])
+def test_pending_then_exact_call_only_once_with_native_decision(harness, proposal, policy, evidence_count):
+    proposal["evidence"] = [
+        {**proposal["evidence"][0], "id": f"source-{index}"}
+        for index in range(evidence_count)
+    ]
+
     async def run():
         agent, remote, _ = harness
         session = agent.create_session()
@@ -149,11 +155,13 @@ def test_pending_then_exact_call_only_once_with_native_decision(harness, proposa
         before = await inspect(agent, session, approval.id)
         assert before["status"] == "pending"
         assert before["result"] is None
+        assert before["evidence"] == proposal["evidence"]
         remote.call_tool.assert_not_called()
         result = json.loads((await agent.run(decision(approval), session=session)).text)
         assert result["status"] == "succeeded"
         assert result["decided_by"] == "local-unverified"
         assert result["run_id"] == proposal["run_id"]
+        assert result["evidence"] == proposal["evidence"]
         assert result["result"]["structuredContent"] == {"written": True}
         remote.call_tool.assert_awaited_once_with(
             policy.tool_name,
@@ -163,6 +171,22 @@ def test_pending_then_exact_call_only_once_with_native_decision(harness, proposa
         with pytest.raises(ValueError, match="no longer pending"):
             await agent.run(decision(approval), session=session)
         assert await inspect(agent, session, approval.id) == result
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("evidence_count", [0, 101])
+def test_evidence_count_outside_bound_never_dispatches(harness, proposal, evidence_count):
+    proposal["evidence"] = [
+        {**proposal["evidence"][0], "id": f"source-{index}"}
+        for index in range(evidence_count)
+    ]
+
+    async def run():
+        agent, remote, _ = harness
+        with pytest.raises(ValueError, match="Invalid approval command"):
+            await propose(agent, agent.create_session(), proposal)
+        remote.call_tool.assert_not_called()
 
     asyncio.run(run())
 

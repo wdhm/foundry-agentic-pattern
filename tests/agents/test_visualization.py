@@ -8,6 +8,7 @@ from uuid import UUID
 import httpx
 import pytest
 from agent_framework import Content, FunctionInvocationContext, FunctionTool
+from documentation_agent.approval import STORE_NAME
 from documentation_agent.assessment import AssessmentAgent
 from documentation_agent.settings import AssessmentSettings
 from documentation_agent.visualization import MAX_HANDOFF_BYTES, handoff
@@ -381,9 +382,12 @@ def test_prompt_definition_is_local_no_tools_and_uses_output_schema():
     assert definition["text"]["format"]["schema"] == VisualizationOutput.model_json_schema()
 
 
-def test_pipeline_a2a_draft_reaches_existing_human_approval(harness, monkeypatch, enabled):
+@pytest.mark.parametrize(("analysis_count", "visualization_count"), [(2, 1), (7, 4), (6, 6), (80, 20)])
+def test_pipeline_a2a_draft_reaches_existing_human_approval(
+    harness, monkeypatch, enabled, analysis_count, visualization_count,
+):
     async def run():
-        flow, teams, assessor, _, connection, _ = harness
+        flow, teams, assessor, _, connection, stores = harness
         current = page_flow(harness)
         original_assess = assessor.assess.side_effect
 
@@ -412,13 +416,24 @@ def test_pipeline_a2a_draft_reaches_existing_human_approval(harness, monkeypatch
                     await guard.process(context, dispatch)
                 result = original_assess(request)
                 result.evidence[0].uri = uri
+                result.evidence.extend(
+                    result.evidence[0].model_copy(update={"id": f"code-{index}"})
+                    for index in range(analysis_count - len(result.evidence))
+                )
+                result.proposed_changes[0].evidence_refs = [item.id for item in result.evidence]
                 return result.model_dump_json(exclude={"request_id", "contract_version", "provenance"})
+
+        def extra_visualization_evidence(data):
+            data["evidence"] = [
+                {**data["evidence"][0], "id": f"G{index + 1}"} for index in range(visualization_count)
+            ]
+            data["diagram"]["nodes"][0]["evidence_refs"] = [item["id"] for item in data["evidence"]]
 
         settings = enabled.model_copy(update={
             "ado_project": "project", "ado_organization": "test", "ado_wiki": "wiki",
             "visualization": enabled.visualization.model_copy(update={"target_page": current[0].path}),
         })
-        specialist = Specialist("create")
+        specialist = Specialist("create", mutate=extra_visualization_evidence)
         flow.assessor = AssessmentAgent(settings, PipelineRunner(), visualization_client=specialist)
         before = current[0]
         prepared = await register_and_send(harness, monkeypatch, push().model_copy(update={"pull_request_id": 12}))
@@ -438,7 +453,13 @@ def test_pipeline_a2a_draft_reaches_existing_human_approval(harness, monkeypatch
         connection.invoke_once.assert_not_called()
         with platform():
             review = await flow.open_review(activity(), UUID(prepared["event_id"]))
-            await teams.handle(activity(value=button(review, "Approve")))
+            approve = button(review, "Approve")
+            pending = await stores[STORE_NAME].get_item(approve["pending_id"])
+            assert len(pending.value["evidence"]) == analysis_count + visualization_count
+            expected_ids = {"code", "wiki"} | {f"code-{index}" for index in range(analysis_count - 2)}
+            expected_ids |= {f"visualization-G{index + 1}" for index in range(visualization_count)}
+            assert {item["id"] for item in pending.value["evidence"]} == expected_ids
+            await teams.handle(activity(value=approve))
         connection.invoke_once.assert_awaited_once()
         assert current[0].content == prepared["content"]
         assert connection.invoke_once.call_args.args[0]["etag"] == before.etag

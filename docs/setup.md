@@ -4,6 +4,22 @@
 >
 > **Owner:** P3: Louise ([@llandinl](https://github.com/llandinl)), [#5](https://github.com/wdhm/foundry-agentic-pattern/issues/5). **Rule:** if you change anything in Azure, update this file in the same PR.
 
+## Combined evidence limit fix (2026-11-19)
+
+Pipeline runs 32 and 36 invoked hosted version 37 successfully through analysis
+and A2A but failed while validating the approval proposal. Retained telemetry
+showed 7+4 and 6+6 citations respectively. `ProposeCall` still allowed at most ten
+evidence entries, so the valid combined results were rejected with HTTP 400.
+The integration configuration was valid; this was not an authentication failure.
+
+The approval bound is now 1-100 entries. No citations are truncated and source
+validation, content limits, target restrictions and human approval are unchanged.
+Offline regression coverage includes 11/12 citations and the 100-entry boundary
+through draft preparation and approval; zero and 101 entries remain rejected.
+Both captured failed-run evidence arrays pass the corrected validation locally.
+Deployment and pipeline-version update are pending. Failed-event state has not
+been cleared and failed commits have not been resubmitted.
+
 ## Visualization serving promotion (2026-11-16)
 
 The user explicitly approved promoting `documentation-agent:37` and chose to make
